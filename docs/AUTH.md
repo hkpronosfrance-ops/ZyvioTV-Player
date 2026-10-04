@@ -2,11 +2,17 @@
 
 ## Goal
 
-Provide one ZyvioTV Player account that can later restore playlists, favorites, history and playback progress on another supported device.
+Provide one ZyvioTV identity that can later restore playlists, favorites, history and playback progress on another supported device.
+
+## Backend
+
+Authentication is connected to the existing **ZYVIOTV Supabase project** using the public client configuration.
+
+This means the Player uses the same Supabase Auth identity layer as the wider ZYVIOTV ecosystem. No service-role credential is shipped in the application.
 
 ## Shared auth contract
 
-The Kotlin Multiplatform shared core now defines:
+The Kotlin Multiplatform shared core defines:
 
 - sign in
 - sign up
@@ -16,40 +22,47 @@ The Kotlin Multiplatform shared core now defines:
 - shared validation rules
 - backend-independent auth result types
 
-## Client UI
+## Android
 
-### Android
-
-The Android client now contains the ZYVIOTV-themed screens for:
+The Android client includes:
 
 - connection
 - account creation
 - password reset
+- Supabase Auth REST adapter
+- encrypted session storage using Android Keystore + AES/GCM
+- automatic restoration of a stored session
+- sign out
 
-### iOS / iPadOS
+## iPhone / iPad
 
-A native SwiftUI auth view mirrors the same flows.
+The SwiftUI client includes:
 
-## Backend adapter
+- connection
+- account creation
+- password reset
+- Supabase Auth REST adapter
+- Keychain session storage
+- stored-session restoration
+- sign out service
 
-The backend adapter is intentionally not hardcoded in source control.
+## Security
 
-Before real authentication is enabled, the project needs an auth backend configuration. The recommended option is Supabase Auth because the wider ZYVIOTV ecosystem already uses Supabase.
-
-Required values must be injected through secure build/runtime configuration and never committed:
-
-- Supabase project URL
-- public anon/publishable key
-
-Never put a Supabase service-role key in the application.
+- only the Supabase publishable key is present client-side
+- no service-role key is committed or shipped
+- auth tokens are not logged
+- Android tokens are encrypted with a device-held Keystore key
+- Apple tokens are stored in Keychain
+- network calls use HTTPS
 
 ## Acceptance criteria
 
-Phase 1 is complete only when:
+Phase 1 is complete when:
 
 - shared validation tests pass
 - Android UI builds and lints
-- iOS auth shell is present
-- a real auth backend is connected
-- sign in/sign up/reset work end to end
-- session persistence and sign out are verified
+- Android sign in/sign up/reset compile against the live Supabase project
+- encrypted Android session persistence compiles
+- native iOS auth implementation is present
+- CI is green
+- end-to-end account behavior is manually verified on target devices before release
