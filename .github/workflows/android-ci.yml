@@ -1,4 +1,4 @@
-name: Android CI
+name: Shared + Android CI
 
 on:
   push:
@@ -40,11 +40,11 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Unit tests
+      - name: Shared and Android unit tests
         run: gradle testDebugUnitTest --stacktrace
 
       - name: Android lint
         run: gradle lintDebug --stacktrace
 
-      - name: Build debug APK
+      - name: Build Android debug APK
         run: gradle assembleDebug --stacktrace
