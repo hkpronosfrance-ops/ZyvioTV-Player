@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import fr.zyviotv.player.shared.AppIdentity
 import kotlinx.coroutines.delay
 
 private enum class AppDestination(
@@ -101,7 +102,7 @@ private fun SplashScreen(onFinished: () -> Unit) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "ZYVIOTV",
+                text = AppIdentity.name.removeSuffix(" Player").uppercase(),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Black,
             )
@@ -112,7 +113,7 @@ private fun SplashScreen(onFinished: () -> Unit) {
             )
             Spacer(Modifier.height(20.dp))
             Text(
-                text = "Votre univers IPTV, partout avec vous.",
+                text = AppIdentity.tagline,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -189,7 +190,7 @@ private fun FoundationScreen(title: String, profile: DeviceProfile) {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "ZyvioTV Player",
+            text = AppIdentity.name,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
