@@ -14,36 +14,61 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.auth.SupabaseAuthRepository
 import fr.zyviotv.player.shared.AppIdentity
+import fr.zyviotv.player.shared.auth.AuthCredentials
 import fr.zyviotv.player.shared.auth.AuthMode
+import fr.zyviotv.player.shared.auth.AuthResult
 import fr.zyviotv.player.shared.auth.AuthValidator
+import fr.zyviotv.player.shared.auth.RegistrationCredentials
+import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
     onAuthenticated: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val repository = remember {
+        SupabaseAuthRepository(
+            sessionStore = SecureSessionStore(context.applicationContext),
+        )
+    }
+    val scope = rememberCoroutineScope()
+
     var mode by remember { mutableStateOf(AuthMode.SignIn) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (repository.hasStoredSession()) {
+            onAuthenticated()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -101,6 +126,7 @@ fun AuthScreen(
                     email = it
                     message = null
                 },
+                enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Adresse e-mail") },
                 singleLine = true,
@@ -116,6 +142,7 @@ fun AuthScreen(
                         password = it
                         message = null
                     },
+                    enabled = !isLoading,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Mot de passe") },
                     singleLine = true,
@@ -133,6 +160,7 @@ fun AuthScreen(
                         confirmPassword = it
                         message = null
                     },
+                    enabled = !isLoading,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Confirmer le mot de passe") },
                     singleLine = true,
@@ -154,64 +182,108 @@ fun AuthScreen(
 
             Button(
                 onClick = {
-                    when (mode) {
-                        AuthMode.SignIn -> {
-                            val result = AuthValidator.validateSignIn(email, password)
-                            if (result.isValid) {
-                                message = "Interface prête. Connexion serveur à configurer."
-                            } else {
-                                message = result.emailError ?: result.passwordError
-                            }
-                        }
+                    val validation = when (mode) {
+                        AuthMode.SignIn -> AuthValidator.validateSignIn(email, password)
+                        AuthMode.SignUp -> AuthValidator.validateSignUp(
+                            email = email,
+                            password = password,
+                            confirmPassword = confirmPassword,
+                        )
+                        AuthMode.ResetPassword -> AuthValidator.validateReset(email)
+                    }
 
-                        AuthMode.SignUp -> {
-                            val result = AuthValidator.validateSignUp(
-                                email = email,
-                                password = password,
-                                confirmPassword = confirmPassword,
+                    if (!validation.isValid) {
+                        message = validation.emailError
+                            ?: validation.passwordError
+                            ?: validation.confirmPasswordError
+                        return@Button
+                    }
+
+                    scope.launch {
+                        isLoading = true
+                        message = null
+
+                        val result = when (mode) {
+                            AuthMode.SignIn -> repository.signIn(
+                                AuthCredentials(
+                                    email = email.trim(),
+                                    password = password,
+                                ),
                             )
-                            if (result.isValid) {
-                                message = "Interface prête. Création de compte serveur à configurer."
-                            } else {
-                                message = result.emailError
-                                    ?: result.passwordError
-                                    ?: result.confirmPasswordError
+
+                            AuthMode.SignUp -> repository.signUp(
+                                RegistrationCredentials(
+                                    email = email.trim(),
+                                    password = password,
+                                    confirmPassword = confirmPassword,
+                                ),
+                            )
+
+                            AuthMode.ResetPassword -> repository.requestPasswordReset(email.trim())
+                        }
+
+                        when (result) {
+                            AuthResult.Success -> {
+                                when (mode) {
+                                    AuthMode.SignIn -> onAuthenticated()
+                                    AuthMode.SignUp -> {
+                                        message = "Compte créé. Vérifiez votre e-mail si une confirmation est demandée."
+                                        mode = AuthMode.SignIn
+                                        password = ""
+                                        confirmPassword = ""
+                                    }
+                                    AuthMode.ResetPassword -> {
+                                        message = "E-mail envoyé. Consultez votre boîte de réception."
+                                        mode = AuthMode.SignIn
+                                    }
+                                }
+                            }
+
+                            is AuthResult.Failure -> {
+                                message = result.message
                             }
                         }
 
-                        AuthMode.ResetPassword -> {
-                            val result = AuthValidator.validateReset(email)
-                            message = if (result.isValid) {
-                                "Interface prête. Envoi de l'e-mail serveur à configurer."
-                            } else {
-                                result.emailError
-                            }
-                        }
+                        isLoading = false
                     }
                 },
+                enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                 ),
             ) {
-                Text(
-                    text = when (mode) {
-                        AuthMode.SignIn -> "Se connecter"
-                        AuthMode.SignUp -> "Créer mon compte"
-                        AuthMode.ResetPassword -> "Envoyer le lien"
-                    },
-                    fontWeight = FontWeight.Bold,
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text(
+                        text = when (mode) {
+                            AuthMode.SignIn -> "Se connecter"
+                            AuthMode.SignUp -> "Créer mon compte"
+                            AuthMode.ResetPassword -> "Envoyer le lien"
+                        },
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
 
             if (mode == AuthMode.SignIn) {
-                TextButton(onClick = { mode = AuthMode.ResetPassword }) {
+                TextButton(
+                    enabled = !isLoading,
+                    onClick = {
+                        mode = AuthMode.ResetPassword
+                        message = null
+                    },
+                ) {
                     Text("Mot de passe oublié ?")
                 }
             }
 
             Spacer(Modifier.height(12.dp))
-            Divider()
+            HorizontalDivider()
             Spacer(Modifier.height(12.dp))
 
             when (mode) {
@@ -221,7 +293,13 @@ fun AuthScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         Text("Pas encore de compte ?")
-                        TextButton(onClick = { mode = AuthMode.SignUp }) {
+                        TextButton(
+                            enabled = !isLoading,
+                            onClick = {
+                                mode = AuthMode.SignUp
+                                message = null
+                            },
+                        ) {
                             Text("S'inscrire")
                         }
                     }
@@ -231,18 +309,16 @@ fun AuthScreen(
                 AuthMode.ResetPassword,
                 -> {
                     OutlinedButton(
-                        onClick = { mode = AuthMode.SignIn },
+                        enabled = !isLoading,
+                        onClick = {
+                            mode = AuthMode.SignIn
+                            message = null
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("Retour à la connexion")
                     }
                 }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            TextButton(onClick = onAuthenticated) {
-                Text("Aperçu de l'application")
             }
         }
     }
