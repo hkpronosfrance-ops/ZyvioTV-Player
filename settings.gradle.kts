@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ZyvioTVPlayer"
 include(":app")
+include(":shared")
