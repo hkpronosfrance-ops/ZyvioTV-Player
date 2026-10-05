@@ -6,14 +6,19 @@ import androidx.compose.runtime.Composable
 
 private val ZyvioColorScheme = darkColorScheme(
     primary = ZyvioRed,
-    onPrimary = ZyvioWhite,
+    onPrimary = ZyvioTextPrimary,
+    primaryContainer = ZyvioRedTint,
+    onPrimaryContainer = ZyvioTextPrimary,
     secondary = ZyvioRedBright,
-    background = ZyvioBlack,
-    onBackground = ZyvioWhite,
-    surface = ZyvioSurface,
-    onSurface = ZyvioWhite,
-    surfaceVariant = ZyvioSurfaceElevated,
-    onSurfaceVariant = ZyvioGray,
+    onSecondary = ZyvioTextPrimary,
+    background = ZyvioCanvas,
+    onBackground = ZyvioTextPrimary,
+    surface = ZyvioSurface1,
+    onSurface = ZyvioTextPrimary,
+    surfaceVariant = ZyvioSurface2,
+    onSurfaceVariant = ZyvioTextSecondary,
+    outline = ZyvioTextTertiary,
+    error = ZyvioRedBright,
 )
 
 @Composable
