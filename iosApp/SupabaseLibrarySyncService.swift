@@ -68,6 +68,111 @@ actor SupabaseLibrarySyncService {
         )
     }
 
+    func upsertFavorite(_ favorite: SyncedFavoriteDTO) async throws {
+        let userId = try await currentUserId()
+        let payload: [String: Any] = [
+            "user_id": userId,
+            "playlist_id": favorite.playlistId,
+            "content_type": favorite.contentType,
+            "content_id": favorite.contentId,
+            "title": favorite.title,
+            "artwork_url": favorite.artworkUrl as Any,
+            "updated_at": ISO8601DateFormatter().string(from: Date())
+        ]
+        try await mutate(
+            path: "/rest/v1/player_favorites?on_conflict=user_id,playlist_id,content_type,content_id",
+            method: "POST",
+            payload: [payload],
+            preferUpsert: true
+        )
+    }
+
+    func removeFavorite(_ favorite: SyncedFavoriteDTO) async throws {
+        try await mutate(
+            path: "/rest/v1/player_favorites?playlist_id=eq.\(encoded(favorite.playlistId))&content_type=eq.\(encoded(favorite.contentType))&content_id=eq.\(encoded(favorite.contentId))",
+            method: "DELETE"
+        )
+    }
+
+    func upsertWatchProgress(_ progress: SyncedWatchProgressDTO) async throws {
+        let userId = try await currentUserId()
+        let now = ISO8601DateFormatter().string(from: Date())
+        let payload: [String: Any] = [
+            "user_id": userId,
+            "playlist_id": progress.playlistId,
+            "content_type": progress.contentType,
+            "content_id": progress.contentId,
+            "title": progress.title,
+            "series_id": progress.seriesId as Any,
+            "season_number": progress.seasonNumber as Any,
+            "episode_number": progress.episodeNumber as Any,
+            "artwork_url": progress.artworkUrl as Any,
+            "position_ms": progress.positionMs,
+            "duration_ms": progress.durationMs as Any,
+            "completed": progress.completed,
+            "last_watched_at": now,
+            "updated_at": now
+        ]
+        try await mutate(
+            path: "/rest/v1/player_watch_progress?on_conflict=user_id,playlist_id,content_type,content_id",
+            method: "POST",
+            payload: [payload],
+            preferUpsert: true
+        )
+    }
+
+    func removeWatchProgress(_ progress: SyncedWatchProgressDTO) async throws {
+        try await mutate(
+            path: "/rest/v1/player_watch_progress?playlist_id=eq.\(encoded(progress.playlistId))&content_type=eq.\(encoded(progress.contentType))&content_id=eq.\(encoded(progress.contentId))",
+            method: "DELETE"
+        )
+    }
+
+    private func currentUserId() async throws -> String {
+        struct CurrentUser: Decodable { let id: String }
+        let user: CurrentUser = try await get(path: "/auth/v1/user")
+        return user.id
+    }
+
+    private func mutate(
+        path: String,
+        method: String,
+        payload: Any? = nil,
+        preferUpsert: Bool = false
+    ) async throws {
+        guard let session = sessionStore.load() else {
+            throw LibrarySyncError.noSession
+        }
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw LibrarySyncError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        if preferUpsert {
+            request.setValue("resolution=merge-duplicates,return=minimal", forHTTPHeaderField: "Prefer")
+        }
+        if let payload {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        }
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LibrarySyncError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw LibrarySyncError.server
+        }
+    }
+
+    private func encoded(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+    }
+
     private func get<T: Decodable>(path: String) async throws -> T {
         guard let session = sessionStore.load() else {
             throw LibrarySyncError.noSession
