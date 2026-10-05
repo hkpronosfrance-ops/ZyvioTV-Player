@@ -22,4 +22,5 @@
 - Phase 18.5 — Real-device smoke test
 
 - Phase 19 — Real Xtream Codes integration
-- Phase 20 — Real M3U import (in progress)
+- Phase 20 — Real M3U import
+- Phase 21 — Real catalog wiring (in progress)
