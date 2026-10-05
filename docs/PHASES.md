@@ -21,4 +21,5 @@
 - Phase 18 — Release hardening and store publication
 - Phase 18.5 — Real-device smoke test
 
-- Phase 19 — Real Xtream Codes integration (in progress)
+- Phase 19 — Real Xtream Codes integration
+- Phase 20 — Real M3U import (in progress)
