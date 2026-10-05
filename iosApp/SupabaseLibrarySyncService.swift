@@ -76,7 +76,7 @@ actor SupabaseLibrarySyncService {
             "content_type": favorite.contentType,
             "content_id": favorite.contentId,
             "title": favorite.title,
-            "artwork_url": favorite.artworkUrl as Any,
+            "artwork_url": jsonValue(favorite.artworkUrl),
             "updated_at": ISO8601DateFormatter().string(from: Date())
         ]
         try await mutate(
@@ -103,12 +103,12 @@ actor SupabaseLibrarySyncService {
             "content_type": progress.contentType,
             "content_id": progress.contentId,
             "title": progress.title,
-            "series_id": progress.seriesId as Any,
-            "season_number": progress.seasonNumber as Any,
-            "episode_number": progress.episodeNumber as Any,
-            "artwork_url": progress.artworkUrl as Any,
+            "series_id": jsonValue(progress.seriesId),
+            "season_number": jsonValue(progress.seasonNumber),
+            "episode_number": jsonValue(progress.episodeNumber),
+            "artwork_url": jsonValue(progress.artworkUrl),
             "position_ms": progress.positionMs,
-            "duration_ms": progress.durationMs as Any,
+            "duration_ms": jsonValue(progress.durationMs),
             "completed": progress.completed,
             "last_watched_at": now,
             "updated_at": now
@@ -169,8 +169,15 @@ actor SupabaseLibrarySyncService {
         }
     }
 
+    private func jsonValue<T>(_ value: T?) -> Any {
+        if let value { return value }
+        return NSNull()
+    }
+
     private func encoded(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=+?")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
     private func get<T: Decodable>(path: String) async throws -> T {
