@@ -1,0 +1,268 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* AuthSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* AuthSessionStore.swift */; };
+		A10000000000000000000002 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* AuthView.swift */; };
+		A10000000000000000000003 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* HomeView.swift */; };
+		A10000000000000000000004 /* LiveTvView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* LiveTvView.swift */; };
+		A10000000000000000000005 /* MoviesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* MoviesView.swift */; };
+		A10000000000000000000006 /* NativeVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* NativeVideoPlayerView.swift */; };
+		A10000000000000000000007 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* RootView.swift */; };
+		A10000000000000000000008 /* SeriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* SeriesView.swift */; };
+		A10000000000000000000009 /* SupabaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* SupabaseAuthService.swift */; };
+		A1000000000000000000000A /* SupabaseLibrarySyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000A /* SupabaseLibrarySyncService.swift */; };
+		A1000000000000000000000B /* ZyvioTVPlayerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000B /* ZyvioTVPlayerApp.swift */; };
+		A1000000000000000000000C /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000C /* MainTabView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B10000000000000000000001 /* AuthSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSessionStore.swift; sourceTree = "<group>"; };
+		B10000000000000000000002 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		B10000000000000000000003 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		B10000000000000000000004 /* LiveTvView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTvView.swift; sourceTree = "<group>"; };
+		B10000000000000000000005 /* MoviesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoviesView.swift; sourceTree = "<group>"; };
+		B10000000000000000000006 /* NativeVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeVideoPlayerView.swift; sourceTree = "<group>"; };
+		B10000000000000000000007 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		B10000000000000000000008 /* SeriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesView.swift; sourceTree = "<group>"; };
+		B10000000000000000000009 /* SupabaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuthService.swift; sourceTree = "<group>"; };
+		B1000000000000000000000A /* SupabaseLibrarySyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseLibrarySyncService.swift; sourceTree = "<group>"; };
+		B1000000000000000000000B /* ZyvioTVPlayerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZyvioTVPlayerApp.swift; sourceTree = "<group>"; };
+		B1000000000000000000000C /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		B20000000000000000000001 /* ZyvioTVPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZyvioTVPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C10000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D10000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				D10000000000000000000002 /* Sources */,
+				D10000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D10000000000000000000002 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000001 /* AuthSessionStore.swift */,
+				B10000000000000000000002 /* AuthView.swift */,
+				B10000000000000000000003 /* HomeView.swift */,
+				B10000000000000000000004 /* LiveTvView.swift */,
+				B10000000000000000000005 /* MoviesView.swift */,
+				B1000000000000000000000C /* MainTabView.swift */,
+				B10000000000000000000006 /* NativeVideoPlayerView.swift */,
+				B10000000000000000000007 /* RootView.swift */,
+				B10000000000000000000008 /* SeriesView.swift */,
+				B10000000000000000000009 /* SupabaseAuthService.swift */,
+				B1000000000000000000000A /* SupabaseLibrarySyncService.swift */,
+				B1000000000000000000000B /* ZyvioTVPlayerApp.swift */,
+			);
+			path = ".";
+			sourceTree = "<group>";
+		};
+		D10000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000001 /* ZyvioTVPlayer.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E10000000000000000000001 /* ZyvioTVPlayer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E20000000000000000000001 /* Build configuration list for PBXNativeTarget "ZyvioTVPlayer" */;
+			buildPhases = (
+				C20000000000000000000001 /* Sources */,
+				C10000000000000000000001 /* Frameworks */,
+				C30000000000000000000001 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = ZyvioTVPlayer;
+			productName = ZyvioTVPlayer;
+			productReference = B20000000000000000000001 /* ZyvioTVPlayer.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F10000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					E10000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = F20000000000000000000001 /* Build configuration list for PBXProject "ZyvioTVPlayer" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D10000000000000000000001;
+			productRefGroup = D10000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E10000000000000000000001 /* ZyvioTVPlayer */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C30000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C20000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* AuthSessionStore.swift in Sources */,
+				A10000000000000000000002 /* AuthView.swift in Sources */,
+				A10000000000000000000003 /* HomeView.swift in Sources */,
+				A10000000000000000000004 /* LiveTvView.swift in Sources */,
+				A10000000000000000000005 /* MoviesView.swift in Sources */,
+				A1000000000000000000000C /* MainTabView.swift in Sources */,
+				A10000000000000000000006 /* NativeVideoPlayerView.swift in Sources */,
+				A10000000000000000000007 /* RootView.swift in Sources */,
+				A10000000000000000000008 /* SeriesView.swift in Sources */,
+				A10000000000000000000009 /* SupabaseAuthService.swift in Sources */,
+				A1000000000000000000000A /* SupabaseLibrarySyncService.swift in Sources */,
+				A1000000000000000000000B /* ZyvioTVPlayerApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		110000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		110000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		120000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "ZyvioTV Player";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fr.zyviotv.player;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		120000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "ZyvioTV Player";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fr.zyviotv.player;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E20000000000000000000001 /* Build configuration list for PBXNativeTarget "ZyvioTVPlayer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				120000000000000000000001 /* Debug */,
+				120000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F20000000000000000000001 /* Build configuration list for PBXProject "ZyvioTVPlayer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				110000000000000000000001 /* Debug */,
+				110000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F10000000000000000000001 /* Project object */;
+}

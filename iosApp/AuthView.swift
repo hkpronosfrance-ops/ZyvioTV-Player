@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct AuthView: View {
+    let onAuthenticated: () -> Void
+
     enum Mode {
         case signIn
         case signUp
@@ -13,15 +15,14 @@ struct AuthView: View {
     @State private var confirmPassword = ""
     @State private var message: String?
     @State private var isLoading = false
-    @State private var authenticated = false
 
     var body: some View {
-        Group {
-            if authenticated {
-                ZStack {
-                    Color.black.ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
 
-                    VStack(spacing: 12) {
+                ScrollView {
+                    VStack(spacing: 16) {
                         Text("ZYVIOTV")
                             .font(.system(size: 34, weight: .black))
                             .foregroundStyle(.white)
@@ -31,108 +32,80 @@ struct AuthView: View {
                             .tracking(8)
                             .foregroundStyle(.red)
 
-                        Text("Compte connecté")
+                        Text(title)
                             .font(.title2.bold())
                             .padding(.top, 20)
-                    }
-                }
-            } else {
-                NavigationStack {
-                    ZStack {
-                        Color.black.ignoresSafeArea()
 
-                        ScrollView {
-                            VStack(spacing: 16) {
-                                Text("ZYVIOTV")
-                                    .font(.system(size: 34, weight: .black))
-                                    .foregroundStyle(.white)
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
 
-                                Text("PLAYER")
-                                    .font(.headline)
-                                    .tracking(8)
-                                    .foregroundStyle(.red)
+                        TextField("Adresse e-mail", text: $email)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.emailAddress)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(isLoading)
 
-                                Text(title)
-                                    .font(.title2.bold())
-                                    .padding(.top, 20)
-
-                                Text(subtitle)
-                                    .font(.subheadline)
-                                    .multilineTextAlignment(.center)
-                                    .foregroundStyle(.secondary)
-
-                                TextField("Adresse e-mail", text: $email)
-                                    .textInputAutocapitalization(.never)
-                                    .keyboardType(.emailAddress)
-                                    .textFieldStyle(.roundedBorder)
-                                    .disabled(isLoading)
-
-                                if mode != .reset {
-                                    SecureField("Mot de passe", text: $password)
-                                        .textFieldStyle(.roundedBorder)
-                                        .disabled(isLoading)
-                                }
-
-                                if mode == .signUp {
-                                    SecureField("Confirmer le mot de passe", text: $confirmPassword)
-                                        .textFieldStyle(.roundedBorder)
-                                        .disabled(isLoading)
-                                }
-
-                                if let message {
-                                    Text(message)
-                                        .font(.footnote)
-                                        .foregroundStyle(.red)
-                                }
-
-                                Button {
-                                    Task { await submit() }
-                                } label: {
-                                    if isLoading {
-                                        ProgressView()
-                                    } else {
-                                        Text(primaryButtonTitle)
-                                    }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.red)
-                                .frame(maxWidth: .infinity)
+                        if mode != .reset {
+                            SecureField("Mot de passe", text: $password)
+                                .textFieldStyle(.roundedBorder)
                                 .disabled(isLoading)
+                        }
 
-                                if mode == .signIn {
-                                    Button("Mot de passe oublié ?") {
-                                        mode = .reset
-                                        message = nil
-                                    }
-                                    .disabled(isLoading)
+                        if mode == .signUp {
+                            SecureField("Confirmer le mot de passe", text: $confirmPassword)
+                                .textFieldStyle(.roundedBorder)
+                                .disabled(isLoading)
+                        }
 
-                                    Button("Créer un compte") {
-                                        mode = .signUp
-                                        message = nil
-                                    }
-                                    .disabled(isLoading)
-                                } else {
-                                    Button("Retour à la connexion") {
-                                        mode = .signIn
-                                        message = nil
-                                    }
-                                    .disabled(isLoading)
-                                }
+                        if let message {
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
+
+                        Button {
+                            Task { await submit() }
+                        } label: {
+                            if isLoading {
+                                ProgressView()
+                            } else {
+                                Text(primaryButtonTitle)
                             }
-                            .padding(24)
-                            .frame(maxWidth: 480)
-                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .frame(maxWidth: .infinity)
+                        .disabled(isLoading)
+
+                        if mode == .signIn {
+                            Button("Mot de passe oublié ?") {
+                                mode = .reset
+                                message = nil
+                            }
+                            .disabled(isLoading)
+
+                            Button("Créer un compte") {
+                                mode = .signUp
+                                message = nil
+                            }
+                            .disabled(isLoading)
+                        } else {
+                            Button("Retour à la connexion") {
+                                mode = .signIn
+                                message = nil
+                            }
+                            .disabled(isLoading)
                         }
                     }
+                    .padding(24)
+                    .frame(maxWidth: 480)
+                    .frame(maxWidth: .infinity)
                 }
             }
         }
         .preferredColorScheme(.dark)
-        .task {
-            if await SupabaseAuthService.shared.hasStoredSession {
-                authenticated = true
-            }
-        }
     }
 
     @MainActor
@@ -164,7 +137,7 @@ struct AuthView: View {
                     email: email,
                     password: password
                 )
-                authenticated = true
+                onAuthenticated()
 
             case .signUp:
                 try await SupabaseAuthService.shared.signUp(
@@ -215,5 +188,5 @@ struct AuthView: View {
 }
 
 #Preview {
-    AuthView()
+    AuthView(onAuthenticated: {})
 }
