@@ -1,0 +1,29 @@
+name: iOS CI
+
+on:
+  pull_request:
+    paths:
+      - "iosApp/**"
+      - ".github/workflows/ios-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "iosApp/**"
+      - ".github/workflows/ios-ci.yml"
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+
+      - name: Build iPhone and iPad app
+        run: |
+          xcodebuild             -project iosApp/ZyvioTVPlayer.xcodeproj             -scheme ZyvioTVPlayer             -configuration Debug             -sdk iphonesimulator             -destination 'generic/platform=iOS Simulator'             CODE_SIGNING_ALLOWED=NO             build
