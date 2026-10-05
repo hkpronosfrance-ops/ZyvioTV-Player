@@ -38,6 +38,41 @@ class M3uCoreTest {
     }
 
     @Test
+    fun parserCanStreamEntriesWithoutBuildingAnIntermediateLineList() {
+        val lines = sequence {
+            yield("#EXTM3U")
+            repeat(5_000) { index ->
+                yield("#EXTINF:-1 group-title=\"Large\",Channel $index")
+                yield("https://stream.example/live/$index.ts")
+            }
+        }
+
+        var seen = 0
+        val emitted = M3uParser.parseLines(lines) {
+            seen += 1
+        }
+
+        assertEquals(5_000, emitted)
+        assertEquals(5_000, seen)
+    }
+
+    @Test
+    fun parserCanStopAtConfiguredEntryLimit() {
+        val content = buildString {
+            appendLine("#EXTM3U")
+            repeat(1_000) { index ->
+                appendLine("#EXTINF:-1,Channel $index")
+                appendLine("https://stream.example/live/$index.ts")
+            }
+        }
+
+        val entries = M3uParser.parse(content, maxEntries = 120)
+
+        assertEquals(120, entries.size)
+        assertEquals("Channel 119", entries.last().name)
+    }
+
+    @Test
     fun sensitiveQueryValuesAreRedacted() {
         val redacted = M3uLogging.redactUrl(
             "https://example.com/get.php?username=john&password=secret&type=m3u",
