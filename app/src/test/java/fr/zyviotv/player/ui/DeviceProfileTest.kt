@@ -1,8 +1,8 @@
 package fr.zyviotv.player.ui
 
 import android.content.res.Configuration
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Test
+import org.junit.Assert.assertEquals
 
 class DeviceProfileTest {
     @Test
