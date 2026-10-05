@@ -4,6 +4,7 @@ import fr.zyviotv.player.BuildConfig
 import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.shared.sync.CloudSyncRepository
 import fr.zyviotv.player.shared.sync.DeviceRegistration
+import fr.zyviotv.player.shared.sync.PlaylistSecret
 import fr.zyviotv.player.shared.sync.SyncResult
 import fr.zyviotv.player.shared.sync.SyncedPlaylist
 import java.net.HttpURLConnection
@@ -93,6 +94,84 @@ class SupabaseCloudSyncRepository(
                     }
                 }
             }
+        }
+
+    override suspend fun setPlaylistSecret(
+        playlistId: String,
+        secret: PlaylistSecret,
+    ): SyncResult = withContext(Dispatchers.IO) {
+        val session = sessionStore.load()
+            ?: return@withContext SyncResult.Failure("Session absente.")
+
+        val secretJson = when (secret) {
+            is PlaylistSecret.Xtream -> JSONObject()
+                .put("provider_type", secret.providerType)
+                .put("server_url", secret.serverUrl)
+                .put("username", secret.username)
+                .put("password", secret.password)
+            is PlaylistSecret.M3u -> JSONObject()
+                .put("provider_type", secret.providerType)
+                .put("url", secret.url)
+        }
+
+        val response = request(
+            path = "/rest/v1/rpc/player_set_playlist_secret",
+            method = "POST",
+            body = JSONObject()
+                .put("p_playlist_id", playlistId)
+                .put("p_secret", secretJson)
+                .toString(),
+            accessToken = session.accessToken,
+        )
+
+        if (response.code in 200..299) SyncResult.Success
+        else SyncResult.Failure("Impossible de sécuriser les identifiants du fournisseur.")
+    }
+
+    override suspend fun getPlaylistSecret(playlistId: String): Result<PlaylistSecret?> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val session = sessionStore.load() ?: error("Session absente.")
+                val response = request(
+                    path = "/rest/v1/rpc/player_get_playlist_secret",
+                    method = "POST",
+                    body = JSONObject().put("p_playlist_id", playlistId).toString(),
+                    accessToken = session.accessToken,
+                )
+
+                if (response.code !in 200..299) {
+                    error("Impossible de restaurer les identifiants du fournisseur.")
+                }
+
+                if (response.body.isBlank() || response.body == "null") return@runCatching null
+                val json = JSONObject(response.body)
+                when (json.optString("provider_type")) {
+                    "xtream" -> PlaylistSecret.Xtream(
+                        serverUrl = json.getString("server_url"),
+                        username = json.getString("username"),
+                        password = json.getString("password"),
+                    )
+                    "m3u" -> PlaylistSecret.M3u(
+                        url = json.getString("url"),
+                    )
+                    else -> error("Type de fournisseur non reconnu.")
+                }
+            }
+        }
+
+    override suspend fun deletePlaylistSecret(playlistId: String): SyncResult =
+        withContext(Dispatchers.IO) {
+            val session = sessionStore.load()
+                ?: return@withContext SyncResult.Failure("Session absente.")
+            val response = request(
+                path = "/rest/v1/rpc/player_delete_playlist_secret",
+                method = "POST",
+                body = JSONObject().put("p_playlist_id", playlistId).toString(),
+                accessToken = session.accessToken,
+            )
+
+            if (response.code in 200..299) SyncResult.Success
+            else SyncResult.Failure("Impossible de supprimer les identifiants du fournisseur.")
         }
 
     private fun fetchCurrentUserId(accessToken: String): String? {
