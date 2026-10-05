@@ -1,32 +1,58 @@
 package fr.zyviotv.player.shared.m3u
 
 object M3uParser {
-    fun parse(content: String): List<M3uEntry> {
-        val lines = content
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .toList()
+    fun parse(
+        content: String,
+        maxEntries: Int = Int.MAX_VALUE,
+    ): List<M3uEntry> {
+        if (maxEntries <= 0) return emptyList()
 
-        if (lines.isEmpty() || !lines.first().startsWith("#EXTM3U")) {
-            return emptyList()
+        val result = ArrayList<M3uEntry>(minOf(maxEntries, 256))
+        parseLines(
+            lines = content.lineSequence(),
+            maxEntries = maxEntries,
+        ) { entry ->
+            result += entry
         }
+        return result
+    }
 
-        val result = mutableListOf<M3uEntry>()
+    fun parseLines(
+        lines: Sequence<String>,
+        maxEntries: Int = Int.MAX_VALUE,
+        onEntry: (M3uEntry) -> Unit,
+    ): Int {
+        if (maxEntries <= 0) return 0
+
+        val iterator = lines.iterator()
+        var headerSeen = false
         var metadata: String? = null
+        var emitted = 0
 
-        for (line in lines.drop(1)) {
+        while (iterator.hasNext() && emitted < maxEntries) {
+            val line = iterator.next().trim()
+            if (line.isEmpty()) continue
+
+            if (!headerSeen) {
+                if (!line.startsWith("#EXTM3U")) return 0
+                headerSeen = true
+                continue
+            }
+
             when {
                 line.startsWith("#EXTINF:", ignoreCase = true) -> metadata = line
                 line.startsWith("#") -> Unit
                 metadata != null -> {
-                    parseEntry(metadata, line)?.let(result::add)
+                    parseEntry(metadata, line)?.let { entry ->
+                        onEntry(entry)
+                        emitted += 1
+                    }
                     metadata = null
                 }
             }
         }
 
-        return result
+        return emitted
     }
 
     private fun parseEntry(metadata: String, streamUrl: String): M3uEntry? {
