@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -267,7 +268,7 @@ private fun AuthAmbientPanel(modifier: Modifier = Modifier) {
             modifier = Modifier.widthIn(max = 520.dp),
         ) {
             ZyvioWordmark()
-            Spacer(Modifier.width(1.dp))
+            Spacer(Modifier.padding(top = 20.dp))
             Text(
                 text = "Vos chaînes, films et séries.\nUne seule expérience.",
                 style = MaterialTheme.typography.headlineLarge,
