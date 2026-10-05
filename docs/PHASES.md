@@ -7,8 +7,8 @@
 - Phase 4 — M3U/M3U8 shared provider core
 - Phase 5 — Home experience
 - Phase 6 — Live TV
-- Phase 7 — Native playback: Media3 (Android) + AVPlayer (iOS) (in progress)
-- Phase 8 — EPG
+- Phase 7 — Native playback: Media3 (Android) + AVPlayer (iOS)
+- Phase 8 — EPG (in progress)
 - Phase 9 — Movies
 - Phase 10 — Series / seasons / episodes
 - Phase 11 — Favorites / history / resume across devices
