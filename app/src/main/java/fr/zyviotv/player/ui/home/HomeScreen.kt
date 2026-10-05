@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
@@ -48,6 +49,7 @@ fun HomeScreen(
     onOpenLive: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
+    onOpenSearch: () -> Unit,
 ) {
     val contentPadding = if (profile == DeviceProfile.Mobile) 4.dp else 12.dp
 
@@ -69,6 +71,7 @@ fun HomeScreen(
             onOpenLive = onOpenLive,
             onOpenMovies = onOpenMovies,
             onOpenSeries = onOpenSeries,
+            onOpenSearch = onOpenSearch,
         )
 
         Spacer(Modifier.height(28.dp))
@@ -201,6 +204,7 @@ private fun QuickActions(
     onOpenLive: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
+    onOpenSearch: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -211,6 +215,7 @@ private fun QuickActions(
         QuickActionCard("TV en direct", Icons.Default.LiveTv, isTelevision, onOpenLive)
         QuickActionCard("Films", Icons.Default.Movie, isTelevision, onOpenMovies)
         QuickActionCard("Séries", Icons.Default.VideoLibrary, isTelevision, onOpenSeries)
+        QuickActionCard("Recherche", Icons.Default.Search, isTelevision, onOpenSearch)
         QuickActionCard("Favoris", Icons.Default.Favorite, isTelevision) {}
     }
 }
