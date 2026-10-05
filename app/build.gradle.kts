@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "fr.zyviotv.player"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "fr.zyviotv.player"
