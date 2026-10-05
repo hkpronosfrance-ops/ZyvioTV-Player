@@ -25,4 +25,5 @@
 - Phase 20 — Real M3U import
 - Phase 21 — Real catalog wiring
 - Phase 22 — Production playback
-- Phase 23 — Real EPG (in progress)
+- Phase 23 — Real EPG
+- Phase 24 — Secure cross-device synchronization (in progress)\n
