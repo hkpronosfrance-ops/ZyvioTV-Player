@@ -40,6 +40,7 @@ import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
 import fr.zyviotv.player.ui.movies.MoviesScreen
+import fr.zyviotv.player.ui.series.SeriesScreen
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
 import kotlinx.coroutines.delay
 
@@ -115,6 +116,10 @@ fun ZyvioTVPlayerApp() {
 
                         AppDestination.Movies -> {
                             MoviesScreen(profile = profile)
+                        }
+
+                        AppDestination.Series -> {
+                            SeriesScreen(profile = profile)
                         }
 
                         AppDestination.Settings -> {
