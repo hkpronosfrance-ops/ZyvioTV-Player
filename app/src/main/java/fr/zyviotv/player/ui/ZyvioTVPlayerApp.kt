@@ -239,7 +239,7 @@ private fun FoundationScreen(title: String, profile: DeviceProfile) {
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "Base ${profile.name.lowercase()} prête pour la Phase 1.",
+            text = "Écran ${profile.name.lowercase()} en préparation.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
