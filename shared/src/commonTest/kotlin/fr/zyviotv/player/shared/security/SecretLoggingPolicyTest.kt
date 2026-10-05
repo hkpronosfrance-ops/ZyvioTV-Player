@@ -15,4 +15,28 @@ class SecretLoggingPolicyTest {
             value,
         )
     }
+
+    @Test
+    fun xtreamPathCredentialsAreRedacted() {
+        val value = SecretLoggingPolicy.redactUrlForLogs(
+            "https://example.test/live/john/secret/12345.ts",
+        )
+
+        assertEquals(
+            "https://example.test/live/***/***/12345.ts",
+            value,
+        )
+    }
+
+    @Test
+    fun urlUserInfoCredentialsAreRedacted() {
+        val value = SecretLoggingPolicy.redactUrlForLogs(
+            "https://john:secret@example.test/live/1.ts",
+        )
+
+        assertEquals(
+            "https://***:***@example.test/live/1.ts",
+            value,
+        )
+    }
 }
