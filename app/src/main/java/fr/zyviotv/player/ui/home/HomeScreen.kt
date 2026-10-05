@@ -124,7 +124,7 @@ private fun Hero(
     val heroHeight = when (profile) {
         DeviceProfile.Mobile -> 220.dp
         DeviceProfile.Tablet -> 270.dp
-        DeviceProfile.Tv -> 330.dp
+        DeviceProfile.Television -> 330.dp
     }
 
     Box(
