@@ -1,5 +1,7 @@
 package fr.zyviotv.player.shared.series
 
+import fr.zyviotv.player.shared.security.SecretLoggingPolicy
+
 data class SeriesSummary(
     val id: String,
     val title: String,
@@ -18,7 +20,10 @@ data class SeriesEpisode(
     val streamUrl: String,
     val resumePositionMs: Long = 0L,
     val watched: Boolean = false,
-)
+) {
+    override fun toString(): String =
+        "SeriesEpisode(id=$id, seasonNumber=$seasonNumber, episodeNumber=$episodeNumber, title=$title, durationMinutes=$durationMinutes, streamUrl=${SecretLoggingPolicy.redactUrlForLogs(streamUrl)}, resumePositionMs=$resumePositionMs, watched=$watched)"
+}
 
 data class SeriesSeason(
     val number: Int,

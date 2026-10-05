@@ -1,0 +1,79 @@
+name: Release Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  hardening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Shared and Android tests
+        run: gradle testDebugUnitTest --stacktrace
+
+      - name: Android release lint
+        run: gradle lintRelease --stacktrace
+
+      - name: Build minified Android release
+        run: gradle assembleRelease --stacktrace
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate TV JavaScript
+        run: |
+          node --check tizenApp/app.js
+          node --check webosApp/app.js
+
+      - name: Validate TV manifests
+        run: |
+          node -e "const a=require('./webosApp/appinfo.json'); if(!a.id||a.type!=='web'||a.main!=='index.html') process.exit(1)"
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("tizenApp/config.xml").getroot()
+          assert root.tag == "{http://www.w3.org/ns/widgets}widget"
+          PY
+
+      - name: Reject privileged client secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          roots=(app/src iosApp tizenApp webosApp shared/src/commonMain)
+          if grep -R -n -E 'sb_secret_|service_role' "${roots[@]}"; then
+            echo "Privileged secret marker found in client source."
+            exit 1
+          fi
+          echo "No privileged client secret markers found."

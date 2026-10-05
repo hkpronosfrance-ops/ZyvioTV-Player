@@ -9,12 +9,29 @@ object SecretLoggingPolicy {
         "auth",
     )
 
-    fun redactUrlForLogs(raw: String): String {
-        val questionMark = raw.indexOf('?')
-        if (questionMark < 0) return raw
+    private val userInfoRegex = Regex(
+        """(https?://)[^/@\s:]+:[^/@\s]+@""",
+        RegexOption.IGNORE_CASE,
+    )
 
-        val base = raw.substring(0, questionMark)
-        val query = raw.substring(questionMark + 1)
+    private val xtreamPathRegex = Regex(
+        """(/(?:live|movie|series)/)([^/?#]+)(/)([^/?#]+)(/)""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    fun redactUrlForLogs(raw: String): String {
+        val withoutUserInfo = userInfoRegex.replace(raw) { match ->
+            "${match.groupValues[1]}***:***@"
+        }
+        val withoutPathCredentials = xtreamPathRegex.replace(withoutUserInfo) { match ->
+            "${match.groupValues[1]}***${match.groupValues[3]}***${match.groupValues[5]}"
+        }
+
+        val questionMark = withoutPathCredentials.indexOf('?')
+        if (questionMark < 0) return withoutPathCredentials
+
+        val base = withoutPathCredentials.substring(0, questionMark)
+        val query = withoutPathCredentials.substring(questionMark + 1)
         val redacted = query
             .split('&')
             .joinToString("&") { part ->
