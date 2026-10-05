@@ -6,6 +6,19 @@ object XtreamEndpointBuilder {
         return base + "/player_api.php"
     }
 
+    fun authenticatedPlayerApi(
+        credentials: XtreamCredentials,
+        action: String? = null,
+    ): String {
+        val base = playerApi(credentials)
+        val query = buildList {
+            add("username=" + encodeQuery(credentials.username))
+            add("password=" + encodeQuery(credentials.password))
+            if (!action.isNullOrBlank()) add("action=" + encodeQuery(action))
+        }.joinToString("&")
+        return "$base?$query"
+    }
+
     fun liveStream(
         credentials: XtreamCredentials,
         streamId: String,
@@ -64,10 +77,30 @@ object XtreamEndpointBuilder {
         )
 
     private fun encodePath(value: String): String =
-        value.trim()
-            .replace("%", "%25")
-            .replace("/", "%2F")
-            .replace("?", "%3F")
-            .replace("#", "%23")
-            .replace(" ", "%20")
+        encodeComponent(value.trim())
+
+    private fun encodeQuery(value: String): String =
+        encodeComponent(value.trim())
+
+    private fun encodeComponent(value: String): String = buildString {
+        value.encodeToByteArray().forEach { byte ->
+            val number = byte.toInt() and 0xff
+            val char = number.toChar()
+            val unreserved =
+                (char in 'a'..'z') ||
+                    (char in 'A'..'Z') ||
+                    (char in '0'..'9') ||
+                    char == '-' || char == '_' || char == '.' || char == '~'
+
+            if (unreserved) {
+                append(char)
+            } else {
+                append('%')
+                append(HEX[(number shr 4) and 0x0f])
+                append(HEX[number and 0x0f])
+            }
+        }
+    }
+
+    private const val HEX = "0123456789ABCDEF"
 }
