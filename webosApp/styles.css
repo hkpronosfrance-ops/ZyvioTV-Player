@@ -1,1 +1,12 @@
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#070707;color:#fff;font-family:Arial,Helvetica,sans-serif;overflow:hidden}button{font:inherit;color:inherit}.shell{display:grid;grid-template-columns:210px 1fr;height:100vh}.rail{padding:42px 24px;background:#0d0d0d;border-right:1px solid #202020}.brand{margin-bottom:46px}.brand strong{display:block;font-size:28px}.brand span,.eyebrow{color:#ef233c;font-weight:800;letter-spacing:4px}nav{display:grid;gap:14px}.nav,.primary,.card{border:2px solid transparent;outline:none;cursor:pointer;transition:transform 120ms ease,border-color 120ms ease,background 120ms ease}.nav{text-align:left;padding:16px 18px;border-radius:14px;background:transparent;color:#c8c8c8}.nav.active{background:#251014;color:#fff}[data-focusable]:focus{border-color:#ef233c;transform:scale(1.045)}.content{padding:36px 44px 64px;overflow-y:auto}.hero{min-height:330px;padding:44px;border-radius:28px;background:radial-gradient(circle at 78% 30%,rgba(239,35,60,.20),transparent 34%),linear-gradient(105deg,#300308,#111 55%,#080808);display:flex;flex-direction:column;justify-content:center}.hero h1{margin:10px 0 14px;font-size:48px;line-height:1.05}.hero p{color:#bdbdbd;font-size:20px;line-height:1.45}.primary{align-self:flex-start;margin-top:18px;padding:15px 24px;border-radius:14px;background:#ef233c;font-weight:800}.shelf{margin-top:34px}.shelf h2{font-size:25px}.cards{display:flex;gap:18px}.card{width:240px;height:150px;padding:20px;border-radius:20px;background:linear-gradient(160deg,#292929,#141414);display:flex;align-items:flex-end;text-align:left;font-weight:800;font-size:20px}.card.wide{width:310px;height:174px}.status{min-height:28px;margin-top:28px;color:#aaa}
+
+
+.tv-player {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+  z-index: 50;
+}
