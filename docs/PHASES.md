@@ -8,8 +8,8 @@
 - Phase 5 — Home experience
 - Phase 6 — Live TV
 - Phase 7 — Native playback: Media3 (Android) + AVPlayer (iOS)
-- Phase 8 — EPG (in progress)
-- Phase 9 — Movies
+- Phase 8 — EPG
+- Phase 9 — Movies (in progress)
 - Phase 10 — Series / seasons / episodes
 - Phase 11 — Favorites / history / resume across devices
 - Phase 12 — Android TV / Google TV / box polish
