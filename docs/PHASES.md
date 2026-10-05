@@ -19,4 +19,6 @@
 - Phase 16 — Samsung Tizen client
 - Phase 17 — LG webOS client
 - Phase 18 — Release hardening and store publication
-- Phase 18.5 — Real-device smoke test (in progress)
+- Phase 18.5 — Real-device smoke test
+
+- Phase 19 — Real Xtream Codes integration (in progress)

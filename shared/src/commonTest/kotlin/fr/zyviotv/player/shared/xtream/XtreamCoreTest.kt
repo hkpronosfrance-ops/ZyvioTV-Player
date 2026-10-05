@@ -21,6 +21,22 @@ class XtreamCoreTest {
     }
 
     @Test
+    fun authenticatedPlayerApiEncodesCredentialsSafely() {
+        val url = XtreamEndpointBuilder.authenticatedPlayerApi(
+            XtreamCredentials(
+                serverUrl = "https://provider.example/",
+                username = "john+tv@example.com",
+                password = "s ecret&42",
+            ),
+        )
+
+        assertEquals(
+            "https://provider.example/player_api.php?username=john%2Btv%40example.com&password=s%20ecret%2642",
+            url,
+        )
+    }
+
+    @Test
     fun playerApiDoesNotEmbedCredentialsInPath() {
         val url = XtreamEndpointBuilder.playerApi(
             XtreamCredentials(
