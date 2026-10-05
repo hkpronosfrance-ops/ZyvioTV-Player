@@ -10,15 +10,24 @@ enum class DeviceProfile {
     Television,
 }
 
+fun resolveDeviceProfile(
+    screenWidthDp: Int,
+    uiModeType: Int,
+): DeviceProfile = when {
+    uiModeType == Configuration.UI_MODE_TYPE_TELEVISION -> DeviceProfile.Television
+    screenWidthDp >= TABLET_MIN_WIDTH_DP -> DeviceProfile.Tablet
+    else -> DeviceProfile.Mobile
+}
+
 @Composable
 fun rememberDeviceProfile(): DeviceProfile {
     val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+    val uiModeType = configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
 
-    return when {
-        isTelevision -> DeviceProfile.Television
-        configuration.screenWidthDp >= 600 -> DeviceProfile.Tablet
-        else -> DeviceProfile.Mobile
-    }
+    return resolveDeviceProfile(
+        screenWidthDp = configuration.screenWidthDp,
+        uiModeType = uiModeType,
+    )
 }
+
+private const val TABLET_MIN_WIDTH_DP = 600
