@@ -50,3 +50,40 @@ object EpgTimeline {
             .toFloat()
     }
 }
+
+
+data class EpgWindow(
+    val fromEpochSeconds: Long,
+    val toEpochSeconds: Long,
+) {
+    init {
+        require(toEpochSeconds > fromEpochSeconds)
+    }
+
+    fun contains(programme: EpgProgramme): Boolean =
+        programme.endEpochSeconds > fromEpochSeconds &&
+            programme.startEpochSeconds < toEpochSeconds
+
+    companion object {
+        fun around(
+            nowEpochSeconds: Long,
+            beforeSeconds: Long = 3 * 60 * 60,
+            afterSeconds: Long = 3 * 60 * 60,
+        ): EpgWindow = EpgWindow(
+            fromEpochSeconds = nowEpochSeconds - beforeSeconds,
+            toEpochSeconds = nowEpochSeconds + afterSeconds,
+        )
+    }
+}
+
+sealed interface EpgLoadResult {
+    data class Success(val programmes: List<EpgProgramme>) : EpgLoadResult
+    data class Failure(val message: String) : EpgLoadResult
+}
+
+interface EpgRepository {
+    suspend fun load(
+        channelId: String,
+        window: EpgWindow,
+    ): EpgLoadResult
+}

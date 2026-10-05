@@ -37,6 +37,27 @@ class XtreamCoreTest {
     }
 
     @Test
+    fun authenticatedPlayerApiEncodesExtraParameters() {
+        val url = XtreamEndpointBuilder.authenticatedPlayerApi(
+            credentials = XtreamCredentials(
+                serverUrl = "https://provider.example",
+                username = "user",
+                password = "secret",
+            ),
+            action = "get_short_epg",
+            extraParams = mapOf(
+                "stream_id" to "42",
+                "note" to "a b&c",
+            ),
+        )
+
+        assertEquals(
+            "https://provider.example/player_api.php?username=user&password=secret&action=get_short_epg&note=a%20b%26c&stream_id=42",
+            url,
+        )
+    }
+
+    @Test
     fun playerApiDoesNotEmbedCredentialsInPath() {
         val url = XtreamEndpointBuilder.playerApi(
             XtreamCredentials(
