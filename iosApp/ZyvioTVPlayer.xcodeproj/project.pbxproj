@@ -70,7 +70,7 @@
 				B1000000000000000000000A /* SupabaseLibrarySyncService.swift */,
 				B1000000000000000000000B /* ZyvioTVPlayerApp.swift */,
 			);
-			path = ..;
+			path = ".";
 			sourceTree = "<group>";
 		};
 		D10000000000000000000003 /* Products */ = {
