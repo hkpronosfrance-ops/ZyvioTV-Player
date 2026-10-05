@@ -17,7 +17,14 @@ create index if not exists player_playlist_secrets_user_idx
 
 alter table public.player_playlist_secrets enable row level security;
 
--- Intentionally no RLS policies: direct client access is denied.
+-- Explicit deny policy: clients must use the ownership-checking RPCs below.
+create policy "player_playlist_secrets_deny_direct_clients"
+  on public.player_playlist_secrets
+  for all
+  to anon, authenticated
+  using (false)
+  with check (false);
+
 revoke all on table public.player_playlist_secrets from anon, authenticated;
 
 create or replace function public.player_set_playlist_secret(
