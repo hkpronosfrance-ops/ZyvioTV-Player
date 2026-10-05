@@ -9,12 +9,16 @@ object XtreamEndpointBuilder {
     fun authenticatedPlayerApi(
         credentials: XtreamCredentials,
         action: String? = null,
+        extraParams: Map<String, String> = emptyMap(),
     ): String {
         val base = playerApi(credentials)
         val query = buildList {
             add("username=" + encodeQuery(credentials.username))
             add("password=" + encodeQuery(credentials.password))
             if (!action.isNullOrBlank()) add("action=" + encodeQuery(action))
+            extraParams.toSortedMap().forEach { (key, value) ->
+                add(encodeQuery(key) + "=" + encodeQuery(value))
+            }
         }.joinToString("&")
         return "$base?$query"
     }
