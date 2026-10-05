@@ -32,6 +32,12 @@ jobs:
       - name: Validate JavaScript syntax
         run: node --check tizenApp/app.js
 
+      - name: Validate provider core
+        run: node tizenApp/provider.test.cjs
+
+      - name: Validate playback adapter syntax
+        run: node --check tizenApp/player.js
+
       - name: Validate Tizen manifest XML
         run: |
           python - <<'PY'
@@ -62,4 +68,6 @@ jobs:
           test -s tizenApp/index.html
           test -s tizenApp/styles.css
           test -s tizenApp/app.js
+          test -s tizenApp/provider.js
+          test -s tizenApp/player.js
           test -s tizenApp/config.xml
