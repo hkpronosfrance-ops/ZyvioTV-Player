@@ -3,8 +3,8 @@ package fr.zyviotv.player.data.epg
 import fr.zyviotv.player.shared.epg.EpgProgramme
 import fr.zyviotv.player.shared.epg.EpgWindow
 import java.io.InputStream
-import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.Locale
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
@@ -72,8 +72,10 @@ object XmlTvParser {
 
         for (pattern in candidates) {
             try {
-                val formatter = DateTimeFormatter.ofPattern(pattern)
-                return OffsetDateTime.parse(normalized, formatter).toEpochSecond()
+                val formatter = SimpleDateFormat(pattern, Locale.US).apply {
+                    isLenient = false
+                }
+                return formatter.parse(normalized)?.time?.div(1000L)
             } catch (_: Exception) {
                 Unit
             }
