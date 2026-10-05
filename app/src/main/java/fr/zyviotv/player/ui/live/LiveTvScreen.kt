@@ -25,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,13 +46,14 @@ private data class LiveChannelPreview(
     val category: String,
     val currentProgram: String,
     val nextProgram: String,
+    val progress: Float,
 )
 
 private val previewChannels = listOf(
-    LiveChannelPreview("Chaîne 1", "France", "Programme en direct", "Programme suivant"),
-    LiveChannelPreview("Chaîne 2", "Sports", "Match en direct", "Magazine sportif"),
-    LiveChannelPreview("Chaîne 3", "Information", "Journal", "Débat"),
-    LiveChannelPreview("Chaîne 4", "Divertissement", "Émission", "Série"),
+    LiveChannelPreview("Chaîne 1", "France", "Programme en direct", "Programme suivant", 0.42f),
+    LiveChannelPreview("Chaîne 2", "Sports", "Match en direct", "Magazine sportif", 0.68f),
+    LiveChannelPreview("Chaîne 3", "Information", "Journal", "Débat", 0.31f),
+    LiveChannelPreview("Chaîne 4", "Divertissement", "Émission", "Série", 0.55f),
 )
 
 @Composable
@@ -243,7 +245,7 @@ private fun PlayerPreview(channel: LiveChannelPreview) {
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Lecteur vidéo disponible en Phase 7",
+                    text = "Lecteur vidéo natif prêt",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -262,7 +264,14 @@ private fun PlayerPreview(channel: LiveChannelPreview) {
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(10.dp))
+        LinearProgressIndicator(
+            progress = { channel.progress.coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
         Text(
             text = "À suivre : ${channel.nextProgram}",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -329,6 +338,13 @@ private fun ChannelList(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { channel.progress.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         )
                     }
                 }
