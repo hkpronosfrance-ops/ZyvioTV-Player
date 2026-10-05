@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +37,7 @@ import androidx.navigation.compose.rememberNavController
 import fr.zyviotv.player.shared.AppIdentity
 import fr.zyviotv.player.ui.auth.AuthScreen
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
+import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
 import kotlinx.coroutines.delay
 
@@ -47,6 +49,7 @@ private enum class AppDestination(
     Home("home", "Accueil", Icons.Default.Home),
     Live("live", "TV", Icons.Default.LiveTv),
     Movies("movies", "Films", Icons.Default.Movie),
+    Series("series", "Séries", Icons.Default.VideoLibrary),
     Settings("settings", "Plus", Icons.Default.Settings),
 }
 
@@ -93,19 +96,28 @@ fun ZyvioTVPlayerApp() {
                         }
                     },
                 ) {
-                    if (destination == AppDestination.Home) {
-                        DeviceSyncEffect()
-                    }
-                    if (destination == AppDestination.Settings) {
-                        AccountSettingsScreen(
-                            onSignedOut = {
-                                navController.navigate("auth") {
-                                    popUpTo(AppDestination.Home.route) { inclusive = true }
-                                }
-                            },
-                        )
-                    } else {
-                        FoundationScreen(destination.label, profile)
+                    when (destination) {
+                        AppDestination.Home -> {
+                            DeviceSyncEffect()
+                            HomeScreen(
+                                profile = profile,
+                                onOpenLive = { navController.navigate(AppDestination.Live.route) },
+                                onOpenMovies = { navController.navigate(AppDestination.Movies.route) },
+                                onOpenSeries = { navController.navigate(AppDestination.Series.route) },
+                            )
+                        }
+
+                        AppDestination.Settings -> {
+                            AccountSettingsScreen(
+                                onSignedOut = {
+                                    navController.navigate("auth") {
+                                        popUpTo(AppDestination.Home.route) { inclusive = true }
+                                    }
+                                },
+                            )
+                        }
+
+                        else -> FoundationScreen(destination.label, profile)
                     }
                 }
             }
