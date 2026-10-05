@@ -2,8 +2,8 @@
 
 - Phase 0 — Multiplatform foundation
 - Phase 1 — ZyvioTV account authentication (Android + iOS contract)
-- Phase 2 — Cloud account/device synchronization (in progress)
-- Phase 3 — Xtream Codes shared provider core
+- Phase 2 — Cloud account/device synchronization
+- Phase 3 — Xtream Codes shared provider core (in progress)
 - Phase 4 — M3U/M3U8 shared provider core
 - Phase 5 — Home experience
 - Phase 6 — Live TV
