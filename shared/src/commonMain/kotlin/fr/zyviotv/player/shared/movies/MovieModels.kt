@@ -1,5 +1,7 @@
 package fr.zyviotv.player.shared.movies
 
+import fr.zyviotv.player.shared.security.SecretLoggingPolicy
+
 data class MovieSummary(
     val id: String,
     val title: String,
@@ -20,7 +22,10 @@ data class MovieDetails(
     val backdropUrl: String? = null,
     val streamUrl: String,
     val resumePositionMs: Long = 0L,
-)
+) {
+    override fun toString(): String =
+        "MovieDetails(id=$id, title=$title, year=$year, durationMinutes=$durationMinutes, rating=$rating, genres=$genres, posterUrl=$posterUrl, backdropUrl=$backdropUrl, streamUrl=${SecretLoggingPolicy.redactUrlForLogs(streamUrl)}, resumePositionMs=$resumePositionMs)"
+}
 
 sealed interface MovieValidationResult {
     data object Valid : MovieValidationResult
