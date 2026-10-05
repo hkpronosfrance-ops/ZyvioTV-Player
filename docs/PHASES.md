@@ -11,8 +11,8 @@
 - Phase 8 — EPG
 - Phase 9 — Movies
 - Phase 10 — Series / seasons / episodes
-- Phase 11 — Favorites / history / resume across devices (in progress)
-- Phase 12 — Android TV / Google TV / box polish
+- Phase 11 — Favorites / history / resume across devices
+- Phase 12 — Android TV / Google TV / box polish (in progress)
 - Phase 13 — iPhone / iPad polish and Apple QA
 - Phase 14 — Performance and large-playlist optimization
 - Phase 15 — Device QA matrix
