@@ -56,7 +56,16 @@ jobs:
       - name: Validate TV JavaScript
         run: |
           node --check tizenApp/app.js
+          node --check tizenApp/provider.js
+          node --check tizenApp/player.js
           node --check webosApp/app.js
+          node --check webosApp/provider.js
+          node --check webosApp/player.js
+
+      - name: Test TV provider cores
+        run: |
+          node tizenApp/provider.test.cjs
+          node webosApp/provider.test.cjs
 
       - name: Validate TV manifests
         run: |
@@ -66,6 +75,9 @@ jobs:
           root = ET.parse("tizenApp/config.xml").getroot()
           assert root.tag == "{http://www.w3.org/ns/widgets}widget"
           PY
+
+      - name: Scan client credential fixtures
+        run: python scripts/check_client_secrets.py
 
       - name: Reject privileged client secrets
         shell: bash
