@@ -14,8 +14,8 @@
 - Phase 11 — Favorites / history / resume across devices
 - Phase 12 — Android TV / Google TV / box polish
 - Phase 13 — iPhone / iPad polish and Apple QA
-- Phase 14 — Performance and large-playlist optimization (in progress)
-- Phase 15 — Device QA matrix
+- Phase 14 — Performance and large-playlist optimization
+- Phase 15 — Device QA matrix (in progress)
 - Phase 16 — Samsung Tizen client
 - Phase 17 — LG webOS client
 - Phase 18 — Release hardening and store publication
