@@ -42,6 +42,8 @@ import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
 import fr.zyviotv.player.ui.movies.MoviesScreen
 import fr.zyviotv.player.ui.series.SeriesScreen
+import fr.zyviotv.player.ui.search.SearchScreen
+import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
 import kotlinx.coroutines.delay
 
@@ -85,6 +87,32 @@ fun ZyvioTVPlayerApp() {
             )
         }
 
+        composable("search") {
+            AdaptiveShell(
+                profile = profile,
+                destinations = AppDestination.entries,
+                selectedRoute = "",
+                onDestinationSelected = { target ->
+                    navController.navigate(target.route) {
+                        launchSingleTop = true
+                    }
+                },
+            ) {
+                SearchScreen(
+                    profile = profile,
+                    onBack = { navController.popBackStack() },
+                    onResultSelected = { result ->
+                        val route = when (result.kind) {
+                            SearchKind.Live -> AppDestination.Live.route
+                            SearchKind.Movie -> AppDestination.Movies.route
+                            SearchKind.Series -> AppDestination.Series.route
+                        }
+                        navController.navigate(route)
+                    },
+                )
+            }
+        }
+
         AppDestination.entries.forEach { destination ->
             composable(destination.route) {
                 AdaptiveShell(
@@ -109,6 +137,7 @@ fun ZyvioTVPlayerApp() {
                                 onOpenLive = { navController.navigate(AppDestination.Live.route) },
                                 onOpenMovies = { navController.navigate(AppDestination.Movies.route) },
                                 onOpenSeries = { navController.navigate(AppDestination.Series.route) },
+                                onOpenSearch = { navController.navigate("search") },
                             )
                         }
 
