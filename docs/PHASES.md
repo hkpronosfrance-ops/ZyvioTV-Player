@@ -24,4 +24,5 @@
 - Phase 19 — Real Xtream Codes integration
 - Phase 20 — Real M3U import
 - Phase 21 — Real catalog wiring
-- Phase 22 — Production playback (in progress)
+- Phase 22 — Production playback
+- Phase 23 — Real EPG (in progress)
