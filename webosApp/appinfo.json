@@ -1,0 +1,13 @@
+{
+  "id": "fr.zyviotv.player",
+  "version": "0.1.0",
+  "vendor": "ZYVIOTV",
+  "type": "web",
+  "main": "index.html",
+  "title": "ZYVIOTV Player",
+  "icon": "icon.png",
+  "largeIcon": "icon-large.png",
+  "bgColor": "#070707",
+  "transparent": false,
+  "disableBackHistoryAPI": true
+}
