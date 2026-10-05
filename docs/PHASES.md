@@ -16,6 +16,6 @@
 - Phase 13 — iPhone / iPad polish and Apple QA
 - Phase 14 — Performance and large-playlist optimization
 - Phase 15 — Device QA matrix
-- Phase 16 — Samsung Tizen client (in progress)
-- Phase 17 — LG webOS client
+- Phase 16 — Samsung Tizen client
+- Phase 17 — LG webOS client (in progress)
 - Phase 18 — Release hardening and store publication
