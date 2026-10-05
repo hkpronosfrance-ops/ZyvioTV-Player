@@ -23,7 +23,7 @@ kotlin {
 
 android {
     namespace = "fr.zyviotv.player.shared"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
