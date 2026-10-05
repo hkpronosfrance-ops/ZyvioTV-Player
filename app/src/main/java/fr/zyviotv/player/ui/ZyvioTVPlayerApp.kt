@@ -76,6 +76,7 @@ fun ZyvioTVPlayerApp() {
 
         composable("auth") {
             AuthScreen(
+                profile = profile,
                 onAuthenticated = {
                     navController.navigate(AppDestination.Home.route) {
                         popUpTo("auth") { inclusive = true }
