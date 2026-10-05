@@ -1,0 +1,51 @@
+name: webOS CI
+
+on:
+  pull_request:
+    paths:
+      - "webosApp/**"
+      - ".github/workflows/webos-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "webosApp/**"
+      - ".github/workflows/webos-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate JavaScript syntax
+        run: node --check webosApp/app.js
+
+      - name: Validate appinfo.json
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const data = JSON.parse(fs.readFileSync("webosApp/appinfo.json", "utf8"));
+          if (!data.id || !data.version || data.type !== "web" || data.main !== "index.html") {
+            throw new Error("Invalid webOS appinfo.json");
+          }
+          console.log("webOS manifest structure OK");
+          NODE
+
+      - name: Validate required client files
+        run: |
+          test -s webosApp/index.html
+          test -s webosApp/styles.css
+          test -s webosApp/app.js
+          test -s webosApp/appinfo.json

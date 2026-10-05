@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>ZYVIOTV Player</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <aside class="rail">
+      <div class="brand">
+        <strong>ZYVIOTV</strong>
+        <span>PLAYER</span>
+      </div>
+      <nav>
+        <button data-focusable data-section="home" class="nav active">Accueil</button>
+        <button data-focusable data-section="live" class="nav">TV</button>
+        <button data-focusable data-section="movies" class="nav">Films</button>
+        <button data-focusable data-section="series" class="nav">Séries</button>
+        <button data-focusable data-section="more" class="nav">Plus</button>
+      </nav>
+    </aside>
+
+    <section class="content">
+      <header class="hero">
+        <p class="eyebrow">LG SMART TV</p>
+        <h1>Tout votre univers au même endroit.</h1>
+        <p>Interface grand écran pensée pour la télécommande LG.</p>
+        <button class="primary" data-focusable data-section="live">Regarder la TV</button>
+      </header>
+
+      <section class="shelf">
+        <h2>Accès rapide</h2>
+        <div class="cards">
+          <button class="card" data-focusable data-section="live">TV en direct</button>
+          <button class="card" data-focusable data-section="movies">Films</button>
+          <button class="card" data-focusable data-section="series">Séries</button>
+          <button class="card" data-focusable data-section="favorites">Favoris</button>
+        </div>
+      </section>
+
+      <section class="shelf">
+        <h2>Reprendre la lecture</h2>
+        <div class="cards">
+          <button class="card wide" data-focusable>Dernier contenu</button>
+          <button class="card wide" data-focusable>Épisode en cours</button>
+          <button class="card wide" data-focusable>Film commencé</button>
+        </div>
+      </section>
+
+      <div id="status" class="status"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
