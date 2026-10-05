@@ -27,4 +27,5 @@
 - Phase 22 — Production playback
 - Phase 23 — Real EPG
 - Phase 24 — Secure cross-device synchronization
-- Phase 25 — Samsung/LG functional provider playback (in progress)
+- Phase 25 — Samsung/LG functional provider playback
+- Phase 26 — Final QA and publication hardening (in progress)

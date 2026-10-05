@@ -19,7 +19,7 @@ The product is designed as a multiplatform system from day one.
 
 - JDK 17
 - Android minSdk 24 (Android 7.0)
-- Android target / compile SDK 35
+- Android target SDK 35 / compile SDK 36
 
 ### Shared responsibilities
 
@@ -49,7 +49,7 @@ GitHub Actions verifies the shared/Android foundation with:
 - Android lint
 - debug APK build
 
-Apple builds will be added when the Xcode project and signing-independent iOS CI target are introduced.
+Signing-independent iOS CI is active; signed App Store builds still require provisioning and publication credentials.
 
 ### Project docs
 

@@ -32,15 +32,15 @@ A green release gate means the source passes automated hardening checks. It does
 
 Before public publication, the following still require explicit completion and verification:
 
-- real Xtream network adapter
-- production M3U network loader
-- real provider data wired into Live / Movies / Series
-- real EPG ingestion
-- secure cross-device provider-secret storage/restoration
-- playback reconnect/error/buffering UX
-- physical phone/tablet/TV/box testing
-- Samsung AVPlay integration and model-year QA
-- LG playback integration and model-year QA
+- real Xtream network adapter — implemented; provider QA pending
+- production M3U network loader — implemented; provider QA pending
+- normalized real provider catalog layer — implemented; final screen wiring/QA pending
+- real EPG ingestion — implemented; provider-feed QA pending
+- secure cross-device provider-secret storage/restoration — implemented with Vault; end-to-end multi-device QA pending
+- playback reconnect/error/buffering UX — implementation hardened; physical QA pending
+- physical phone/tablet/TV/box testing — pending
+- Samsung AVPlay integration — implemented; model-year QA pending
+- LG playback integration — implemented; model-year QA pending
 - Apple/Android/TV signing and store credentials
 - privacy/store metadata and review requirements
 
