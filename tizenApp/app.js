@@ -3,6 +3,65 @@
 
     const focusableSelector = "[data-focusable]";
     const status = document.getElementById("status");
+    const video = document.getElementById("tv-player");
+    const player = window.ZyvioPlayer?.create(video);
+    let providerConfig = null;
+    let liveChannels = [];
+
+    async function loadProviderLive() {
+        if (!providerConfig) {
+            setStatus("Aucun fournisseur configuré.");
+            return [];
+        }
+        setStatus("Chargement des chaînes…");
+        try {
+            liveChannels = await window.ZyvioProvider.loadLive(providerConfig);
+            setStatus(liveChannels.length + " chaînes chargées.");
+            return liveChannels;
+        } catch (error) {
+            setStatus(error?.message || "Impossible de charger les chaînes.");
+            return [];
+        }
+    }
+
+    async function playChannel(channelOrIndex = 0) {
+        if (!liveChannels.length) await loadProviderLive();
+        const channel = typeof channelOrIndex === "number"
+            ? liveChannels[channelOrIndex]
+            : channelOrIndex;
+        if (!channel) {
+            setStatus("Chaîne introuvable.");
+            return;
+        }
+        try {
+            await player.play(channel.streamUrl);
+            setStatus("Lecture : " + channel.name);
+        } catch (_) {
+            setStatus("Flux indisponible.");
+        }
+    }
+
+    window.ZyvioTV = Object.freeze({
+        setProviderConfig(config) {
+            providerConfig = config ? { ...config } : null;
+            liveChannels = [];
+            return Boolean(providerConfig);
+        },
+        clearProviderConfig() {
+            providerConfig = null;
+            liveChannels = [];
+            player?.stop();
+        },
+        loadLive: loadProviderLive,
+        playChannel,
+        stopPlayback() {
+            player?.stop();
+        },
+        getLiveChannels() {
+            return liveChannels.map(({ streamUrl, ...safe }) => ({ ...safe }));
+        },
+    });
+
 
     function focusables() {
         return Array.from(document.querySelectorAll(focusableSelector))
@@ -144,6 +203,7 @@
 
         if (target.dataset.action === "open-live") {
             activateSection("live");
+            loadProviderLive();
             return;
         }
 

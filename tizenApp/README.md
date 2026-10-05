@@ -21,7 +21,15 @@ The client provides:
 - optional registration of Samsung media remote keys
 - Supabase origin allow-list
 
-The current cards are placeholders. Authentication, playlist restoration, real catalogs, AVPlay/native streaming behavior and production Samsung signing are not claimed complete yet.
+Phase 25 adds the functional provider/playback runtime:
+- Xtream live categories/streams loading
+- M3U loading/parsing
+- Samsung AVPlay playback when available, with HTML5 video fallback
+- in-memory provider configuration only
+- provider URLs/credentials are never written to UI status or logs
+- CI regression tests for provider parsing and URL redaction
+
+Authentication UI, secure account-based provider restoration into this runtime, production Samsung signing and physical model-year certification are still pending.
 
 ## Security
 

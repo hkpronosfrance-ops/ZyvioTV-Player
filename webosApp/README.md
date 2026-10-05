@@ -15,16 +15,24 @@ Phase 17 introduces the dedicated LG webOS Smart TV client foundation.
 
 ## Current scope
 
-This is a webOS application foundation. It does not yet claim complete production playback or Store readiness.
+Phase 25 adds the functional provider/playback runtime for live TV:
+- Xtream live categories/streams loading
+- M3U loading/parsing
+- HTML5 video playback surface
+- in-memory provider configuration only
+- provider URLs/credentials are never written to UI status or logs
+- CI regression tests for provider parsing and URL redaction
+
+This still does not claim Store readiness or physical model-year certification.
 
 Remaining integration includes:
 
 - ZyvioTV account authentication
-- secure playlist restoration
-- real Live / Movies / Series catalogs
-- EPG
-- favorites/history/resume
-- webOS media pipeline/native playback validation
+- secure account-based playlist restoration into the TV runtime
+- real Movies / Series catalog UI wiring
+- EPG UI wiring
+- favorites/history/resume UI wiring
+- webOS codec/model playback validation
 - model-year compatibility testing
 - packaging/signing for LG Seller Lounge
 - physical LG TV/emulator QA

@@ -103,7 +103,10 @@
 
   document.addEventListener("click", (event) => {
     const target = event.target.closest("[data-section]");
-    if (target?.dataset.section) activate(target.dataset.section);
+    if (target?.dataset.section) {
+      activate(target.dataset.section);
+      if (target.dataset.section === "live") loadProviderLive();
+    }
   });
 
   window.addEventListener("load", () => {
