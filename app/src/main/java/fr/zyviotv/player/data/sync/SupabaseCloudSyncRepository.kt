@@ -1,0 +1,154 @@
+package fr.zyviotv.player.data.sync
+
+import fr.zyviotv.player.BuildConfig
+import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.shared.sync.CloudSyncRepository
+import fr.zyviotv.player.shared.sync.DeviceRegistration
+import fr.zyviotv.player.shared.sync.SyncResult
+import fr.zyviotv.player.shared.sync.SyncedPlaylist
+import java.net.HttpURLConnection
+import java.net.URL
+import java.nio.charset.StandardCharsets
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+
+class SupabaseCloudSyncRepository(
+    private val sessionStore: SecureSessionStore,
+) : CloudSyncRepository {
+
+    override suspend fun registerDevice(device: DeviceRegistration): SyncResult =
+        withContext(Dispatchers.IO) {
+            val session = sessionStore.load()
+                ?: return@withContext SyncResult.Failure("Session absente.")
+
+            val userId = fetchCurrentUserId(session.accessToken)
+                ?: return@withContext SyncResult.Failure("Compte utilisateur introuvable.")
+
+            val body = JSONArray()
+                .put(
+                    JSONObject()
+                        .put("user_id", userId)
+                        .put("device_uid", device.deviceUid)
+                        .put("display_name", device.displayName)
+                        .put("platform", device.platform.wireValue)
+                        .put("app_version", device.appVersion)
+                        .put("last_seen_at", utcNow())
+                        .put("updated_at", utcNow())
+                )
+                .toString()
+
+            val response = request(
+                path = "/rest/v1/player_devices?on_conflict=user_id,device_uid",
+                method = "POST",
+                body = body,
+                accessToken = session.accessToken,
+                extraHeaders = mapOf(
+                    "Prefer" to "resolution=merge-duplicates,return=minimal",
+                ),
+            )
+
+            if (response.code in 200..299) {
+                SyncResult.Success
+            } else {
+                SyncResult.Failure("Impossible de synchroniser cet appareil.")
+            }
+        }
+
+    override suspend fun listPlaylists(): Result<List<SyncedPlaylist>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val session = sessionStore.load() ?: error("Session absente.")
+                val response = request(
+                    path = "/rest/v1/player_playlists?select=id,name,provider_type,server_host,playlist_url_hint,secret_status,is_enabled&order=updated_at.desc",
+                    method = "GET",
+                    body = null,
+                    accessToken = session.accessToken,
+                )
+
+                if (response.code !in 200..299) {
+                    error("Impossible de récupérer les playlists.")
+                }
+
+                val array = JSONArray(response.body)
+                buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.getJSONObject(index)
+                        add(
+                            SyncedPlaylist(
+                                id = item.getString("id"),
+                                name = item.getString("name"),
+                                providerType = item.getString("provider_type"),
+                                serverHost = item.optString("server_host").takeIf { it.isNotBlank() },
+                                playlistUrlHint = item.optString("playlist_url_hint").takeIf { it.isNotBlank() },
+                                secretStatus = item.optString("secret_status", "not_configured"),
+                                isEnabled = item.optBoolean("is_enabled", true),
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+    private fun fetchCurrentUserId(accessToken: String): String? {
+        val response = request(
+            path = "/auth/v1/user",
+            method = "GET",
+            body = null,
+            accessToken = accessToken,
+        )
+
+        if (response.code !in 200..299) return null
+        return runCatching { JSONObject(response.body).getString("id") }.getOrNull()
+    }
+
+    private fun request(
+        path: String,
+        method: String,
+        body: String?,
+        accessToken: String,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): HttpResponse {
+        val connection = (URL(BuildConfig.SUPABASE_URL + path).openConnection() as HttpURLConnection)
+        try {
+            connection.requestMethod = method
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            connection.doInput = true
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+            connection.setRequestProperty("Authorization", "Bearer $accessToken")
+            extraHeaders.forEach(connection::setRequestProperty)
+
+            if (body != null) {
+                connection.doOutput = true
+                connection.outputStream.bufferedWriter(StandardCharsets.UTF_8).use {
+                    it.write(body)
+                }
+            }
+
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val responseBody = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            return HttpResponse(code, responseBody)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun utcNow(): String {
+        val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        formatter.timeZone = TimeZone.getTimeZone("UTC")
+        return formatter.format(Date())
+    }
+
+    private data class HttpResponse(
+        val code: Int,
+        val body: String,
+    )
+}

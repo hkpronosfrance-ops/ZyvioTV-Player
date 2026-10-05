@@ -36,6 +36,7 @@ import androidx.navigation.compose.rememberNavController
 import fr.zyviotv.player.shared.AppIdentity
 import fr.zyviotv.player.ui.auth.AuthScreen
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
+import fr.zyviotv.player.ui.sync.DeviceSyncEffect
 import kotlinx.coroutines.delay
 
 private enum class AppDestination(
@@ -92,6 +93,9 @@ fun ZyvioTVPlayerApp() {
                         }
                     },
                 ) {
+                    if (destination == AppDestination.Home) {
+                        DeviceSyncEffect()
+                    }
                     if (destination == AppDestination.Settings) {
                         AccountSettingsScreen(
                             onSignedOut = {
