@@ -80,7 +80,18 @@ object M3uParser {
     }
 
     private fun attribute(line: String, name: String): String? {
-        val match = Regex("""$name\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE).find(line)
-        return match?.groups?.get(1)?.value?.takeIf { it.isNotBlank() }
+        val regex = when (name) {
+            "tvg-id" -> TVG_ID_REGEX
+            "tvg-name" -> TVG_NAME_REGEX
+            "tvg-logo" -> TVG_LOGO_REGEX
+            "group-title" -> GROUP_TITLE_REGEX
+            else -> return null
+        }
+        return regex.find(line)?.groups?.get(1)?.value?.takeIf { it.isNotBlank() }
     }
+
+    private val TVG_ID_REGEX = Regex("""tvg-id\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
+    private val TVG_NAME_REGEX = Regex("""tvg-name\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
+    private val TVG_LOGO_REGEX = Regex("""tvg-logo\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
+    private val GROUP_TITLE_REGEX = Regex("""group-title\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
 }
