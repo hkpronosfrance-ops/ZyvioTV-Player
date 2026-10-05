@@ -9,6 +9,10 @@ import fr.zyviotv.player.shared.sync.SyncedPlaylist
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -34,7 +38,8 @@ class SupabaseCloudSyncRepository(
                         .put("display_name", device.displayName)
                         .put("platform", device.platform.wireValue)
                         .put("app_version", device.appVersion)
-                        .put("last_seen_at", JSONObject.NULL)
+                        .put("last_seen_at", utcNow())
+                        .put("updated_at", utcNow())
                 )
                 .toString()
 
@@ -134,6 +139,12 @@ class SupabaseCloudSyncRepository(
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun utcNow(): String {
+        val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        formatter.timeZone = TimeZone.getTimeZone("UTC")
+        return formatter.format(Date())
     }
 
     private data class HttpResponse(
