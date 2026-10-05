@@ -2,6 +2,7 @@ package fr.zyviotv.player.ui.series
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.tv.tvFocusEffect
 
 private data class EpisodePreview(
     val season: Int,
@@ -79,14 +81,14 @@ fun SeriesScreen(profile: DeviceProfile) {
         ) {
             SeriesHero(selectedSeries)
             Spacer(Modifier.height(20.dp))
-            SeriesSelector(previewSeries, selectedSeries) {
+            SeriesSelector(previewSeries, selectedSeries, false) {
                 selectedSeries = it
                 selectedSeason = it.episodes.minOfOrNull { ep -> ep.season } ?: 1
             }
             Spacer(Modifier.height(22.dp))
-            SeasonSelector(seasons, selectedSeason) { selectedSeason = it }
+            SeasonSelector(seasons, selectedSeason, false) { selectedSeason = it }
             Spacer(Modifier.height(14.dp))
-            EpisodeList(episodes)
+            EpisodeList(episodes, false)
         }
     } else {
         Row(
@@ -98,7 +100,7 @@ fun SeriesScreen(profile: DeviceProfile) {
             ) {
                 Text("Séries", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(18.dp))
-                SeriesSelector(previewSeries, selectedSeries) {
+                SeriesSelector(previewSeries, selectedSeries, profile == DeviceProfile.Television) {
                     selectedSeries = it
                     selectedSeason = it.episodes.minOfOrNull { ep -> ep.season } ?: 1
                 }
@@ -109,9 +111,9 @@ fun SeriesScreen(profile: DeviceProfile) {
             ) {
                 SeriesHero(selectedSeries)
                 Spacer(Modifier.height(22.dp))
-                SeasonSelector(seasons, selectedSeason) { selectedSeason = it }
+                SeasonSelector(seasons, selectedSeason, profile == DeviceProfile.Television) { selectedSeason = it }
                 Spacer(Modifier.height(14.dp))
-                EpisodeList(episodes)
+                EpisodeList(episodes, profile == DeviceProfile.Television)
             }
         }
     }
@@ -144,12 +146,13 @@ private fun SeriesHero(series: SeriesPreview) {
 private fun SeriesSelector(
     series: List<SeriesPreview>,
     selected: SeriesPreview,
+    isTelevision: Boolean,
     onSelect: (SeriesPreview) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         series.forEach { item ->
             Card(
-                modifier = Modifier.fillMaxWidth().clickable { onSelect(item) },
+                modifier = Modifier.fillMaxWidth().tvFocusEffect(isTelevision).clickable { onSelect(item) },
                 colors = CardDefaults.cardColors(
                     containerColor = if (item == selected) MaterialTheme.colorScheme.surfaceVariant
                     else MaterialTheme.colorScheme.surface,
@@ -182,6 +185,7 @@ private fun SeriesSelector(
 private fun SeasonSelector(
     seasons: List<Int>,
     selectedSeason: Int,
+    isTelevision: Boolean,
     onSelect: (Int) -> Unit,
 ) {
     Row(
@@ -190,6 +194,7 @@ private fun SeasonSelector(
     ) {
         seasons.forEach { season ->
             FilterChip(
+                modifier = Modifier.tvFocusEffect(isTelevision, cornerRadiusDp = 999),
                 selected = season == selectedSeason,
                 onClick = { onSelect(season) },
                 label = { Text("Saison $season") },
@@ -199,11 +204,14 @@ private fun SeasonSelector(
 }
 
 @Composable
-private fun EpisodeList(episodes: List<EpisodePreview>) {
+private fun EpisodeList(
+    episodes: List<EpisodePreview>,
+    isTelevision: Boolean,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         episodes.sortedBy { it.number }.forEach { episode ->
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tvFocusEffect(isTelevision).focusable(enabled = isTelevision),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(16.dp),
             ) {

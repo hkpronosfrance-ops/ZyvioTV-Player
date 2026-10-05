@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.tv.tvFocusEffect
 
 @Composable
 fun HomeScreen(
@@ -64,6 +65,7 @@ fun HomeScreen(
         Spacer(Modifier.height(24.dp))
 
         QuickActions(
+            isTelevision = profile == DeviceProfile.Television,
             onOpenLive = onOpenLive,
             onOpenMovies = onOpenMovies,
             onOpenSeries = onOpenSeries,
@@ -79,6 +81,7 @@ fun HomeScreen(
                 "Film commencé",
             ),
             poster = false,
+            isTelevision = profile == DeviceProfile.Television,
         )
 
         HomeSection(
@@ -90,6 +93,7 @@ fun HomeScreen(
                 "Divertissement",
             ),
             poster = false,
+            isTelevision = profile == DeviceProfile.Television,
         )
 
         HomeSection(
@@ -101,6 +105,7 @@ fun HomeScreen(
                 "Vos favoris",
             ),
             poster = true,
+            isTelevision = profile == DeviceProfile.Television,
         )
 
         HomeSection(
@@ -112,6 +117,7 @@ fun HomeScreen(
                 "Vos favoris",
             ),
             poster = true,
+            isTelevision = profile == DeviceProfile.Television,
         )
     }
 }
@@ -191,6 +197,7 @@ private fun Hero(
 
 @Composable
 private fun QuickActions(
+    isTelevision: Boolean,
     onOpenLive: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
@@ -201,10 +208,10 @@ private fun QuickActions(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        QuickActionCard("TV en direct", Icons.Default.LiveTv, onOpenLive)
-        QuickActionCard("Films", Icons.Default.Movie, onOpenMovies)
-        QuickActionCard("Séries", Icons.Default.VideoLibrary, onOpenSeries)
-        QuickActionCard("Favoris", Icons.Default.Favorite) {}
+        QuickActionCard("TV en direct", Icons.Default.LiveTv, isTelevision, onOpenLive)
+        QuickActionCard("Films", Icons.Default.Movie, isTelevision, onOpenMovies)
+        QuickActionCard("Séries", Icons.Default.VideoLibrary, isTelevision, onOpenSeries)
+        QuickActionCard("Favoris", Icons.Default.Favorite, isTelevision) {}
     }
 }
 
@@ -212,11 +219,14 @@ private fun QuickActions(
 private fun QuickActionCard(
     label: String,
     icon: ImageVector,
+    isTelevision: Boolean,
     onClick: () -> Unit,
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.width(150.dp),
+        modifier = Modifier
+            .width(if (isTelevision) 190.dp else 150.dp)
+            .tvFocusEffect(isTelevision, cornerRadiusDp = 18),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
@@ -244,6 +254,7 @@ private fun HomeSection(
     title: String,
     items: List<String>,
     poster: Boolean,
+    isTelevision: Boolean,
 ) {
     Text(
         text = title,
@@ -261,7 +272,14 @@ private fun HomeSection(
         items.forEachIndexed { index, label ->
             Card(
                 modifier = Modifier
-                    .width(if (poster) 132.dp else 210.dp)
+                    .width(
+                        if (isTelevision) {
+                            if (poster) 180.dp else 280.dp
+                        } else {
+                            if (poster) 132.dp else 210.dp
+                        },
+                    )
+                    .tvFocusEffect(isTelevision)
                     .then(
                         if (poster) Modifier.aspectRatio(2f / 3f)
                         else Modifier.aspectRatio(16f / 9f),

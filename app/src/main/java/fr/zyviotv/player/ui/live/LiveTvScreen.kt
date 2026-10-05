@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.tv.tvFocusEffect
 
 private data class LiveChannelPreview(
     val name: String,
@@ -81,6 +82,7 @@ fun LiveTvScreen(
         )
     } else {
         LargeScreenLiveLayout(
+            isTelevision = profile == DeviceProfile.Television,
             categories = categories,
             selectedCategory = selectedCategory,
             onCategorySelected = { selectedCategory = it },
@@ -107,16 +109,17 @@ private fun MobileLiveLayout(
     ) {
         LiveHeader()
         Spacer(Modifier.height(16.dp))
-        CategoryRow(categories, selectedCategory, onCategorySelected)
+        CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision = false)
         Spacer(Modifier.height(16.dp))
         PlayerPreview(selectedChannel)
         Spacer(Modifier.height(18.dp))
-        ChannelList(channels, selectedChannel, onChannelSelected)
+        ChannelList(channels, selectedChannel, onChannelSelected, isTelevision = false)
     }
 }
 
 @Composable
 private fun LargeScreenLiveLayout(
+    isTelevision: Boolean,
     categories: List<String>,
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
@@ -127,7 +130,7 @@ private fun LargeScreenLiveLayout(
     Column(Modifier.fillMaxSize()) {
         LiveHeader()
         Spacer(Modifier.height(14.dp))
-        CategoryRow(categories, selectedCategory, onCategorySelected)
+        CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision = isTelevision)
         Spacer(Modifier.height(18.dp))
 
         Row(
@@ -140,7 +143,7 @@ private fun LargeScreenLiveLayout(
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState()),
             ) {
-                ChannelList(channels, selectedChannel, onChannelSelected)
+                ChannelList(channels, selectedChannel, onChannelSelected, isTelevision = isTelevision)
             }
 
             Box(
@@ -184,6 +187,7 @@ private fun CategoryRow(
     categories: List<String>,
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
+    isTelevision: Boolean,
 ) {
     Row(
         modifier = Modifier
@@ -194,7 +198,9 @@ private fun CategoryRow(
         categories.forEach { category ->
             val selected = category == selectedCategory
             Card(
-                modifier = Modifier.clickable { onCategorySelected(category) },
+                modifier = Modifier
+                    .tvFocusEffect(isTelevision, cornerRadiusDp = 999)
+                    .clickable { onCategorySelected(category) },
                 shape = RoundedCornerShape(999.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (selected) {
@@ -284,6 +290,7 @@ private fun ChannelList(
     channels: List<LiveChannelPreview>,
     selectedChannel: LiveChannelPreview,
     onChannelSelected: (LiveChannelPreview) -> Unit,
+    isTelevision: Boolean,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -293,6 +300,7 @@ private fun ChannelList(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .tvFocusEffect(isTelevision)
                     .clickable { onChannelSelected(channel) },
                 colors = CardDefaults.cardColors(
                     containerColor = if (selected) {

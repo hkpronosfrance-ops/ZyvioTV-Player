@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.tv.tvFocusEffect
 
 private data class MoviePreview(
     val title: String,
@@ -44,7 +45,7 @@ fun MoviesScreen(profile: DeviceProfile) {
         ) {
             MovieHero(selected)
             Spacer(Modifier.height(22.dp))
-            MovieGrid(previewMovies, selected) { selected = it }
+            MovieGrid(previewMovies, selected, false) { selected = it }
         }
     } else {
         Row(
@@ -56,7 +57,7 @@ fun MoviesScreen(profile: DeviceProfile) {
             ) {
                 Text("Films", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(18.dp))
-                MovieGrid(previewMovies, selected) { selected = it }
+                MovieGrid(previewMovies, selected, profile == DeviceProfile.Television) { selected = it }
             }
 
             Column(
@@ -104,6 +105,7 @@ private fun MovieHero(movie: MoviePreview) {
 private fun MovieGrid(
     movies: List<MoviePreview>,
     selected: MoviePreview,
+    isTelevision: Boolean,
     onSelect: (MoviePreview) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -114,7 +116,7 @@ private fun MovieGrid(
             ) {
                 rowMovies.forEach { movie ->
                     Card(
-                        modifier = Modifier.weight(1f).aspectRatio(2f / 3f).clickable { onSelect(movie) },
+                        modifier = Modifier.weight(1f).aspectRatio(2f / 3f).tvFocusEffect(isTelevision).clickable { onSelect(movie) },
                         colors = CardDefaults.cardColors(
                             containerColor = if (movie == selected) MaterialTheme.colorScheme.surfaceVariant
                             else MaterialTheme.colorScheme.surface,
