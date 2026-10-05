@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
@@ -184,20 +185,44 @@ private fun AdaptiveShell(
 ) {
     if (profile != DeviceProfile.Mobile) {
         Row(Modifier.fillMaxSize()) {
-            NavigationRail {
+            NavigationRail(
+                modifier = if (profile == DeviceProfile.Television) {
+                    Modifier.width(132.dp)
+                } else {
+                    Modifier
+                },
+            ) {
                 destinations.forEach { destination ->
                     NavigationRailItem(
                         selected = selectedRoute == destination.route,
                         onClick = { onDestinationSelected(destination) },
-                        icon = { Icon(destination.icon, contentDescription = destination.label) },
-                        label = { Text(destination.label) },
+                        icon = {
+                            Icon(
+                                destination.icon,
+                                contentDescription = destination.label,
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = destination.label,
+                                style = if (profile == DeviceProfile.Television) {
+                                    MaterialTheme.typography.titleSmall
+                                } else {
+                                    MaterialTheme.typography.labelMedium
+                                },
+                            )
+                        },
+                        alwaysShowLabel = true,
                     )
+                    if (profile == DeviceProfile.Television) {
+                        Spacer(Modifier.height(10.dp))
+                    }
                 }
             }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
+                    .padding(if (profile == DeviceProfile.Television) 32.dp else 24.dp),
             ) {
                 content()
             }
