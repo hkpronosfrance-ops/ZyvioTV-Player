@@ -8,6 +8,40 @@ enum class PlaybackKind {
     Episode,
 }
 
+enum class PlaybackMediaType {
+    Hls,
+    TransportStream,
+    Progressive,
+    Unknown,
+}
+
+enum class PlaybackState {
+    Idle,
+    Buffering,
+    Ready,
+    Ended,
+    Error,
+}
+
+object PlaybackMediaTypeResolver {
+    fun resolve(request: PlaybackRequest): PlaybackMediaType {
+        val cleanUrl = request.streamUrl
+            .substringBefore('?')
+            .substringBefore('#')
+            .lowercase()
+
+        return when {
+            cleanUrl.endsWith(".m3u8") -> PlaybackMediaType.Hls
+            cleanUrl.endsWith(".ts") -> PlaybackMediaType.TransportStream
+            cleanUrl.endsWith(".mp4") ||
+                cleanUrl.endsWith(".mkv") ||
+                cleanUrl.endsWith(".webm") -> PlaybackMediaType.Progressive
+            request.kind == PlaybackKind.Live -> PlaybackMediaType.TransportStream
+            else -> PlaybackMediaType.Unknown
+        }
+    }
+}
+
 data class PlaybackRequest(
     val title: String,
     val streamUrl: String,
