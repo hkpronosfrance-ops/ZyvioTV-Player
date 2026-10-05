@@ -34,6 +34,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import fr.zyviotv.player.shared.AppIdentity
+import fr.zyviotv.player.ui.auth.AuthScreen
+import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import kotlinx.coroutines.delay
 
 private enum class AppDestination(
@@ -58,10 +60,20 @@ fun ZyvioTVPlayerApp() {
     ) {
         composable("splash") {
             SplashScreen {
-                navController.navigate(AppDestination.Home.route) {
+                navController.navigate("auth") {
                     popUpTo("splash") { inclusive = true }
                 }
             }
+        }
+
+        composable("auth") {
+            AuthScreen(
+                onAuthenticated = {
+                    navController.navigate(AppDestination.Home.route) {
+                        popUpTo("auth") { inclusive = true }
+                    }
+                },
+            )
         }
 
         AppDestination.entries.forEach { destination ->
@@ -80,7 +92,17 @@ fun ZyvioTVPlayerApp() {
                         }
                     },
                 ) {
-                    FoundationScreen(destination.label, profile)
+                    if (destination == AppDestination.Settings) {
+                        AccountSettingsScreen(
+                            onSignedOut = {
+                                navController.navigate("auth") {
+                                    popUpTo(AppDestination.Home.route) { inclusive = true }
+                                }
+                            },
+                        )
+                    } else {
+                        FoundationScreen(destination.label, profile)
+                    }
                 }
             }
         }
