@@ -32,6 +32,12 @@ jobs:
       - name: Validate JavaScript syntax
         run: node --check webosApp/app.js
 
+      - name: Validate provider core
+        run: node webosApp/provider.test.cjs
+
+      - name: Validate playback adapter syntax
+        run: node --check webosApp/player.js
+
       - name: Validate appinfo.json
         run: |
           node - <<'NODE'
@@ -48,4 +54,6 @@ jobs:
           test -s webosApp/index.html
           test -s webosApp/styles.css
           test -s webosApp/app.js
+          test -s webosApp/provider.js
+          test -s webosApp/player.js
           test -s webosApp/appinfo.json
