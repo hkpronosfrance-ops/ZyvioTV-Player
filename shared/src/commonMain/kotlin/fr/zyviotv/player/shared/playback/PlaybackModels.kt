@@ -1,5 +1,7 @@
 package fr.zyviotv.player.shared.playback
 
+import fr.zyviotv.player.shared.security.SecretLoggingPolicy
+
 enum class PlaybackKind {
     Live,
     Movie,
@@ -11,7 +13,10 @@ data class PlaybackRequest(
     val streamUrl: String,
     val kind: PlaybackKind,
     val resumePositionMs: Long = 0L,
-)
+) {
+    override fun toString(): String =
+        "PlaybackRequest(title=$title, streamUrl=${SecretLoggingPolicy.redactUrlForLogs(streamUrl)}, kind=$kind, resumePositionMs=$resumePositionMs)"
+}
 
 sealed interface PlaybackValidationResult {
     data object Valid : PlaybackValidationResult
