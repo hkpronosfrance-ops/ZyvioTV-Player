@@ -1,0 +1,65 @@
+name: Tizen CI
+
+on:
+  pull_request:
+    paths:
+      - "tizenApp/**"
+      - ".github/workflows/tizen-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tizenApp/**"
+      - ".github/workflows/tizen-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate JavaScript syntax
+        run: node --check tizenApp/app.js
+
+      - name: Validate Tizen manifest XML
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          manifest = Path("tizenApp/config.xml")
+          root = ET.parse(manifest).getroot()
+
+          ns = {
+              "w": "http://www.w3.org/ns/widgets",
+              "t": "http://tizen.org/ns/widgets",
+          }
+
+          assert root.tag == "{http://www.w3.org/ns/widgets}widget"
+          assert root.find("w:content", ns) is not None
+          profile = root.find("t:profile", ns)
+          assert profile is not None and profile.attrib.get("name") == "tv-samsung"
+          application = root.find("t:application", ns)
+          assert application is not None
+          assert application.attrib.get("id")
+          assert application.attrib.get("package")
+          print("Tizen manifest structure OK")
+          PY
+
+      - name: Validate required client files
+        run: |
+          test -s tizenApp/index.html
+          test -s tizenApp/styles.css
+          test -s tizenApp/app.js
+          test -s tizenApp/config.xml

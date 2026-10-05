@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <title>ZYVIOTV Player</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main class="app-shell">
+        <aside class="rail" aria-label="Navigation principale">
+            <div class="brand">
+                <strong>ZYVIOTV</strong>
+                <span>PLAYER</span>
+            </div>
+
+            <nav id="main-nav">
+                <button class="nav-item active" data-focusable data-section="home">Accueil</button>
+                <button class="nav-item" data-focusable data-section="live">TV</button>
+                <button class="nav-item" data-focusable data-section="movies">Films</button>
+                <button class="nav-item" data-focusable data-section="series">Séries</button>
+                <button class="nav-item" data-focusable data-section="more">Plus</button>
+            </nav>
+        </aside>
+
+        <section class="content">
+            <header class="hero">
+                <div>
+                    <p class="eyebrow">SAMSUNG SMART TV</p>
+                    <h1>Tout votre univers au même endroit.</h1>
+                    <p>Une expérience pensée pour la télécommande et l'affichage grand écran.</p>
+                    <button class="primary" data-focusable data-action="open-live">Regarder la TV</button>
+                </div>
+            </header>
+
+            <section class="shelf">
+                <h2>Accès rapide</h2>
+                <div class="cards">
+                    <button class="card" data-focusable data-section="live"><span>TV en direct</span></button>
+                    <button class="card" data-focusable data-section="movies"><span>Films</span></button>
+                    <button class="card" data-focusable data-section="series"><span>Séries</span></button>
+                    <button class="card" data-focusable data-section="favorites"><span>Favoris</span></button>
+                </div>
+            </section>
+
+            <section class="shelf">
+                <h2>Reprendre la lecture</h2>
+                <div class="cards wide">
+                    <button class="card landscape" data-focusable><span>Dernier contenu</span></button>
+                    <button class="card landscape" data-focusable><span>Épisode en cours</span></button>
+                    <button class="card landscape" data-focusable><span>Film commencé</span></button>
+                </div>
+            </section>
+
+            <div id="status" class="status" aria-live="polite"></div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

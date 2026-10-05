@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://zyviotv.fr/player"
+        version="0.1.0"
+        viewmodes="maximized">
+    <tizen:application id="ZyvioTV001.ZyvioTVPlayer"
+                       package="ZyvioTV001"
+                       required_version="6.0"/>
+    <content src="index.html"/>
+    <name>ZYVIOTV Player</name>
+    <description>ZYVIOTV Player for Samsung Smart TV</description>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <tizen:profile name="tv-samsung"/>
+    <tizen:setting screen-orientation="landscape"
+                   context-menu="disable"
+                   background-support="disable"
+                   encryption="disable"
+                   install-location="auto"
+                   hwkey-event="enable"/>
+    <access origin="https://nvpuftuluguawdxonmlc.supabase.co" subdomains="false"/>
+</widget>
