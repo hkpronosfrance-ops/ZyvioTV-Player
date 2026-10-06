@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -122,6 +123,8 @@ private fun MoviesReady(
     var selectedCategory by rememberSaveable { mutableStateOf("Toutes") }
     var sort by rememberSaveable { mutableStateOf("Popularité") }
     var lastSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCategory by remember { mutableStateOf<String?>(null) }
+    var pendingMovie by remember { mutableStateOf<MovieCatalogItem?>(null) }
 
     val filtered = remember(items, selectedCategory, sort) {
         val base = when (selectedCategory) {
@@ -164,7 +167,10 @@ private fun MoviesReady(
                     categories = allCategories,
                     lockedCategories = lockedCategories,
                     selected = selectedCategory,
-                    onSelect = { selectedCategory = it },
+                    onSelect = { category ->
+                        if (category in lockedCategories) pendingCategory = category
+                        else selectedCategory = category
+                    },
                     modifier = Modifier.width(220.dp),
                     isTelevision = false,
                 )
@@ -177,7 +183,7 @@ private fun MoviesReady(
                     lastSelectedId = lastSelectedId,
                     onMovieSelected = {
                         lastSelectedId = it.id
-                        onMovieSelected(it)
+                        if (it.isLocked) pendingMovie = it else onMovieSelected(it)
                     },
                 )
             }
@@ -186,7 +192,10 @@ private fun MoviesReady(
                 categories = allCategories,
                 lockedCategories = lockedCategories,
                 selected = selectedCategory,
-                onSelect = { selectedCategory = it },
+                onSelect = { category ->
+                    if (category in lockedCategories) pendingCategory = category
+                    else selectedCategory = category
+                },
                 isTelevision = profile == DeviceProfile.Television,
             )
             Spacer(Modifier.height(14.dp))
@@ -199,10 +208,31 @@ private fun MoviesReady(
                 lastSelectedId = lastSelectedId,
                     onMovieSelected = {
                         lastSelectedId = it.id
-                        onMovieSelected(it)
+                        if (it.isLocked) pendingMovie = it else onMovieSelected(it)
                     },
             )
         }
+
+        ParentalUnlockDialog(
+            visible = pendingCategory != null,
+            title = "Catégorie verrouillée",
+            onDismiss = { pendingCategory = null },
+            onUnlocked = {
+                selectedCategory = pendingCategory ?: selectedCategory
+                pendingCategory = null
+            },
+        )
+
+        ParentalUnlockDialog(
+            visible = pendingMovie != null,
+            title = "Film verrouillé",
+            onDismiss = { pendingMovie = null },
+            onUnlocked = {
+                val movie = pendingMovie ?: return@ParentalUnlockDialog
+                pendingMovie = null
+                onMovieSelected(movie)
+            },
+        )
     }
 }
 
