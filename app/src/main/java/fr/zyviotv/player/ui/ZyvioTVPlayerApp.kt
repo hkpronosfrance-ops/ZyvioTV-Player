@@ -124,7 +124,6 @@ fun ZyvioTVPlayerApp() {
     val providerCatalog = rememberProviderCatalogSession()
     val providerState = providerCatalog.state.value
     val librarySession = rememberLibrarySession()
-    val libraryState = librarySession.state.value
     val scope = rememberCoroutineScope()
     var selectedMovie by remember { mutableStateOf<CatalogMovie?>(null) }
     var selectedSeries by remember { mutableStateOf<CatalogSeries?>(null) }
@@ -262,6 +261,7 @@ fun ZyvioTVPlayerApp() {
                                 streamUrl = source.streamUrl,
                                 kind = PlaybackKind.Live,
                             )
+                            playbackSyncContext = null
                             navController.navigate("player")
                         }
                     },
@@ -516,6 +516,18 @@ fun ZyvioTVPlayerApp() {
                                         artworkUrl = series.posterUrl,
                                     ),
                                 )
+                                val ready = seriesDetailState as? SeriesDetailState.Ready
+                                if (ready != null) {
+                                    seriesDetailState = ready.copy(
+                                        series = ready.series.copy(
+                                            isFavorite = librarySession.isFavorite(
+                                                playlistId = readyProvider.playlistId,
+                                                type = FavoriteContentType.Series,
+                                                contentId = series.id,
+                                            ),
+                                        ),
+                                    )
+                                }
                             }
                         },
                         onPlayEpisode = { episode ->
@@ -563,12 +575,37 @@ fun ZyvioTVPlayerApp() {
                     request = request,
                     onBack = {
                         playbackRequest = null
-                        playbackSyncContext = null
                         navController.popBackStack()
                     },
                     onOpenGuide = {
                         if (request.kind == PlaybackKind.Live) {
                             navController.navigate("guide")
+                        }
+                    },
+                    onPlaybackExit = { positionMs, durationMs ->
+                        val sync = playbackSyncContext
+                        if (sync != null) {
+                            val completed = durationMs != null &&
+                                durationMs > 0L &&
+                                positionMs.toDouble() / durationMs.toDouble() >= 0.95
+                            lastSyncedPositionMs = positionMs
+                            scope.launch {
+                                librarySession.saveProgress(
+                                    SyncedWatchProgress(
+                                        playlistId = sync.playlistId,
+                                        contentType = sync.contentType,
+                                        contentId = sync.contentId,
+                                        title = sync.title,
+                                        seriesId = sync.seriesId,
+                                        seasonNumber = sync.seasonNumber,
+                                        episodeNumber = sync.episodeNumber,
+                                        artworkUrl = sync.artworkUrl,
+                                        positionMs = positionMs.coerceAtLeast(0L),
+                                        durationMs = durationMs,
+                                        completed = completed,
+                                    ),
+                                )
+                            }
                         }
                     },
                     onProgressChanged = { positionMs, durationMs ->
