@@ -100,26 +100,28 @@ fun ParentalScheduleEditor(
             Text("Plage ${index + 1}")
 
             Spacer(Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                DAY_LABELS.forEachIndexed { dayIndex, label ->
-                    val day = dayIndex + 1
-                    FilterChip(
-                        selected = day in window.days,
-                        onClick = {
-                            val nextDays = window.days.toMutableSet().apply {
-                                if (!add(day)) remove(day)
-                            }
-                            onChange(
-                                windows.toMutableList().also {
-                                    it[index] = window.copy(days = nextDays)
-                                },
-                            )
-                        },
-                        label = { Text(label) },
-                    )
+            DAY_LABELS.chunked(4).forEachIndexed { rowIndex, labels ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    labels.forEachIndexed { itemIndex, label ->
+                        val day = rowIndex * 4 + itemIndex + 1
+                        FilterChip(
+                            selected = day in window.days,
+                            onClick = {
+                                val nextDays = window.days.toMutableSet().apply {
+                                    if (!add(day)) remove(day)
+                                }
+                                onChange(
+                                    windows.toMutableList().also {
+                                        it[index] = window.copy(days = nextDays)
+                                    },
+                                )
+                            },
+                            label = { Text(label) },
+                        )
+                    }
                 }
             }
 
