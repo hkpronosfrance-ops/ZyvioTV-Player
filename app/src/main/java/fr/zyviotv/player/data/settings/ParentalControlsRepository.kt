@@ -118,6 +118,7 @@ class ParentalControlsRepository(
                 body = JSONObject()
                     .put("email", email)
                     .put("create_user", false)
+                    .put("redirect_to", "zyviotv://parental-pin-recovery")
                     .toString(),
                 bearerToken = null,
             )
