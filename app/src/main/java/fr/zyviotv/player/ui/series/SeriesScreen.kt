@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -122,6 +123,8 @@ private fun SeriesReady(
     var selectedCategory by rememberSaveable { mutableStateOf("Toutes") }
     var sort by rememberSaveable { mutableStateOf("Popularité") }
     var lastSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCategory by remember { mutableStateOf<String?>(null) }
+    var pendingSeries by remember { mutableStateOf<SeriesCatalogItem?>(null) }
 
     val filtered = remember(items, selectedCategory, sort) {
         val base = when (selectedCategory) {
@@ -162,7 +165,10 @@ private fun SeriesReady(
                     categories = allCategories,
                     lockedCategories = lockedCategories,
                     selected = selectedCategory,
-                    onSelect = { selectedCategory = it },
+                    onSelect = { category ->
+                        if (category in lockedCategories) pendingCategory = category
+                        else selectedCategory = category
+                    },
                     modifier = Modifier.width(220.dp),
                     isTelevision = false,
                 )
@@ -175,7 +181,7 @@ private fun SeriesReady(
                     lastSelectedId = lastSelectedId,
                     onSeriesSelected = {
                         lastSelectedId = it.id
-                        onSeriesSelected(it)
+                        if (it.isLocked) pendingSeries = it else onSeriesSelected(it)
                     },
                 )
             }
@@ -184,7 +190,10 @@ private fun SeriesReady(
                 categories = allCategories,
                 lockedCategories = lockedCategories,
                 selected = selectedCategory,
-                onSelect = { selectedCategory = it },
+                onSelect = { category ->
+                    if (category in lockedCategories) pendingCategory = category
+                    else selectedCategory = category
+                },
                 isTelevision = profile == DeviceProfile.Television,
             )
             Spacer(Modifier.height(14.dp))
@@ -197,10 +206,31 @@ private fun SeriesReady(
                 lastSelectedId = lastSelectedId,
                     onSeriesSelected = {
                         lastSelectedId = it.id
-                        onSeriesSelected(it)
+                        if (it.isLocked) pendingSeries = it else onSeriesSelected(it)
                     },
             )
         }
+
+        ParentalUnlockDialog(
+            visible = pendingCategory != null,
+            title = "Catégorie verrouillée",
+            onDismiss = { pendingCategory = null },
+            onUnlocked = {
+                selectedCategory = pendingCategory ?: selectedCategory
+                pendingCategory = null
+            },
+        )
+
+        ParentalUnlockDialog(
+            visible = pendingSeries != null,
+            title = "Série verrouillée",
+            onDismiss = { pendingSeries = null },
+            onUnlocked = {
+                val series = pendingSeries ?: return@ParentalUnlockDialog
+                pendingSeries = null
+                onSeriesSelected(series)
+            },
+        )
     }
 }
 
