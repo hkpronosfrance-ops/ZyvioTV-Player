@@ -210,6 +210,20 @@ fun ZyvioTVPlayerApp() {
             )
         }
 
+        composable("profile-switch") {
+            WhoIsWatchingGate(
+                deviceProfile = profile,
+                forceChooser = true,
+                onProfileSelected = {
+                    providerCatalog.reload()
+                    librarySession.reload()
+                    navController.navigate(AppDestination.Home.route) {
+                        popUpTo("profile-switch") { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable("guide") {
             val context = LocalContext.current
             val readyProvider = providerState as? ProviderCatalogState.Ready
@@ -1097,6 +1111,7 @@ fun ZyvioTVPlayerApp() {
                                 onOpenCache = { navController.navigate("settings-cache") },
                                 onOpenParentalControls = { navController.navigate("settings-parental") },
                                 onOpenProfiles = { navController.navigate("settings-profiles") },
+                                onSwitchProfile = { navController.navigate("profile-switch") },
                                 onSignedOut = {
                                     navController.navigate("auth") {
                                         popUpTo(AppDestination.Home.route) { inclusive = true }
