@@ -32,6 +32,7 @@ fun PlayerHost(
     onNextChannel: () -> Unit = {},
     onChannelNumberEntered: (String) -> Unit = {},
     onPositionChanged: (Long) -> Unit = {},
+    onProgressChanged: (Long, Long?) -> Unit = { _, _ -> },
 ) {
     val effectiveRequest = remember(request) {
         request.copy(
@@ -165,8 +166,12 @@ fun PlayerHost(
                 onPositionChanged = {
                     positionMs = it
                     onPositionChanged(it)
+                    onProgressChanged(it, durationMs)
                 },
-                onDurationChanged = { durationMs = it },
+                onDurationChanged = {
+                    durationMs = it
+                    onProgressChanged(positionMs, it)
+                },
                 onIsPlayingChanged = { isPlaying = it },
                 onTracksChanged = { tracks = it },
                 selectedAudioLanguage = selectedAudioLanguage,
