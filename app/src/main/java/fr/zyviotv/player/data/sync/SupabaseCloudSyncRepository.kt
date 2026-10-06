@@ -98,6 +98,55 @@ class SupabaseCloudSyncRepository(
         }
 
 
+
+    override suspend fun createPlaylist(
+        name: String,
+        providerType: String,
+        priority: Int,
+        serverHost: String?,
+        playlistUrlHint: String?,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val cleanName = name.trim()
+            require(cleanName.isNotBlank()) { "Le nom de la playlist est vide." }
+            require(providerType == "xtream" || providerType == "m3u") {
+                "Type de fournisseur invalide."
+            }
+
+            val session = sessionStore.load() ?: error("Session absente.")
+            val userId = fetchCurrentUserId(session.accessToken)
+                ?: error("Compte utilisateur introuvable.")
+
+            val body = JSONArray().put(
+                JSONObject()
+                    .put("user_id", userId)
+                    .put("name", cleanName)
+                    .put("provider_type", providerType)
+                    .put("server_host", serverHost ?: JSONObject.NULL)
+                    .put("playlist_url_hint", playlistUrlHint ?: JSONObject.NULL)
+                    .put("secret_status", "not_configured")
+                    .put("is_enabled", true)
+                    .put("priority", priority.coerceIn(1, 10))
+                    .put("updated_at", utcNow()),
+            ).toString()
+
+            val response = request(
+                path = "/rest/v1/player_playlists",
+                method = "POST",
+                body = body,
+                accessToken = session.accessToken,
+                extraHeaders = mapOf("Prefer" to "return=representation"),
+            )
+            if (response.code !in 200..299) {
+                error("Impossible d’enregistrer la playlist.")
+            }
+
+            val array = JSONArray(response.body)
+            if (array.length() == 0) error("Playlist créée sans identifiant.")
+            array.getJSONObject(0).getString("id")
+        }
+    }
+
     override suspend fun updatePlaylistPriority(
         playlistId: String,
         priority: Int,
