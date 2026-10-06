@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,12 +37,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,7 +93,11 @@ fun MoviesScreen(
             profile = profile,
             items = state.items,
             categories = state.categories,
-            onMovieSelected = onMovieSelected,
+            lastSelectedId = lastSelectedId,
+                    onMovieSelected = {
+                        lastSelectedId = it.id
+                        onMovieSelected(it)
+                    },
         )
     }
 }
@@ -109,8 +118,9 @@ private fun MoviesReady(
             .filter { it.isNotBlank() }
             .distinct()
     }
-    var selectedCategory by remember { mutableStateOf("Toutes") }
-    var sort by remember { mutableStateOf("Popularité") }
+    var selectedCategory by rememberSaveable { mutableStateOf("Toutes") }
+    var sort by rememberSaveable { mutableStateOf("Popularité") }
+    var lastSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val filtered = remember(items, selectedCategory, sort) {
         val base = when (selectedCategory) {
@@ -162,7 +172,11 @@ private fun MoviesReady(
                     items = filtered,
                     hasFilters = selectedCategory != "Toutes",
                     onReset = { selectedCategory = "Toutes" },
-                    onMovieSelected = onMovieSelected,
+                    lastSelectedId = lastSelectedId,
+                    onMovieSelected = {
+                        lastSelectedId = it.id
+                        onMovieSelected(it)
+                    },
                 )
             }
         } else {
@@ -179,7 +193,11 @@ private fun MoviesReady(
                 items = filtered,
                 hasFilters = selectedCategory != "Toutes",
                 onReset = { selectedCategory = "Toutes" },
-                onMovieSelected = onMovieSelected,
+                lastSelectedId = lastSelectedId,
+                    onMovieSelected = {
+                        lastSelectedId = it.id
+                        onMovieSelected(it)
+                    },
             )
         }
     }
@@ -192,6 +210,7 @@ private fun MoviesBody(
     items: List<MovieCatalogItem>,
     hasFilters: Boolean,
     onReset: () -> Unit,
+    lastSelectedId: String?,
     onMovieSelected: (MovieCatalogItem) -> Unit,
 ) {
     if (items.isEmpty()) {
@@ -209,8 +228,24 @@ private fun MoviesBody(
         DeviceProfile.Television -> 6
     }
 
+    val gridState = rememberLazyGridState()
+    val focusRequesters = remember(items) {
+        items.associate { it.id to FocusRequester() }
+    }
+
+    LaunchedEffect(profile, lastSelectedId, items) {
+        if (profile == DeviceProfile.Television && lastSelectedId != null) {
+            val index = items.indexOfFirst { it.id == lastSelectedId }
+            if (index >= 0) {
+                gridState.scrollToItem(index)
+                focusRequesters[lastSelectedId]?.requestFocus()
+            }
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
+        state = gridState,
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(if (profile == DeviceProfile.Mobile) 8.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -222,6 +257,7 @@ private fun MoviesBody(
             MovieCard(
                 item = movie,
                 isTelevision = profile == DeviceProfile.Television,
+                focusRequester = focusRequesters[movie.id],
                 onClick = { onMovieSelected(movie) },
             )
         }
@@ -319,10 +355,12 @@ private fun CategoryPanel(
 private fun MovieCard(
     item: MovieCatalogItem,
     isTelevision: Boolean,
+    focusRequester: FocusRequester?,
     onClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .tvFocusEffect(isTelevision, cornerRadiusDp = 10)
             .clickable(onClick = onClick),
     ) {
