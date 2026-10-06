@@ -26,6 +26,7 @@ data class SyncedPlaylist(
     val playlistUrlHint: String?,
     val secretStatus: String,
     val isEnabled: Boolean,
+    val priority: Int = 1,
 )
 
 sealed interface PlaylistSecret {
@@ -56,6 +57,10 @@ sealed interface SyncResult {
 interface CloudSyncRepository {
     suspend fun registerDevice(device: DeviceRegistration): SyncResult
     suspend fun listPlaylists(): Result<List<SyncedPlaylist>>
+    suspend fun updatePlaylistPriority(playlistId: String, priority: Int): SyncResult
+    suspend fun updatePlaylistEnabled(playlistId: String, isEnabled: Boolean): SyncResult
+    suspend fun renamePlaylist(playlistId: String, name: String): SyncResult
+    suspend fun deletePlaylist(playlistId: String): SyncResult
     suspend fun setPlaylistSecret(playlistId: String, secret: PlaylistSecret): SyncResult
     suspend fun getPlaylistSecret(playlistId: String): Result<PlaylistSecret?>
     suspend fun deletePlaylistSecret(playlistId: String): SyncResult
