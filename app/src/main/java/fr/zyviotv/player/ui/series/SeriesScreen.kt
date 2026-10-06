@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
@@ -68,6 +69,7 @@ data class SeriesCatalogItem(
     val progress: Float? = null,
     val progressLabel: String? = null,
     val isNew: Boolean = false,
+    val isLocked: Boolean = false,
 )
 
 sealed interface SeriesScreenState {
@@ -75,6 +77,7 @@ sealed interface SeriesScreenState {
     data class Ready(
         val items: List<SeriesCatalogItem>,
         val categories: List<String>,
+        val lockedCategories: Set<String> = emptySet(),
     ) : SeriesScreenState
     data class Error(val message: String) : SeriesScreenState
 }
@@ -93,6 +96,7 @@ fun SeriesScreen(
             profile = profile,
             items = state.items,
             categories = state.categories,
+            lockedCategories = state.lockedCategories,
             onSeriesSelected = onSeriesSelected,
         )
     }
@@ -103,6 +107,7 @@ private fun SeriesReady(
     profile: DeviceProfile,
     items: List<SeriesCatalogItem>,
     categories: List<String>,
+    lockedCategories: Set<String>,
     onSeriesSelected: (SeriesCatalogItem) -> Unit,
 ) {
     val configuration = LocalConfiguration.current
@@ -155,6 +160,7 @@ private fun SeriesReady(
             ) {
                 CategoryPanel(
                     categories = allCategories,
+                    lockedCategories = lockedCategories,
                     selected = selectedCategory,
                     onSelect = { selectedCategory = it },
                     modifier = Modifier.width(220.dp),
@@ -176,6 +182,7 @@ private fun SeriesReady(
         } else {
             CategoryRow(
                 categories = allCategories,
+                lockedCategories = lockedCategories,
                 selected = selectedCategory,
                 onSelect = { selectedCategory = it },
                 isTelevision = profile == DeviceProfile.Television,
@@ -291,6 +298,7 @@ private fun CatalogHeader(
 @Composable
 private fun CategoryRow(
     categories: List<String>,
+    lockedCategories: Set<String>,
     selected: String,
     onSelect: (String) -> Unit,
     isTelevision: Boolean,
@@ -306,7 +314,15 @@ private fun CategoryRow(
                 modifier = Modifier.tvFocusEffect(isTelevision, cornerRadiusDp = 999),
                 selected = category == selected,
                 onClick = { onSelect(category) },
-                label = { Text(category, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (category in lockedCategories) {
+                            Icon(Icons.Default.Lock, contentDescription = "Verrouillé")
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(category, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                },
             )
         }
     }
@@ -315,6 +331,7 @@ private fun CategoryRow(
 @Composable
 private fun CategoryPanel(
     categories: List<String>,
+    lockedCategories: Set<String>,
     selected: String,
     onSelect: (String) -> Unit,
     modifier: Modifier,
@@ -333,13 +350,21 @@ private fun CategoryPanel(
                 color = if (category == selected) ZyvioRedTint else ZyvioSurface1,
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Text(
-                    text = category,
+                Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (category in lockedCategories) {
+                        Icon(Icons.Default.Lock, contentDescription = "Verrouillé")
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                    text = category,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = if (category == selected) FontWeight.Bold else FontWeight.Medium,
-                )
+                    )
+                }
             }
         }
     }
@@ -388,6 +413,22 @@ private fun SeriesCard(
                             maxLines = 4,
                             overflow = TextOverflow.Ellipsis,
                             fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+
+                if (item.isLocked) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(999.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Verrouillé",
+                            modifier = Modifier.padding(6.dp),
                         )
                     }
                 }
