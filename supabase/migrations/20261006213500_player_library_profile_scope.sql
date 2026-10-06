@@ -50,10 +50,10 @@ alter table public.player_watch_progress
   alter column profile_id set not null;
 
 alter table public.player_favorites
-  drop constraint if exists player_favorites_user_id_playlist_id_content_type_content_id_key;
+  drop constraint if exists player_favorites_user_id_playlist_id_content_type_content_i_key;
 
 alter table public.player_watch_progress
-  drop constraint if exists player_watch_progress_user_id_playlist_id_content_type_content_id_key;
+  drop constraint if exists player_watch_progress_user_id_playlist_id_content_type_cont_key;
 
 alter table public.player_favorites
   add constraint player_favorites_profile_content_unique
