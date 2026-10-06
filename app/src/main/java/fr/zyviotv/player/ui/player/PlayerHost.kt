@@ -49,6 +49,10 @@ fun PlayerHost(
     var durationMs by remember(effectiveRequest.streamUrl) { mutableStateOf<Long?>(null) }
     var errorMessage by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
     var panel by remember(effectiveRequest.streamUrl) { mutableStateOf(PlayerPanel.None) }
+    var tracks by remember(effectiveRequest.streamUrl) { mutableStateOf(NativeTrackCatalog()) }
+    var selectedAudioLanguage by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
+    var selectedSubtitleLanguage by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
+    var subtitlesEnabled by remember(effectiveRequest.streamUrl) { mutableStateOf(true) }
     var command by remember { mutableStateOf(NativePlayerCommand.None) }
     var commandToken by remember { mutableLongStateOf(0L) }
     var channelDigits by remember(effectiveRequest.streamUrl) { mutableStateOf("") }
@@ -78,6 +82,29 @@ fun PlayerHost(
             positionMs = positionMs,
             durationMs = durationMs,
         ),
+        audioLabel = tracks.audio.firstOrNull { it.selected }?.label,
+        subtitlesLabel = if (!subtitlesEnabled) {
+            "Désactivés"
+        } else {
+            tracks.subtitles.firstOrNull { it.selected }?.label
+        },
+        audioTracks = tracks.audio.map {
+            PlayerTrackUi(
+                id = it.id,
+                label = it.label,
+                language = it.language,
+                selected = it.selected,
+            )
+        },
+        subtitleTracks = tracks.subtitles.map {
+            PlayerTrackUi(
+                id = it.id,
+                label = it.label,
+                language = it.language,
+                selected = it.selected,
+            )
+        },
+        subtitlesEnabled = subtitlesEnabled,
         errorMessage = errorMessage,
         channelNumberInput = channelDigits.takeIf { it.isNotBlank() },
     )
@@ -107,6 +134,18 @@ fun PlayerHost(
         onOpenTracks = { panel = PlayerPanel.Tracks },
         onOpenGuide = onOpenGuide,
         onToggleFavorite = onToggleFavorite,
+        onSelectAudioTrack = { track ->
+            track.language?.let { selectedAudioLanguage = it }
+        },
+        onSelectSubtitleTrack = { track ->
+            track.language?.let {
+                selectedSubtitleLanguage = it
+                subtitlesEnabled = true
+            }
+        },
+        onDisableSubtitles = {
+            subtitlesEnabled = false
+        },
         onChannelUp = onNextChannel,
         onChannelDown = onPreviousChannel,
         onChannelDigit = { digit ->
@@ -127,6 +166,10 @@ fun PlayerHost(
                 },
                 onDurationChanged = { durationMs = it },
                 onIsPlayingChanged = { isPlaying = it },
+                onTracksChanged = { tracks = it },
+                selectedAudioLanguage = selectedAudioLanguage,
+                selectedSubtitleLanguage = selectedSubtitleLanguage,
+                subtitlesEnabled = subtitlesEnabled,
                 showNativeControls = false,
                 command = command,
                 commandToken = commandToken,
