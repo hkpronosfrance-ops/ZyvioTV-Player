@@ -18,6 +18,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import fr.zyviotv.player.shared.playback.PlaybackMediaType
@@ -43,6 +44,10 @@ fun NativeVideoPlayer(
     onPositionChanged: (Long) -> Unit = {},
     onDurationChanged: (Long?) -> Unit = {},
     onIsPlayingChanged: (Boolean) -> Unit = {},
+    onTracksChanged: (NativeTrackCatalog) -> Unit = {},
+    selectedAudioLanguage: String? = null,
+    selectedSubtitleLanguage: String? = null,
+    subtitlesEnabled: Boolean = true,
     showNativeControls: Boolean = true,
     command: NativePlayerCommand = NativePlayerCommand.None,
     commandToken: Long = 0L,
@@ -70,6 +75,17 @@ fun NativeVideoPlayer(
             prepare()
             playWhenReady = true
         }
+    }
+
+    LaunchedEffect(player, selectedAudioLanguage, selectedSubtitleLanguage, subtitlesEnabled) {
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .apply {
+                selectedAudioLanguage?.let { setPreferredAudioLanguage(it) }
+                selectedSubtitleLanguage?.let { setPreferredTextLanguage(it) }
+                setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
+            }
+            .build()
     }
 
     LaunchedEffect(player, commandToken) {
@@ -157,6 +173,7 @@ fun NativeVideoPlayer(
                         onStateChanged(PlaybackState.Ready)
                         onPositionChanged(player.currentPosition.coerceAtLeast(0L))
                         publishDuration()
+                        onTracksChanged(player.currentTracks.toNativeTrackCatalog())
                     }
                     Player.STATE_ENDED -> {
                         bufferingJob?.cancel()
@@ -173,6 +190,10 @@ fun NativeVideoPlayer(
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 onIsPlayingChanged(isPlaying)
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                onTracksChanged(tracks.toNativeTrackCatalog())
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -227,6 +248,58 @@ fun NativeVideoPlayer(
             view.player = player
             view.useController = showNativeControls
         },
+    )
+}
+
+data class NativeTrackOption(
+    val id: String,
+    val label: String,
+    val language: String?,
+    val selected: Boolean,
+)
+
+data class NativeTrackCatalog(
+    val audio: List<NativeTrackOption> = emptyList(),
+    val subtitles: List<NativeTrackOption> = emptyList(),
+)
+
+private fun Tracks.toNativeTrackCatalog(): NativeTrackCatalog {
+    val audio = mutableListOf<NativeTrackOption>()
+    val subtitles = mutableListOf<NativeTrackOption>()
+
+    groups.forEachIndexed { groupIndex, group ->
+        val target = when (group.type) {
+            C.TRACK_TYPE_AUDIO -> audio
+            C.TRACK_TYPE_TEXT -> subtitles
+            else -> null
+        } ?: return@forEachIndexed
+
+        for (trackIndex in 0 until group.length) {
+            if (!group.isTrackSupported(trackIndex)) continue
+
+            val format = group.mediaTrackGroup.getFormat(trackIndex)
+            val language = format.language
+            val fallback = if (group.type == C.TRACK_TYPE_AUDIO) {
+                "Piste audio " + (audio.size + 1)
+            } else {
+                "Sous-titre " + (subtitles.size + 1)
+            }
+            val label = format.label?.takeIf { it.isNotBlank() }
+                ?: language?.takeIf { it.isNotBlank() }?.uppercase()
+                ?: fallback
+
+            target += NativeTrackOption(
+                id = groupIndex.toString() + ":" + trackIndex,
+                label = label,
+                language = language,
+                selected = group.isTrackSelected(trackIndex),
+            )
+        }
+    }
+
+    return NativeTrackCatalog(
+        audio = audio,
+        subtitles = subtitles,
     )
 }
 
