@@ -66,6 +66,7 @@ import fr.zyviotv.player.ui.catalog.toSeriesState
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
+import fr.zyviotv.player.ui.library.FavoritesScreen
 import fr.zyviotv.player.ui.library.LibraryState
 import fr.zyviotv.player.ui.library.rememberLibrarySession
 import fr.zyviotv.player.ui.epg.EpgChannelUi
@@ -306,6 +307,70 @@ fun ZyvioTVPlayerApp() {
                                 kind = PlaybackKind.Live,
                             )
                             navController.navigate("player")
+                        }
+                    },
+                )
+            }
+        }
+
+
+        composable("favorites") {
+            AdaptiveShell(
+                profile = profile,
+                destinations = AppDestination.entries,
+                selectedRoute = "",
+                onDestinationSelected = { target ->
+                    navController.navigate(target.route) {
+                        launchSingleTop = true
+                    }
+                },
+            ) {
+                FavoritesScreen(
+                    profile = profile,
+                    state = libraryState,
+                    onRetry = librarySession::reload,
+                    onOpenFavorite = { favorite ->
+                        val readyProvider = providerState as? ProviderCatalogState.Ready
+                        if (readyProvider != null && favorite.playlistId == readyProvider.playlistId) {
+                            when (favorite.contentType) {
+                                FavoriteContentType.Live -> {
+                                    val channel = readyProvider.snapshot.liveChannels
+                                        .firstOrNull { it.id == favorite.contentId }
+                                    if (channel != null) {
+                                        playbackRequest = PlaybackRequest(
+                                            title = channel.name,
+                                            streamUrl = channel.streamUrl,
+                                            kind = PlaybackKind.Live,
+                                        )
+                                        playbackSyncContext = null
+                                        navController.navigate("player")
+                                    }
+                                }
+
+                                FavoriteContentType.Movie -> {
+                                    selectedMovie = readyProvider.snapshot.movies
+                                        .firstOrNull { it.id == favorite.contentId }
+                                    if (selectedMovie != null) {
+                                        navController.navigate("movie-detail")
+                                    }
+                                }
+
+                                FavoriteContentType.Series -> {
+                                    selectedSeries = readyProvider.snapshot.series
+                                        .firstOrNull { it.id == favorite.contentId }
+                                    if (selectedSeries != null) {
+                                        seriesDetailState = SeriesDetailState.Loading
+                                        seriesEpisodeSources = emptyMap()
+                                        seriesDetailReloadToken += 1
+                                        navController.navigate("series-detail")
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    onRemoveFavorite = { favorite ->
+                        scope.launch {
+                            librarySession.toggleFavorite(favorite)
                         }
                     },
                 )
@@ -699,6 +764,7 @@ fun ZyvioTVPlayerApp() {
                                 onOpenMovies = { navController.navigate(AppDestination.Movies.route) },
                                 onOpenSeries = { navController.navigate(AppDestination.Series.route) },
                                 onOpenSearch = { navController.navigate("search") },
+                                onOpenFavorites = { navController.navigate("favorites") },
                             )
                         }
 
