@@ -25,12 +25,12 @@ class SupabaseLibrarySyncRepository(
     private val sessionStore: SecureSessionStore,
 ) : CloudLibraryRepository {
 
-    override suspend fun listFavorites(): Result<List<SyncedFavorite>> =
+    override suspend fun listFavorites(profileId: String): Result<List<SyncedFavorite>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val session = sessionStore.load() ?: error("Session absente.")
                 val response = request(
-                    path = "/rest/v1/player_favorites?select=playlist_id,content_type,content_id,title,artwork_url&order=updated_at.desc",
+                    path = "/rest/v1/player_favorites?profile_id=eq." + encoded(profileId) + "&select=profile_id,playlist_id,content_type,content_id,title,artwork_url&order=updated_at.desc",
                     method = "GET",
                     accessToken = session.accessToken,
                 )
@@ -46,6 +46,7 @@ class SupabaseLibrarySyncRepository(
 
                         add(
                             SyncedFavorite(
+                                profileId = item.getString("profile_id"),
                                 playlistId = item.getString("playlist_id"),
                                 contentType = type,
                                 contentId = item.getString("content_id"),
@@ -67,6 +68,7 @@ class SupabaseLibrarySyncRepository(
             val body = JSONArray().put(
                 JSONObject()
                     .put("user_id", userId)
+                    .put("profile_id", favorite.profileId)
                     .put("playlist_id", favorite.playlistId)
                     .put("content_type", favorite.contentType.wireValue)
                     .put("content_id", favorite.contentId)
@@ -76,7 +78,7 @@ class SupabaseLibrarySyncRepository(
             ).toString()
 
             val response = request(
-                path = "/rest/v1/player_favorites?on_conflict=user_id,playlist_id,content_type,content_id",
+                path = "/rest/v1/player_favorites?on_conflict=user_id,profile_id,playlist_id,content_type,content_id",
                 method = "POST",
                 body = body,
                 accessToken = session.accessToken,
@@ -88,12 +90,14 @@ class SupabaseLibrarySyncRepository(
         }
 
     override suspend fun removeFavorite(
+        profileId: String,
         playlistId: String,
         contentType: FavoriteContentType,
         contentId: String,
     ): SyncResult = withContext(Dispatchers.IO) {
         val session = sessionStore.load() ?: return@withContext SyncResult.Failure("Session absente.")
-        val path = "/rest/v1/player_favorites?playlist_id=eq." + encoded(playlistId) +
+        val path = "/rest/v1/player_favorites?profile_id=eq." + encoded(profileId) +
+            "&playlist_id=eq." + encoded(playlistId) +
             "&content_type=eq." + encoded(contentType.wireValue) +
             "&content_id=eq." + encoded(contentId)
         val response = request(
@@ -106,12 +110,12 @@ class SupabaseLibrarySyncRepository(
         else SyncResult.Failure("Impossible de supprimer le favori.")
     }
 
-    override suspend fun listWatchProgress(limit: Int): Result<List<SyncedWatchProgress>> =
+    override suspend fun listWatchProgress(profileId: String, limit: Int): Result<List<SyncedWatchProgress>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val session = sessionStore.load() ?: error("Session absente.")
                 val safeLimit = limit.coerceIn(1, 200)
-                val path = "/rest/v1/player_watch_progress?select=playlist_id,content_type,content_id,title,series_id,season_number,episode_number,artwork_url,position_ms,duration_ms,completed&order=last_watched_at.desc&limit=" + safeLimit
+                val path = "/rest/v1/player_watch_progress?profile_id=eq." + encoded(profileId) + "&select=profile_id,playlist_id,content_type,content_id,title,series_id,season_number,episode_number,artwork_url,position_ms,duration_ms,completed&order=last_watched_at.desc&limit=" + safeLimit
                 val response = request(
                     path = path,
                     method = "GET",
@@ -129,6 +133,7 @@ class SupabaseLibrarySyncRepository(
 
                         add(
                             SyncedWatchProgress(
+                                profileId = item.getString("profile_id"),
                                 playlistId = item.getString("playlist_id"),
                                 contentType = type,
                                 contentId = item.getString("content_id"),
@@ -157,6 +162,7 @@ class SupabaseLibrarySyncRepository(
             val body = JSONArray().put(
                 JSONObject()
                     .put("user_id", userId)
+                    .put("profile_id", progress.profileId)
                     .put("playlist_id", progress.playlistId)
                     .put("content_type", progress.contentType.wireValue)
                     .put("content_id", progress.contentId)
@@ -173,7 +179,7 @@ class SupabaseLibrarySyncRepository(
             ).toString()
 
             val response = request(
-                path = "/rest/v1/player_watch_progress?on_conflict=user_id,playlist_id,content_type,content_id",
+                path = "/rest/v1/player_watch_progress?on_conflict=user_id,profile_id,playlist_id,content_type,content_id",
                 method = "POST",
                 body = body,
                 accessToken = session.accessToken,
@@ -185,12 +191,14 @@ class SupabaseLibrarySyncRepository(
         }
 
     override suspend fun removeWatchProgress(
+        profileId: String,
         playlistId: String,
         contentType: ProgressContentType,
         contentId: String,
     ): SyncResult = withContext(Dispatchers.IO) {
         val session = sessionStore.load() ?: return@withContext SyncResult.Failure("Session absente.")
-        val path = "/rest/v1/player_watch_progress?playlist_id=eq." + encoded(playlistId) +
+        val path = "/rest/v1/player_watch_progress?profile_id=eq." + encoded(profileId) +
+            "&playlist_id=eq." + encoded(playlistId) +
             "&content_type=eq." + encoded(contentType.wireValue) +
             "&content_id=eq." + encoded(contentId)
         val response = request(
