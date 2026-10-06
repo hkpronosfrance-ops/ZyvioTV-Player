@@ -51,6 +51,7 @@ import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.ui.auth.AuthScreen
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.settings.OnboardingPreferences
 import fr.zyviotv.player.data.catalog.AndroidXtreamSeriesDetailLoader
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
@@ -73,6 +74,7 @@ import fr.zyviotv.player.ui.settings.PlaybackDataSettingsScreen
 import fr.zyviotv.player.ui.settings.PlaylistSettingsScreen
 import fr.zyviotv.player.ui.settings.ProfilesSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
+import fr.zyviotv.player.ui.onboarding.OnboardingGateScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
 import fr.zyviotv.player.ui.library.ContinueWatchingScreen
 import fr.zyviotv.player.ui.library.FavoritesScreen
@@ -142,6 +144,10 @@ fun ZyvioTVPlayerApp(
     val librarySession = rememberLibrarySession()
     val libraryState = librarySession.state.value
     val scope = rememberCoroutineScope()
+    val appContext = LocalContext.current.applicationContext
+    val onboardingPreferences = remember(appContext) {
+        OnboardingPreferences(appContext)
+    }
 
     val activePlaylistId = (providerState as? ProviderCatalogState.Ready)?.playlistId
     val movieProgressById = remember(libraryState, activePlaylistId) {
@@ -236,9 +242,73 @@ fun ZyvioTVPlayerApp(
                 onProfileSelected = {
                     providerCatalog.reload()
                     librarySession.reload()
-                    navController.navigate(AppDestination.Home.route) {
+                    val target = if (onboardingPreferences.isCompleted()) {
+                        AppDestination.Home.route
+                    } else {
+                        onboardingPreferences.markStarted()
+                        "onboarding"
+                    }
+                    navController.navigate(target) {
                         popUpTo("profile-gate") { inclusive = true }
                     }
+                },
+            )
+        }
+
+        composable("onboarding") {
+            val context = LocalContext.current.applicationContext
+            var hasConfiguredPlaylist by remember { mutableStateOf<Boolean?>(null) }
+            var playlistCheckToken by remember { mutableIntStateOf(0) }
+
+            LaunchedEffect(playlistCheckToken) {
+                val repository = SupabaseCloudSyncRepository(
+                    sessionStore = SecureSessionStore(context),
+                )
+                hasConfiguredPlaylist = repository.listPlaylists()
+                    .getOrNull()
+                    ?.any { it.isEnabled && it.secretStatus == "configured" }
+                    ?: false
+                if (hasConfiguredPlaylist == true) {
+                    providerCatalog.reload()
+                }
+            }
+
+            if (hasConfiguredPlaylist == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                }
+            } else {
+                OnboardingGateScreen(
+                    deviceProfile = profile,
+                    state = providerState,
+                    hasConfiguredPlaylist = hasConfiguredPlaylist == true,
+                    resumed = onboardingPreferences.hasStarted(),
+                    onAddPlaylist = {
+                        navController.navigate("onboarding-add-playlist")
+                    },
+                    onRetry = {
+                        playlistCheckToken += 1
+                        providerCatalog.reload()
+                    },
+                    onContinue = {
+                        onboardingPreferences.markCompleted()
+                        navController.navigate(AppDestination.Home.route) {
+                            popUpTo("onboarding") { inclusive = true }
+                        }
+                    },
+                )
+            }
+        }
+
+        composable("onboarding-add-playlist") {
+            AddPlaylistScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = {
+                    providerCatalog.reload()
+                    navController.popBackStack()
                 },
             )
         }
