@@ -62,7 +62,7 @@ begin
   end if;
 
   return jsonb_build_object(
-    'server_now', now(),
+    'server_now_epoch_ms', floor(extract(epoch from now()) * 1000)::bigint,
     'parental_enabled', coalesce(v_control.enabled, false),
     'is_child', v_profile.profile_type = 'child',
     'consumed_seconds', v_used,
@@ -71,6 +71,11 @@ begin
     'schedule_enabled', coalesce(v_settings.schedule_enabled, false),
     'schedule_windows', coalesce(v_settings.schedule_windows, '[]'::jsonb),
     'exception_until', v_exception_until,
+    'exception_until_epoch_ms',
+      case
+        when v_exception_until is null then null
+        else floor(extract(epoch from v_exception_until) * 1000)::bigint
+      end,
     'blocked_by_time',
       coalesce(v_control.enabled, false)
       and v_profile.profile_type = 'child'
