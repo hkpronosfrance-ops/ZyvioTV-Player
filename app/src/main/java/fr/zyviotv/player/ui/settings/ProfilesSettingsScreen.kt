@@ -181,12 +181,18 @@ fun ProfilesSettingsScreen(
                     editAvatarIndex = it.coerceIn(1, 16)
                     editError = null
                 },
-                onSetDefault = {
-                    defaultProfileId = item.id
-                    preferences.setDefaultProfileId(item.id)
-                    preferences.setSelectedProfileId(item.id)
-                    onProfileSelectionChanged()
-                    message = "Profil par défaut enregistré sur cet appareil."
+                onDefaultChange = { enabled ->
+                    if (enabled) {
+                        defaultProfileId = item.id
+                        preferences.setDefaultProfileId(item.id)
+                        preferences.setSelectedProfileId(item.id)
+                        onProfileSelectionChanged()
+                        message = "Profil par défaut enregistré sur cet appareil."
+                    } else {
+                        defaultProfileId = null
+                        preferences.setDefaultProfileId(null)
+                        message = "Profil par défaut désactivé sur cet appareil."
+                    }
                 },
                 onSave = {
                     val cleanName = editName.trim()
