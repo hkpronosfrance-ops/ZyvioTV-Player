@@ -105,6 +105,7 @@ import fr.zyviotv.player.ui.series.SeriesDetailState
 import fr.zyviotv.player.ui.series.SeriesDetailUi
 import fr.zyviotv.player.ui.series.SeriesScreen
 import fr.zyviotv.player.ui.player.PlayerHost
+import fr.zyviotv.player.ui.player.SeriesAutoNextResolver
 import fr.zyviotv.player.ui.profiles.WhoIsWatchingGate
 import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.PlayerProfile
@@ -158,6 +159,12 @@ fun ZyvioTVPlayerApp(
     val appContext = LocalContext.current.applicationContext
     val onboardingPreferences = remember(appContext) {
         OnboardingPreferences(appContext)
+    }
+    val profilePreferences = remember(appContext) {
+        ProfilePreferences(appContext)
+    }
+    val setupPreferences = remember(appContext) {
+        OnboardingSetupPreferences(appContext)
     }
 
     val activePlaylistId = (providerState as? ProviderCatalogState.Ready)?.playlistId
@@ -215,6 +222,60 @@ fun ZyvioTVPlayerApp(
     var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
     var playbackSyncContext by remember { mutableStateOf<PlaybackSyncContext?>(null) }
     var lastSyncedPositionMs by remember { mutableStateOf(0L) }
+
+    val advanceToNextEpisode: (Boolean) -> Unit = { automatic ->
+        val sync = playbackSyncContext
+        val seriesId = sync?.seriesId
+        val isEpisode = sync?.contentType == ProgressContentType.Episode
+        val selectedProfileId = profilePreferences.selectedProfileId()
+        val autoNextEnabled = selectedProfileId
+            ?.let { setupPreferences.profile(it).autoNextEpisode }
+            ?: true
+
+        if (
+            isEpisode &&
+            !seriesId.isNullOrBlank() &&
+            (!automatic || autoNextEnabled)
+        ) {
+            scope.launch {
+                val resolver = SeriesAutoNextResolver(
+                    SupabaseCloudSyncRepository(
+                        sessionStore = SecureSessionStore(appContext),
+                    ),
+                )
+                val next = resolver.resolveNext(
+                    playlistId = sync!!.playlistId,
+                    seriesId = seriesId,
+                    currentContentId = sync.contentId,
+                    currentSeason = sync.seasonNumber,
+                    currentEpisode = sync.episodeNumber,
+                ) ?: return@launch
+                val series = (providerState as? ProviderCatalogState.Ready)
+                    ?.snapshot
+                    ?.series
+                    ?.firstOrNull { it.id == seriesId }
+                val seriesTitle = series?.title ?: "Série"
+
+                playbackRequest = PlaybackRequest(
+                    title = seriesTitle + " — S" + next.season +
+                        " E" + next.number + " — " + next.title,
+                    streamUrl = next.streamUrl,
+                    kind = PlaybackKind.Episode,
+                )
+                playbackSyncContext = PlaybackSyncContext(
+                    playlistId = sync.playlistId,
+                    contentType = ProgressContentType.Episode,
+                    contentId = next.id,
+                    title = next.title,
+                    seriesId = seriesId,
+                    seasonNumber = next.season,
+                    episodeNumber = next.number,
+                    artworkUrl = series?.posterUrl ?: sync.artworkUrl,
+                )
+                lastSyncedPositionMs = 0L
+            }
+        }
+    }
 
     LaunchedEffect(deepLink) {
         if (deepLink?.startsWith("zyviotv://parental-pin-recovery") == true) {
@@ -1212,6 +1273,7 @@ fun ZyvioTVPlayerApp(
                 PlayerHost(
                     profile = profile,
                     request = request,
+                    onNext = { advanceToNextEpisode(false) },
                     onBack = {
                         playbackRequest = null
                         navController.popBackStack()
@@ -1244,6 +1306,32 @@ fun ZyvioTVPlayerApp(
                                         completed = completed,
                                     ),
                                 )
+                            }
+                        }
+                    },
+                    onPlaybackEnded = { positionMs, durationMs ->
+                        val sync = playbackSyncContext
+                        if (sync != null) {
+                            lastSyncedPositionMs = positionMs
+                            scope.launch {
+                                librarySession.saveProgress(
+                                    SyncedWatchProgress(
+                                        playlistId = sync.playlistId,
+                                        contentType = sync.contentType,
+                                        contentId = sync.contentId,
+                                        title = sync.title,
+                                        seriesId = sync.seriesId,
+                                        seasonNumber = sync.seasonNumber,
+                                        episodeNumber = sync.episodeNumber,
+                                        artworkUrl = sync.artworkUrl,
+                                        positionMs = positionMs.coerceAtLeast(0L),
+                                        durationMs = durationMs,
+                                        completed = true,
+                                    ),
+                                )
+                            }
+                            if (sync.contentType == ProgressContentType.Episode) {
+                                advanceToNextEpisode(true)
                             }
                         }
                     },
