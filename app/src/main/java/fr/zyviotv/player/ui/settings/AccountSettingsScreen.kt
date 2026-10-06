@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AccountSettingsScreen(
     onSignedOut: () -> Unit,
+    onOpenPlaylists: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember {
@@ -57,6 +59,15 @@ fun AccountSettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(20.dp))
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(0.6f),
+            onClick = onOpenPlaylists,
+        ) {
+            Text("Playlists")
+        }
+
+        Spacer(Modifier.height(12.dp))
 
         message?.let {
             Text(

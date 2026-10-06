@@ -69,9 +69,9 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
             return@LaunchedEffect
         }
 
-        val playlist = playlists.firstOrNull {
-            it.isEnabled && it.secretStatus == "configured"
-        }
+        val playlist = playlists
+            .filter { it.isEnabled && it.secretStatus == "configured" }
+            .minWithOrNull(compareBy<SyncedPlaylist> { it.priority }.thenBy { it.name.lowercase() })
 
         if (playlist == null) {
             state.value = ProviderCatalogState.Empty(
