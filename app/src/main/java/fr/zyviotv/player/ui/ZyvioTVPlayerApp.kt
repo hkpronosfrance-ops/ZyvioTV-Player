@@ -45,6 +45,7 @@ import androidx.navigation.compose.rememberNavController
 import fr.zyviotv.player.shared.AppIdentity
 import fr.zyviotv.player.shared.catalog.CatalogMovie
 import fr.zyviotv.player.shared.catalog.CatalogSeries
+import fr.zyviotv.player.shared.epg.EpgWindow
 import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.ui.auth.AuthScreen
@@ -52,6 +53,8 @@ import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.catalog.AndroidXtreamSeriesDetailLoader
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
+import fr.zyviotv.player.data.epg.AndroidXtreamGuideLoader
+import fr.zyviotv.player.data.epg.GuideLoadResult
 import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
 import fr.zyviotv.player.ui.catalog.ProviderCatalogState
 import fr.zyviotv.player.ui.catalog.rememberProviderCatalogSession
@@ -62,6 +65,8 @@ import fr.zyviotv.player.ui.catalog.toSeriesState
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
+import fr.zyviotv.player.ui.epg.EpgChannelUi
+import fr.zyviotv.player.ui.epg.EpgGuideState
 import fr.zyviotv.player.ui.epg.GuideEpgScreen
 import fr.zyviotv.player.ui.movies.MovieDetailScreen
 import fr.zyviotv.player.ui.movies.MovieDetailState
@@ -131,6 +136,82 @@ fun ZyvioTVPlayerApp() {
         }
 
         composable("guide") {
+            val context = LocalContext.current
+            val readyProvider = providerState as? ProviderCatalogState.Ready
+            var guideState by remember { mutableStateOf<EpgGuideState>(EpgGuideState.Loading) }
+            var guideReloadToken by remember { mutableIntStateOf(0) }
+
+            LaunchedEffect(
+                readyProvider?.playlistId,
+                readyProvider?.snapshot?.liveChannels,
+                guideReloadToken,
+            ) {
+                if (readyProvider == null) {
+                    guideState = when (providerState) {
+                        ProviderCatalogState.Loading -> EpgGuideState.Loading
+                        is ProviderCatalogState.Error -> EpgGuideState.Error(providerState.message)
+                        is ProviderCatalogState.Empty -> EpgGuideState.Ready(emptyList())
+                        is ProviderCatalogState.Ready -> EpgGuideState.Loading
+                    }
+                    return@LaunchedEffect
+                }
+
+                guideState = EpgGuideState.Loading
+                val repository = SupabaseCloudSyncRepository(
+                    sessionStore = SecureSessionStore(context.applicationContext),
+                )
+                val secret = repository
+                    .getPlaylistSecret(readyProvider.playlistId)
+                    .getOrElse {
+                        guideState = EpgGuideState.Error(
+                            "Impossible de restaurer la configuration de la playlist.",
+                        )
+                        return@LaunchedEffect
+                    }
+
+                val xtream = secret as? PlaylistSecret.Xtream
+                if (xtream == null) {
+                    guideState = EpgGuideState.Error(
+                        "Le guide EPG réel est actuellement disponible pour les playlists Xtream.",
+                    )
+                    return@LaunchedEffect
+                }
+
+                val nowEpochSeconds = System.currentTimeMillis() / 1000L
+                val result = AndroidXtreamGuideLoader(
+                    credentials = XtreamCredentials(
+                        serverUrl = xtream.serverUrl,
+                        username = xtream.username,
+                        password = xtream.password,
+                    ),
+                ).load(
+                    channels = readyProvider.snapshot.liveChannels,
+                    window = EpgWindow.around(nowEpochSeconds),
+                )
+
+                guideState = when (result) {
+                    is GuideLoadResult.Failure -> EpgGuideState.Error(result.message)
+                    is GuideLoadResult.Success -> {
+                        val programmesByChannel = result.channels.associate {
+                            it.channelId to it.programmes
+                        }
+                        EpgGuideState.Ready(
+                            readyProvider.snapshot.liveChannels
+                                .take(50)
+                                .mapIndexed { index, channel ->
+                                    EpgChannelUi(
+                                        id = channel.id,
+                                        number = (index + 1).toString(),
+                                        name = channel.name,
+                                        sourceLabel = readyProvider.playlistName,
+                                        programmes = programmesByChannel[channel.id].orEmpty(),
+                                    )
+                                },
+                        )
+                    }
+                }
+            }
+
             AdaptiveShell(
                 profile = profile,
                 destinations = AppDestination.entries,
@@ -143,6 +224,36 @@ fun ZyvioTVPlayerApp() {
             ) {
                 GuideEpgScreen(
                     profile = profile,
+                    state = guideState,
+                    onRetry = { guideReloadToken += 1 },
+                    onWatchChannel = { channel ->
+                        val source = readyProvider
+                            ?.snapshot
+                            ?.liveChannels
+                            ?.firstOrNull { it.id == channel.id }
+                        if (source != null) {
+                            playbackRequest = PlaybackRequest(
+                                title = source.name,
+                                streamUrl = source.streamUrl,
+                                kind = PlaybackKind.Live,
+                            )
+                            navController.navigate("player")
+                        }
+                    },
+                    onWatchProgramme = { channel, _ ->
+                        val source = readyProvider
+                            ?.snapshot
+                            ?.liveChannels
+                            ?.firstOrNull { it.id == channel.id }
+                        if (source != null) {
+                            playbackRequest = PlaybackRequest(
+                                title = source.name,
+                                streamUrl = source.streamUrl,
+                                kind = PlaybackKind.Live,
+                            )
+                            navController.navigate("player")
+                        }
+                    },
                 )
             }
         }
