@@ -52,6 +52,9 @@ import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.ui.auth.AuthScreen
 import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.settings.OnboardingPreferences
+import fr.zyviotv.player.data.settings.OnboardingSetupPreferences
+import fr.zyviotv.player.data.settings.ProfilePreferences
+import fr.zyviotv.player.data.settings.ProfileRepository
 import fr.zyviotv.player.data.catalog.AndroidXtreamSeriesDetailLoader
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
@@ -75,6 +78,7 @@ import fr.zyviotv.player.ui.settings.PlaylistSettingsScreen
 import fr.zyviotv.player.ui.settings.ProfilesSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.onboarding.OnboardingGateScreen
+import fr.zyviotv.player.ui.onboarding.OnboardingPreferencesScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
 import fr.zyviotv.player.ui.library.ContinueWatchingScreen
 import fr.zyviotv.player.ui.library.FavoritesScreen
@@ -97,6 +101,7 @@ import fr.zyviotv.player.ui.series.SeriesScreen
 import fr.zyviotv.player.ui.player.PlayerHost
 import fr.zyviotv.player.ui.profiles.WhoIsWatchingGate
 import fr.zyviotv.player.shared.sync.FavoriteContentType
+import fr.zyviotv.player.shared.sync.PlayerProfile
 import fr.zyviotv.player.shared.sync.PlaylistSecret
 import fr.zyviotv.player.shared.sync.ProgressContentType
 import fr.zyviotv.player.shared.sync.SyncedFavorite
@@ -294,6 +299,62 @@ fun ZyvioTVPlayerApp(
                         providerCatalog.reload()
                     },
                     onContinue = {
+                        navController.navigate("onboarding-preferences")
+                    },
+                )
+            }
+        }
+
+        composable("onboarding-preferences") {
+            val context = LocalContext.current.applicationContext
+            val profileRepository = remember(context) {
+                ProfileRepository(SecureSessionStore(context))
+            }
+            val profilePreferences = remember(context) {
+                ProfilePreferences(context)
+            }
+            val setupPreferences = remember(context) {
+                OnboardingSetupPreferences(context)
+            }
+
+            var profiles by remember { mutableStateOf<List<PlayerProfile>?>(null) }
+            var defaultProfileId by remember {
+                mutableStateOf(profilePreferences.defaultProfileId())
+            }
+            val selectedProfileId = profilePreferences.selectedProfileId()
+
+            LaunchedEffect(Unit) {
+                profiles = profileRepository.listProfiles().getOrDefault(emptyList())
+            }
+
+            val loadedProfiles = profiles
+            if (loadedProfiles == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                }
+            } else {
+                val preferenceProfileId = selectedProfileId
+                    ?: loadedProfiles.firstOrNull()?.id
+                    .orEmpty()
+                OnboardingPreferencesScreen(
+                    deviceProfile = profile,
+                    profiles = loadedProfiles,
+                    selectedDefaultProfileId = defaultProfileId,
+                    selectedProfileId = preferenceProfileId,
+                    initialProfilePreferences = setupPreferences.profile(preferenceProfileId),
+                    initialDevicePreferences = setupPreferences.device(),
+                    onDefaultProfileChanged = { profileId ->
+                        defaultProfileId = profileId
+                        profilePreferences.setDefaultProfileId(profileId)
+                    },
+                    onProfilePreferencesSaved = { profileId, snapshot ->
+                        setupPreferences.saveProfile(profileId, snapshot)
+                    },
+                    onDevicePreferencesSaved = setupPreferences::saveDevice,
+                    onFinished = {
                         onboardingPreferences.markCompleted()
                         navController.navigate(AppDestination.Home.route) {
                             popUpTo("onboarding") { inclusive = true }
