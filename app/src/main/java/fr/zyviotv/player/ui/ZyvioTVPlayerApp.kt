@@ -51,6 +51,9 @@ import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.ui.auth.AuthScreen
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.settings.AppUpdateKind
+import fr.zyviotv.player.data.settings.AppUpdatePreferences
+import fr.zyviotv.player.data.settings.AppUpdateRepository
 import fr.zyviotv.player.data.settings.OnboardingPreferences
 import fr.zyviotv.player.data.settings.OnboardingSetupPreferences
 import fr.zyviotv.player.data.settings.ProfilePreferences
@@ -77,6 +80,7 @@ import fr.zyviotv.player.ui.settings.PlaybackDataSettingsScreen
 import fr.zyviotv.player.ui.settings.PlaylistSettingsScreen
 import fr.zyviotv.player.ui.settings.ProfilesSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
+import fr.zyviotv.player.ui.onboarding.AppUpdateGateScreen
 import fr.zyviotv.player.ui.onboarding.OnboardingGateScreen
 import fr.zyviotv.player.ui.onboarding.OnboardingPreferencesScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
@@ -248,7 +252,7 @@ fun ZyvioTVPlayerApp(
                     providerCatalog.reload()
                     librarySession.reload()
                     val target = if (onboardingPreferences.isCompleted()) {
-                        AppDestination.Home.route
+                        "update-gate"
                     } else {
                         onboardingPreferences.markStarted()
                         "onboarding"
@@ -356,8 +360,83 @@ fun ZyvioTVPlayerApp(
                     onDevicePreferencesSaved = setupPreferences::saveDevice,
                     onFinished = {
                         onboardingPreferences.markCompleted()
-                        navController.navigate(AppDestination.Home.route) {
+                        navController.navigate("update-gate") {
                             popUpTo("onboarding") { inclusive = true }
+                        }
+                    },
+                )
+            }
+        }
+
+        composable("update-gate") {
+            val context = LocalContext.current
+            val appContext = context.applicationContext
+            val updateRepository = remember(appContext) {
+                AppUpdateRepository(SecureSessionStore(appContext))
+            }
+            val updatePreferences = remember(appContext) {
+                AppUpdatePreferences(appContext)
+            }
+            var policy by remember {
+                mutableStateOf<fr.zyviotv.player.data.settings.AppUpdatePolicy?>(null)
+            }
+            var checked by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                policy = updateRepository
+                    .loadAndroidPolicy(fr.zyviotv.player.BuildConfig.VERSION_CODE.toLong())
+                    .getOrNull()
+                checked = true
+            }
+
+            val loadedPolicy = policy
+            if (!checked) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                }
+            } else if (
+                loadedPolicy == null ||
+                loadedPolicy.kind == AppUpdateKind.None ||
+                (
+                    loadedPolicy.kind == AppUpdateKind.Optional &&
+                        !updatePreferences.shouldShowOptionalUpdate(
+                            loadedPolicy.latestVersionCode,
+                        )
+                    )
+            ) {
+                LaunchedEffect(loadedPolicy?.latestVersionCode) {
+                    navController.navigate(AppDestination.Home.route) {
+                        popUpTo("update-gate") { inclusive = true }
+                    }
+                }
+            } else {
+                AppUpdateGateScreen(
+                    deviceProfile = profile,
+                    policy = loadedPolicy,
+                    onUpdate = {
+                        val url = loadedPolicy.storeUrl
+                        if (url != null) {
+                            runCatching {
+                                context.startActivity(
+                                    android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse(url),
+                                    ),
+                                )
+                            }
+                        }
+                    },
+                    onLater = {
+                        if (loadedPolicy.kind == AppUpdateKind.Optional) {
+                            updatePreferences.dismissOptionalUpdate(
+                                loadedPolicy.latestVersionCode,
+                            )
+                            navController.navigate(AppDestination.Home.route) {
+                                popUpTo("update-gate") { inclusive = true }
+                            }
                         }
                     },
                 )
