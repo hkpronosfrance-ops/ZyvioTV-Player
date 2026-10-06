@@ -12,6 +12,7 @@ enum class ProgressContentType(val wireValue: String) {
 }
 
 data class SyncedFavorite(
+    val profileId: String = "",
     val playlistId: String,
     val contentType: FavoriteContentType,
     val contentId: String,
@@ -20,6 +21,7 @@ data class SyncedFavorite(
 )
 
 data class SyncedWatchProgress(
+    val profileId: String = "",
     val playlistId: String,
     val contentType: ProgressContentType,
     val contentId: String,
@@ -43,17 +45,19 @@ data class SyncedWatchProgress(
 }
 
 interface CloudLibraryRepository {
-    suspend fun listFavorites(): Result<List<SyncedFavorite>>
+    suspend fun listFavorites(profileId: String): Result<List<SyncedFavorite>>
     suspend fun upsertFavorite(favorite: SyncedFavorite): SyncResult
     suspend fun removeFavorite(
+        profileId: String,
         playlistId: String,
         contentType: FavoriteContentType,
         contentId: String,
     ): SyncResult
 
-    suspend fun listWatchProgress(limit: Int = 50): Result<List<SyncedWatchProgress>>
+    suspend fun listWatchProgress(profileId: String, limit: Int = 50): Result<List<SyncedWatchProgress>>
     suspend fun upsertWatchProgress(progress: SyncedWatchProgress): SyncResult
     suspend fun removeWatchProgress(
+        profileId: String,
         playlistId: String,
         contentType: ProgressContentType,
         contentId: String,

@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 fun ProfilesSettingsScreen(
     profile: DeviceProfile,
     onBack: () -> Unit,
+    onProfileSelectionChanged: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember(context.applicationContext) {
@@ -304,6 +305,7 @@ fun ProfilesSettingsScreen(
                             defaultProfileId = item.id
                             preferences.setDefaultProfileId(item.id)
                             preferences.setSelectedProfileId(item.id)
+                            onProfileSelectionChanged()
                             message = "Profil par défaut enregistré sur cet appareil."
                         },
                         onDelete = {
@@ -314,6 +316,10 @@ fun ProfilesSettingsScreen(
                                         if (defaultProfileId == item.id) {
                                             defaultProfileId = null
                                             preferences.setDefaultProfileId(null)
+                                        }
+                                        if (preferences.selectedProfileId() == item.id) {
+                                            preferences.setSelectedProfileId(null)
+                                            onProfileSelectionChanged()
                                         }
                                         reload()
                                     }

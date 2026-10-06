@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.settings.ProfilePreferences
+import fr.zyviotv.player.data.settings.ProfileRepository
 import fr.zyviotv.player.data.sync.SupabaseLibrarySyncRepository
 import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.ProgressContentType
@@ -18,6 +20,7 @@ import fr.zyviotv.player.shared.sync.SyncedWatchProgress
 import fr.zyviotv.player.shared.sync.SyncResult
 
 data class LibrarySnapshot(
+    val profileId: String,
     val favorites: List<SyncedFavorite> = emptyList(),
     val progress: List<SyncedWatchProgress> = emptyList(),
 )
@@ -39,6 +42,7 @@ class LibrarySession internal constructor(
     suspend fun toggleFavorite(favorite: SyncedFavorite): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
+        val scopedFavorite = favorite.copy(profileId = ready.snapshot.profileId)
         val exists = ready.snapshot.favorites.any {
             it.playlistId == favorite.playlistId &&
                 it.contentType == favorite.contentType &&
@@ -47,12 +51,13 @@ class LibrarySession internal constructor(
 
         val result = if (exists) {
             repository.removeFavorite(
+                profileId = ready.snapshot.profileId,
                 playlistId = favorite.playlistId,
                 contentType = favorite.contentType,
                 contentId = favorite.contentId,
             )
         } else {
-            repository.upsertFavorite(favorite)
+            repository.upsertFavorite(scopedFavorite)
         }
 
         if (result is SyncResult.Success) {
@@ -63,7 +68,7 @@ class LibrarySession internal constructor(
                         it.contentId == favorite.contentId
                 }
             } else {
-                listOf(favorite) + ready.snapshot.favorites
+                listOf(scopedFavorite) + ready.snapshot.favorites
             }
             updateState(ready.copy(snapshot = ready.snapshot.copy(favorites = next)))
         }
@@ -71,48 +76,48 @@ class LibrarySession internal constructor(
     }
 
     suspend fun saveProgress(progress: SyncedWatchProgress): SyncResult {
-        val result = repository.upsertWatchProgress(progress)
+        val ready = state.value as? LibraryState.Ready
+            ?: return SyncResult.Failure("Bibliothèque indisponible.")
+        val scopedProgress = progress.copy(profileId = ready.snapshot.profileId)
+        val result = repository.upsertWatchProgress(scopedProgress)
         if (result is SyncResult.Success) {
-            val ready = state.value as? LibraryState.Ready
-            if (ready != null) {
-                val next = listOf(progress) + ready.snapshot.progress.filterNot {
-                    it.playlistId == progress.playlistId &&
-                        it.contentType == progress.contentType &&
-                        it.contentId == progress.contentId
+            val next = listOf(scopedProgress) + ready.snapshot.progress.filterNot {
+                    it.playlistId == scopedProgress.playlistId &&
+                        it.contentType == scopedProgress.contentType &&
+                        it.contentId == scopedProgress.contentId
                 }
-                updateState(
-                    ready.copy(
-                        snapshot = ready.snapshot.copy(
-                            progress = next.take(MAX_PROGRESS),
-                        ),
+            updateState(
+                ready.copy(
+                    snapshot = ready.snapshot.copy(
+                        progress = next.take(MAX_PROGRESS),
                     ),
-                )
-            }
+                ),
+            )
         }
         return result
     }
 
     suspend fun removeProgress(progress: SyncedWatchProgress): SyncResult {
+        val ready = state.value as? LibraryState.Ready
+            ?: return SyncResult.Failure("Bibliothèque indisponible.")
         val result = repository.removeWatchProgress(
+            profileId = ready.snapshot.profileId,
             playlistId = progress.playlistId,
             contentType = progress.contentType,
             contentId = progress.contentId,
         )
         if (result is SyncResult.Success) {
-            val ready = state.value as? LibraryState.Ready
-            if (ready != null) {
-                updateState(
-                    ready.copy(
-                        snapshot = ready.snapshot.copy(
-                            progress = ready.snapshot.progress.filterNot {
-                                it.playlistId == progress.playlistId &&
-                                    it.contentType == progress.contentType &&
-                                    it.contentId == progress.contentId
-                            },
-                        ),
+            updateState(
+                ready.copy(
+                    snapshot = ready.snapshot.copy(
+                        progress = ready.snapshot.progress.filterNot {
+                            it.playlistId == progress.playlistId &&
+                                it.contentType == progress.contentType &&
+                                it.contentId == progress.contentId
+                        },
                     ),
-                )
-            }
+                ),
+            )
         }
         return result
     }
@@ -151,10 +156,16 @@ class LibrarySession internal constructor(
 @Composable
 fun rememberLibrarySession(): LibrarySession {
     val context = LocalContext.current
-    val repository = remember(context.applicationContext) {
-        SupabaseLibrarySyncRepository(
-            sessionStore = SecureSessionStore(context.applicationContext),
-        )
+    val appContext = context.applicationContext
+    val sessionStore = remember(appContext) { SecureSessionStore(appContext) }
+    val repository = remember(appContext) {
+        SupabaseLibrarySyncRepository(sessionStore = sessionStore)
+    }
+    val profileRepository = remember(appContext) {
+        ProfileRepository(sessionStore = sessionStore)
+    }
+    val profilePreferences = remember(appContext) {
+        ProfilePreferences(appContext)
     }
     val state = remember { mutableStateOf<LibraryState>(LibraryState.Loading) }
     var reloadToken by remember { mutableIntStateOf(0) }
@@ -162,17 +173,41 @@ fun rememberLibrarySession(): LibrarySession {
     LaunchedEffect(reloadToken) {
         state.value = LibraryState.Loading
 
-        val favorites = repository.listFavorites().getOrElse {
+        val primaryProfileId = profileRepository.ensurePrimaryProfile().getOrElse {
+            state.value = LibraryState.Error("Impossible de préparer votre profil.")
+            return@LaunchedEffect
+        }
+        val profiles = profileRepository.listProfiles().getOrElse {
+            state.value = LibraryState.Error("Impossible de charger vos profils.")
+            return@LaunchedEffect
+        }
+
+        val selectedProfileId = profilePreferences.selectedProfileId()
+        val defaultProfileId = profilePreferences.defaultProfileId()
+        val activeProfileId = profiles.firstOrNull { it.id == selectedProfileId }?.id
+            ?: profiles.firstOrNull { it.id == defaultProfileId }?.id
+            ?: profiles.firstOrNull { it.isPrimary }?.id
+            ?: primaryProfileId
+
+        if (selectedProfileId != activeProfileId) {
+            profilePreferences.setSelectedProfileId(activeProfileId)
+        }
+
+        val favorites = repository.listFavorites(profileId = activeProfileId).getOrElse {
             state.value = LibraryState.Error("Impossible de charger vos favoris.")
             return@LaunchedEffect
         }
-        val progress = repository.listWatchProgress(limit = 200).getOrElse {
+        val progress = repository.listWatchProgress(
+            profileId = activeProfileId,
+            limit = 200,
+        ).getOrElse {
             state.value = LibraryState.Error("Impossible de charger votre progression.")
             return@LaunchedEffect
         }
 
         state.value = LibraryState.Ready(
             LibrarySnapshot(
+                profileId = activeProfileId,
                 favorites = favorites,
                 progress = progress,
             ),
