@@ -7,10 +7,10 @@ import kotlin.test.assertTrue
 
 class EpgModelsTest {
     @Test
-    fun windowAroundNowUsesThreeHoursByDefault() {
+    fun windowAroundNowUsesThreeHoursBeforeAndSixHoursAfterByDefault() {
         val window = EpgWindow.around(10_000)
         assertEquals(-800, window.fromEpochSeconds)
-        assertEquals(20_800, window.toEpochSeconds)
+        assertEquals(31_600, window.toEpochSeconds)
     }
 
     @Test
