@@ -15,6 +15,30 @@ data class ParentalSettings(
     val blockedUntil: String?,
 )
 
+data class ParentalRuntimeState(
+    val parentalEnabled: Boolean,
+    val isChild: Boolean,
+    val consumedSeconds: Int,
+    val limitMinutes: Int?,
+    val warningMinutes: Int,
+    val scheduleEnabled: Boolean,
+    val scheduleWindowsJson: String,
+    val exceptionUntil: String?,
+    val blockedByTime: Boolean,
+)
+
+data class ScreenTimeHeartbeat(
+    val consumedSeconds: Int,
+    val limitMinutes: Int?,
+    val warningMinutes: Int,
+    val blockedByTime: Boolean,
+)
+
+sealed interface ParentalExceptionResult {
+    data class Granted(val expiresAt: String?) : ParentalExceptionResult
+    data class Failure(val message: String) : ParentalExceptionResult
+}
+
 data class ProfileParentalSettings(
     val profileId: String,
     val profileName: String,
@@ -193,6 +217,106 @@ class ParentalControlsRepository(
             }
             ParentalWriteResult.Failure(message)
         }
+    }
+
+    suspend fun loadRuntimeState(
+        profileId: String,
+        contentKey: String,
+    ): Result<ParentalRuntimeState> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = rpc(
+                "player_parental_runtime_state",
+                JSONObject()
+                    .put("p_profile_id", profileId)
+                    .put("p_content_key", contentKey),
+            )
+            if (response.code !in 200..299) error("Impossible de charger l’état parental.")
+            val json = JSONObject(response.body)
+            ParentalRuntimeState(
+                parentalEnabled = json.optBoolean("parental_enabled", false),
+                isChild = json.optBoolean("is_child", false),
+                consumedSeconds = json.optInt("consumed_seconds", 0),
+                limitMinutes = if (json.isNull("limit_minutes")) null else json.getInt("limit_minutes"),
+                warningMinutes = json.optInt("warning_minutes", 10),
+                scheduleEnabled = json.optBoolean("schedule_enabled", false),
+                scheduleWindowsJson = json.optJSONArray("schedule_windows")?.toString() ?: "[]",
+                exceptionUntil = json.optString("exception_until").takeIf {
+                    it.isNotBlank() && it != "null"
+                },
+                blockedByTime = json.optBoolean("blocked_by_time", false),
+            )
+        }
+    }
+
+    suspend fun heartbeatScreenTime(
+        profileId: String,
+        playing: Boolean,
+        contentKey: String,
+    ): Result<ScreenTimeHeartbeat> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = rpc(
+                "player_parental_screen_time_heartbeat",
+                JSONObject()
+                    .put("p_profile_id", profileId)
+                    .put("p_playing", playing)
+                    .put("p_content_key", contentKey),
+            )
+            if (response.code !in 200..299) error("Impossible de synchroniser le temps d’écran.")
+            val json = JSONObject(response.body)
+            ScreenTimeHeartbeat(
+                consumedSeconds = json.optInt("consumed_seconds", 0),
+                limitMinutes = if (json.isNull("limit_minutes")) null else json.getInt("limit_minutes"),
+                warningMinutes = json.optInt("warning_minutes", 10),
+                blockedByTime = json.optBoolean("blocked_by_time", false),
+            )
+        }
+    }
+
+    suspend fun grantRuntimeException(
+        profileId: String,
+        pin: String,
+        contentKey: String,
+    ): ParentalExceptionResult = withContext(Dispatchers.IO) {
+        val response = rpc(
+            "player_parental_grant_exception",
+            JSONObject()
+                .put("p_profile_id", profileId)
+                .put("p_pin", pin)
+                .put("p_content_key", contentKey),
+        )
+        if (response.code !in 200..299) {
+            return@withContext ParentalExceptionResult.Failure(
+                "Impossible d’autoriser l’exception parentale.",
+            )
+        }
+        val json = JSONObject(response.body)
+        if (json.optBoolean("success", false)) {
+            ParentalExceptionResult.Granted(
+                json.optString("expires_at").takeIf { it.isNotBlank() && it != "null" },
+            )
+        } else {
+            val message = when (json.optString("reason")) {
+                "pin_invalid" -> "Code PIN incorrect."
+                "pin_not_configured" -> "Aucun code PIN parental n’est configuré."
+                "blocked" -> "Trop de tentatives. Réessayez dans quelques minutes."
+                "profile_not_found" -> "Profil introuvable."
+                else -> "Impossible d’autoriser l’exception parentale."
+            }
+            ParentalExceptionResult.Failure(message)
+        }
+    }
+
+    suspend fun endRuntimeException(
+        profileId: String,
+        contentKey: String,
+    ): Unit = withContext(Dispatchers.IO) {
+        rpc(
+            "player_parental_end_exception",
+            JSONObject()
+                .put("p_profile_id", profileId)
+                .put("p_content_key", contentKey),
+        )
+        Unit
     }
 
     suspend fun setEnabled(

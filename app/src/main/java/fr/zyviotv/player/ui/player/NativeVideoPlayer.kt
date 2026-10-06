@@ -96,6 +96,8 @@ fun NativeVideoPlayer(
             NativePlayerCommand.TogglePlayPause -> {
                 if (player.isPlaying) player.pause() else player.play()
             }
+            NativePlayerCommand.Pause -> player.pause()
+            NativePlayerCommand.Play -> player.play()
             NativePlayerCommand.SeekBack10 -> {
                 player.seekTo((player.currentPosition - SEEK_STEP_MS).coerceAtLeast(0L))
             }
@@ -309,6 +311,8 @@ private fun Tracks.toNativeTrackCatalog(): NativeTrackCatalog {
 enum class NativePlayerCommand {
     None,
     TogglePlayPause,
+    Pause,
+    Play,
     SeekBack10,
     SeekForward10,
     Retry,
