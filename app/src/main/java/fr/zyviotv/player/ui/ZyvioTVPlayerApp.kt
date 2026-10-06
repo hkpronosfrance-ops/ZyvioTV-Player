@@ -68,6 +68,7 @@ import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
 import fr.zyviotv.player.ui.library.ContinueWatchingScreen
 import fr.zyviotv.player.ui.library.FavoritesScreen
+import fr.zyviotv.player.ui.library.HistoryScreen
 import fr.zyviotv.player.ui.library.LibraryState
 import fr.zyviotv.player.ui.library.rememberLibrarySession
 import fr.zyviotv.player.ui.epg.EpgChannelUi
@@ -315,6 +316,60 @@ fun ZyvioTVPlayerApp() {
         }
 
 
+
+
+        composable("history") {
+            AdaptiveShell(
+                profile = profile,
+                destinations = AppDestination.entries,
+                selectedRoute = "",
+                onDestinationSelected = { target ->
+                    navController.navigate(target.route) {
+                        launchSingleTop = true
+                    }
+                },
+            ) {
+                HistoryScreen(
+                    profile = profile,
+                    state = libraryState,
+                    activePlaylistId = activePlaylistId,
+                    onRetry = librarySession::reload,
+                    onOpen = { progress ->
+                        val readyProvider = providerState as? ProviderCatalogState.Ready
+                        if (readyProvider != null && progress.playlistId == readyProvider.playlistId) {
+                            when (progress.contentType) {
+                                ProgressContentType.Movie -> {
+                                    selectedMovie = readyProvider.snapshot.movies
+                                        .firstOrNull { it.id == progress.contentId }
+                                    if (selectedMovie != null) {
+                                        navController.navigate("movie-detail")
+                                    }
+                                }
+
+                                ProgressContentType.Episode -> {
+                                    val seriesId = progress.seriesId
+                                    if (!seriesId.isNullOrBlank()) {
+                                        selectedSeries = readyProvider.snapshot.series
+                                            .firstOrNull { it.id == seriesId }
+                                        if (selectedSeries != null) {
+                                            seriesDetailState = SeriesDetailState.Loading
+                                            seriesEpisodeSources = emptyMap()
+                                            seriesDetailReloadToken += 1
+                                            navController.navigate("series-detail")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    onRemove = { progress ->
+                        scope.launch {
+                            librarySession.removeProgress(progress)
+                        }
+                    },
+                )
+            }
+        }
 
         composable("continue-watching") {
             AdaptiveShell(
@@ -816,6 +871,7 @@ fun ZyvioTVPlayerApp() {
                                 onOpenSearch = { navController.navigate("search") },
                                 onOpenFavorites = { navController.navigate("favorites") },
                                 onOpenContinueWatching = { navController.navigate("continue-watching") },
+                                onOpenHistory = { navController.navigate("history") },
                             )
                         }
 

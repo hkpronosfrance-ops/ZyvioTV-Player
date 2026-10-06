@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
@@ -52,6 +53,7 @@ fun HomeScreen(
     onOpenSearch: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenContinueWatching: () -> Unit,
+    onOpenHistory: () -> Unit,
 ) {
     val contentPadding = if (profile == DeviceProfile.Mobile) 4.dp else 12.dp
 
@@ -76,6 +78,7 @@ fun HomeScreen(
             onOpenSearch = onOpenSearch,
             onOpenFavorites = onOpenFavorites,
             onOpenContinueWatching = onOpenContinueWatching,
+            onOpenHistory = onOpenHistory,
         )
 
         Spacer(Modifier.height(28.dp))
@@ -211,6 +214,7 @@ private fun QuickActions(
     onOpenSearch: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenContinueWatching: () -> Unit,
+    onOpenHistory: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -224,6 +228,7 @@ private fun QuickActions(
         QuickActionCard("Recherche", Icons.Default.Search, isTelevision, onOpenSearch)
         QuickActionCard("Favoris", Icons.Default.Favorite, isTelevision, onOpenFavorites)
         QuickActionCard("Continuer", Icons.Default.PlayArrow, isTelevision, onOpenContinueWatching)
+        QuickActionCard("Historique", Icons.Default.History, isTelevision, onOpenHistory)
     }
 }
 
