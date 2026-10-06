@@ -32,51 +32,82 @@ import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.settings.ParentalControlsRepository
 import fr.zyviotv.player.data.settings.ParentalSettings
 import fr.zyviotv.player.data.settings.ParentalWriteResult
+import fr.zyviotv.player.data.settings.ProfileParentalSettings
+import fr.zyviotv.player.data.settings.ProfileRepository
+import fr.zyviotv.player.shared.sync.PlayerProfile
 import kotlinx.coroutines.launch
 
 @Composable
-fun ParentalControlsScreen(
-    onBack: () -> Unit,
-) {
+fun ParentalControlsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val repository = remember(context.applicationContext) {
-        ParentalControlsRepository(
-            SecureSessionStore(context.applicationContext),
-        )
+    val appContext = context.applicationContext
+    val repository = remember(appContext) {
+        ParentalControlsRepository(SecureSessionStore(appContext))
+    }
+    val profileRepository = remember(appContext) {
+        ProfileRepository(SecureSessionStore(appContext))
     }
     val scope = rememberCoroutineScope()
 
     var loading by remember { mutableStateOf(true) }
     var settings by remember { mutableStateOf<ParentalSettings?>(null) }
+    var profiles by remember { mutableStateOf<List<PlayerProfile>>(emptyList()) }
+    var selectedProfile by remember { mutableStateOf<PlayerProfile?>(null) }
+    var profileSettings by remember { mutableStateOf<ProfileParentalSettings?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var newPin by remember { mutableStateOf("") }
+
     var currentPin by remember { mutableStateOf("") }
-    var settingsPin by remember { mutableStateOf("") }
-    var maxAge by remember { mutableStateOf<Int?>(null) }
-    var hideLocked by remember { mutableStateOf(false) }
-    var scheduleEnabled by remember { mutableStateOf(false) }
-    var dailyLimit by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var actionPin by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    suspend fun load() {
+    var maxAge by remember { mutableStateOf<Int?>(null) }
+    var hideLocked by remember { mutableStateOf(false) }
+    var dailyLimit by remember { mutableStateOf("") }
+    var weekendLimit by remember { mutableStateOf("") }
+    var warningMinutes by remember { mutableStateOf("10") }
+    var scheduleEnabled by remember { mutableStateOf(false) }
+
+    suspend fun loadAccount() {
         loading = true
         error = null
-        val loaded = repository.loadSettings().getOrElse {
+        val loadedSettings = repository.loadSettings().getOrElse {
             error = "Impossible de charger le contrôle parental."
             loading = false
             return
         }
-        settings = loaded
-        maxAge = loaded.maxAge
-        hideLocked = loaded.hideLocked
-        scheduleEnabled = loaded.scheduleEnabled
-        dailyLimit = loaded.dailyLimitMinutes?.toString().orEmpty()
+        val loadedProfiles = profileRepository.listProfiles().getOrElse {
+            error = "Impossible de charger les profils."
+            loading = false
+            return
+        }
+        settings = loadedSettings
+        profiles = loadedProfiles
+        if (selectedProfile == null) {
+            selectedProfile = loadedProfiles.firstOrNull { !it.isPrimary } ?: loadedProfiles.firstOrNull()
+        }
         loading = false
     }
 
-    LaunchedEffect(Unit) {
-        load()
+    suspend fun loadSelectedProfile() {
+        val profile = selectedProfile ?: return
+        val loaded = repository.loadProfileSettings(profile.id).getOrElse {
+            error = "Impossible de charger les restrictions du profil."
+            return
+        }
+        profileSettings = loaded
+        maxAge = loaded.maxAge
+        hideLocked = loaded.hideLocked
+        dailyLimit = loaded.dailyLimitMinutes?.toString().orEmpty()
+        weekendLimit = loaded.weekendLimitMinutes?.toString().orEmpty()
+        warningMinutes = loaded.warningMinutes.toString()
+        scheduleEnabled = loaded.scheduleEnabled
+    }
+
+    LaunchedEffect(Unit) { loadAccount() }
+    LaunchedEffect(selectedProfile?.id) {
+        if (selectedProfile != null) loadSelectedProfile()
     }
 
     if (loading) {
@@ -84,9 +115,7 @@ fun ParentalControlsScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-        ) {
-            CircularProgressIndicator()
-        }
+        ) { CircularProgressIndicator() }
         return
     }
 
@@ -95,9 +124,7 @@ fun ParentalControlsScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onBack) {
-                Text("Retour")
-            }
+            TextButton(enabled = !busy, onClick = onBack) { Text("Retour") }
             Column(Modifier.weight(1f)) {
                 Text(
                     text = "Contrôle parental",
@@ -105,32 +132,29 @@ fun ParentalControlsScreen(
                     fontWeight = FontWeight.ExtraBold,
                 )
                 Text(
-                    text = "Protégé par un PIN de compte à 4 chiffres",
+                    text = "PIN commun au compte · restrictions propres au profil",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
         error?.let {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Text(it, color = MaterialTheme.colorScheme.error)
             Spacer(Modifier.height(8.dp))
-            Button(onClick = { scope.launch { load() } }) {
-                Text("Réessayer")
-            }
-            return
+            Button(onClick = { scope.launch { loadAccount() } }) { Text("Réessayer") }
+            return@Column
         }
 
-        Spacer(Modifier.height(20.dp))
-
+        Spacer(Modifier.height(18.dp))
         Text(
-            text = if (settings?.hasPin == true) "Modifier le PIN" else "Créer le PIN",
+            text = if (settings?.hasPin == true) "Code PIN parental" else "Créer le code PIN parental",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )
 
         if (settings?.hasPin == true) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = currentPin,
                 onValueChange = { currentPin = it.filter(Char::isDigit).take(4) },
@@ -141,7 +165,7 @@ fun ParentalControlsScreen(
             )
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = newPin,
             onValueChange = { newPin = it.filter(Char::isDigit).take(4) },
@@ -151,7 +175,7 @@ fun ParentalControlsScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         OutlinedButton(
             enabled = !busy && newPin.length == 4 &&
                 (settings?.hasPin != true || currentPin.length == 4),
@@ -159,147 +183,206 @@ fun ParentalControlsScreen(
             onClick = {
                 scope.launch {
                     busy = true
-                    when (
-                        val result = repository.setPin(
-                            newPin = newPin,
-                            currentPin = currentPin.takeIf { settings?.hasPin == true },
-                        )
-                    ) {
+                    when (val result = repository.setPin(
+                        newPin = newPin,
+                        currentPin = currentPin.takeIf { settings?.hasPin == true },
+                    )) {
                         ParentalWriteResult.Success -> {
-                            message = "PIN enregistré."
                             newPin = ""
                             currentPin = ""
-                            load()
+                            message = "PIN enregistré."
+                            loadAccount()
                         }
                         is ParentalWriteResult.Failure -> message = result.message
                     }
                     busy = false
                 }
             },
-        ) {
-            Text("Enregistrer le PIN")
-        }
+        ) { Text("Enregistrer le PIN") }
 
         if (settings?.hasPin == true) {
-            Spacer(Modifier.height(24.dp))
-            Text(
-                text = "Restrictions",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(10.dp))
-
-            Text(
-                text = "Âge maximum",
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                listOf<Int?>(null, 7, 10, 12, 16, 18).forEach { age ->
-                    val label = age?.toString() ?: "Tous"
-                    if (maxAge == age) {
-                        Button(
-                            modifier = Modifier.weight(1f),
-                            onClick = { maxAge = age },
-                        ) {
-                            Text(label)
-                        }
+            Spacer(Modifier.height(20.dp))
+            SettingToggle(
+                title = "Contrôle parental du compte",
+                subtitle = "Active les restrictions configurées sur les profils.",
+                checked = settings?.enabled == true,
+                onCheckedChange = { requested ->
+                    if (actionPin.length != 4) {
+                        message = "Saisissez le PIN pour modifier le contrôle parental."
                     } else {
-                        OutlinedButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = { maxAge = age },
-                        ) {
-                            Text(label)
+                        scope.launch {
+                            busy = true
+                            when (val result = repository.setEnabled(actionPin, requested)) {
+                                ParentalWriteResult.Success -> {
+                                    actionPin = ""
+                                    message = if (requested) "Contrôle parental activé." else "Contrôle parental désactivé."
+                                    loadAccount()
+                                }
+                                is ParentalWriteResult.Failure -> message = result.message
+                            }
+                            busy = false
                         }
                     }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-            SettingToggle(
-                title = "Masquer les contenus verrouillés",
-                subtitle = "Sinon ils restent visibles avec un cadenas.",
-                checked = hideLocked,
-                onCheckedChange = { hideLocked = it },
+                },
             )
-
-            SettingToggle(
-                title = "Activer une limite quotidienne",
-                subtitle = "La limite s’appliquera ensuite aux profils Enfant.",
-                checked = scheduleEnabled,
-                onCheckedChange = { scheduleEnabled = it },
-            )
-
-            if (scheduleEnabled) {
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = dailyLimit,
-                    onValueChange = { dailyLimit = it.filter(Char::isDigit).take(4) },
-                    label = { Text("Limite quotidienne en minutes") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
 
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(
-                value = settingsPin,
-                onValueChange = { settingsPin = it.filter(Char::isDigit).take(4) },
-                label = { Text("PIN pour confirmer") },
+                value = actionPin,
+                onValueChange = { actionPin = it.filter(Char::isDigit).take(4) },
+                label = { Text("PIN pour confirmer les modifications") },
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Spacer(Modifier.height(10.dp))
-            Button(
-                enabled = !busy && settingsPin.length == 4,
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Propre à chaque profil",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    scope.launch {
-                        busy = true
-                        val limit = dailyLimit.toIntOrNull()
-                        when (
-                            val result = repository.updateSettings(
-                                pin = settingsPin,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                profiles.forEach { profile ->
+                    if (selectedProfile?.id == profile.id) {
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            onClick = { selectedProfile = profile },
+                        ) { Text(profile.name) }
+                    } else {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { selectedProfile = profile },
+                        ) { Text(profile.name) }
+                    }
+                }
+            }
+
+            selectedProfile?.let { profile ->
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = "Restrictions de ${profile.name} · propre au profil",
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Spacer(Modifier.height(10.dp))
+                Text("Âge maximum", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    listOf<Int?>(null, 7, 10, 12, 16, 18).forEach { age ->
+                        val label = age?.toString() ?: "Tous"
+                        val enabled = !profile.isPrimary || age == null
+                        if (maxAge == age) {
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                enabled = enabled,
+                                onClick = { maxAge = age },
+                            ) { Text(label) }
+                        } else {
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                enabled = enabled,
+                                onClick = { maxAge = age },
+                            ) { Text(label) }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                SettingToggle(
+                    title = "Masquer complètement les contenus verrouillés",
+                    subtitle = "Sinon ils restent visibles avec un cadenas.",
+                    checked = hideLocked,
+                    onCheckedChange = { hideLocked = it },
+                )
+
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = dailyLimit,
+                    onValueChange = { dailyLimit = it.filter(Char::isDigit).take(4) },
+                    label = { Text("Temps d’écran quotidien (minutes)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = weekendLimit,
+                    onValueChange = { weekendLimit = it.filter(Char::isDigit).take(4) },
+                    label = { Text("Limite week-end (minutes)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = warningMinutes,
+                    onValueChange = { warningMinutes = it.filter(Char::isDigit).take(3) },
+                    label = { Text("Avertir avant la fin (minutes)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(8.dp))
+                SettingToggle(
+                    title = "Plages horaires",
+                    subtitle = "Les règles en cache restent appliquées hors ligne.",
+                    checked = scheduleEnabled,
+                    onCheckedChange = { scheduleEnabled = it },
+                )
+
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    enabled = !busy && actionPin.length == 4,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            when (val result = repository.updateProfileSettings(
+                                profileId = profile.id,
+                                pin = actionPin,
                                 maxAge = maxAge,
                                 hideLocked = hideLocked,
+                                dailyLimitMinutes = dailyLimit.toIntOrNull(),
+                                weekendLimitMinutes = weekendLimit.toIntOrNull(),
+                                warningMinutes = warningMinutes.toIntOrNull() ?: 10,
                                 scheduleEnabled = scheduleEnabled,
-                                dailyLimitMinutes = if (scheduleEnabled) limit else null,
-                            )
-                        ) {
-                            ParentalWriteResult.Success -> {
-                                message = "Contrôle parental mis à jour."
-                                settingsPin = ""
-                                load()
+                            )) {
+                                ParentalWriteResult.Success -> {
+                                    actionPin = ""
+                                    message = "Restrictions de ${profile.name} mises à jour."
+                                    loadSelectedProfile()
+                                }
+                                is ParentalWriteResult.Failure -> message = result.message
                             }
-                            is ParentalWriteResult.Failure -> message = result.message
+                            busy = false
                         }
-                        busy = false
-                    }
-                },
-            ) {
-                Text("Enregistrer les restrictions")
+                    },
+                ) { Text("Enregistrer les restrictions") }
             }
         }
 
         message?.let {
-            Spacer(Modifier.height(14.dp))
-            Text(
-                text = it,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Spacer(Modifier.height(12.dp))
+            Text(text = it, color = MaterialTheme.colorScheme.primary)
         }
 
-        Spacer(Modifier.height(14.dp))
-        Text(
-            text = "Après 5 codes PIN incorrects, les vérifications sont bloquées pendant 5 minutes.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
+        profileSettings?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Le PIN ne déverrouille que l’action en cours. Le temps d’écran est cumulé sur tous les appareils.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 }
 
@@ -322,9 +405,6 @@ private fun SettingToggle(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
