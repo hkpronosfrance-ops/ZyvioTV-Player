@@ -93,11 +93,7 @@ fun MoviesScreen(
             profile = profile,
             items = state.items,
             categories = state.categories,
-            lastSelectedId = lastSelectedId,
-                    onMovieSelected = {
-                        lastSelectedId = it.id
-                        onMovieSelected(it)
-                    },
+            onMovieSelected = onMovieSelected,
         )
     }
 }
