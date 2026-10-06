@@ -66,7 +66,7 @@ class SupabaseCloudSyncRepository(
             runCatching {
                 val session = sessionStore.load() ?: error("Session absente.")
                 val response = request(
-                    path = "/rest/v1/player_playlists?select=id,name,provider_type,server_host,playlist_url_hint,secret_status,is_enabled&order=updated_at.desc",
+                    path = "/rest/v1/player_playlists?select=id,name,provider_type,server_host,playlist_url_hint,secret_status,is_enabled,priority&order=priority.asc,updated_at.desc",
                     method = "GET",
                     body = null,
                     accessToken = session.accessToken,
@@ -89,12 +89,78 @@ class SupabaseCloudSyncRepository(
                                 playlistUrlHint = item.optString("playlist_url_hint").takeIf { it.isNotBlank() },
                                 secretStatus = item.optString("secret_status", "not_configured"),
                                 isEnabled = item.optBoolean("is_enabled", true),
+                                priority = item.optInt("priority", index + 1),
                             ),
                         )
                     }
                 }
             }
         }
+
+
+    override suspend fun updatePlaylistPriority(
+        playlistId: String,
+        priority: Int,
+    ): SyncResult = updatePlaylistFields(
+        playlistId = playlistId,
+        fields = JSONObject().put("priority", priority.coerceIn(1, 10)),
+        failureMessage = "Impossible de modifier la priorité de la playlist.",
+    )
+
+    override suspend fun updatePlaylistEnabled(
+        playlistId: String,
+        isEnabled: Boolean,
+    ): SyncResult = updatePlaylistFields(
+        playlistId = playlistId,
+        fields = JSONObject().put("is_enabled", isEnabled),
+        failureMessage = "Impossible de modifier l’état de la playlist.",
+    )
+
+    override suspend fun renamePlaylist(
+        playlistId: String,
+        name: String,
+    ): SyncResult {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) return SyncResult.Failure("Le nom de la playlist est vide.")
+        return updatePlaylistFields(
+            playlistId = playlistId,
+            fields = JSONObject().put("name", cleanName),
+            failureMessage = "Impossible de renommer la playlist.",
+        )
+    }
+
+    override suspend fun deletePlaylist(playlistId: String): SyncResult =
+        withContext(Dispatchers.IO) {
+            val session = sessionStore.load()
+                ?: return@withContext SyncResult.Failure("Session absente.")
+            val response = request(
+                path = "/rest/v1/player_playlists?id=eq." + playlistId,
+                method = "DELETE",
+                body = null,
+                accessToken = session.accessToken,
+            )
+            if (response.code in 200..299) SyncResult.Success
+            else SyncResult.Failure("Impossible de supprimer la playlist.")
+        }
+
+    private suspend fun updatePlaylistFields(
+        playlistId: String,
+        fields: JSONObject,
+        failureMessage: String,
+    ): SyncResult = withContext(Dispatchers.IO) {
+        val session = sessionStore.load()
+            ?: return@withContext SyncResult.Failure("Session absente.")
+        fields.put("updated_at", utcNow())
+        val response = request(
+            path = "/rest/v1/player_playlists?id=eq." + playlistId,
+            method = "PATCH",
+            body = fields.toString(),
+            accessToken = session.accessToken,
+            extraHeaders = mapOf("Prefer" to "return=minimal"),
+        )
+        if (response.code in 200..299) SyncResult.Success
+        else SyncResult.Failure(failureMessage)
+    }
 
     override suspend fun setPlaylistSecret(
         playlistId: String,
