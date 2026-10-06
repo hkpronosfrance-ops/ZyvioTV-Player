@@ -264,7 +264,7 @@ data class NativeTrackCatalog(
     val subtitles: List<NativeTrackOption> = emptyList(),
 )
 
-@OptIn(UnstableApi::class)
+@UnstableApi
 private fun Tracks.toNativeTrackCatalog(): NativeTrackCatalog {
     val audio = mutableListOf<NativeTrackOption>()
     val subtitles = mutableListOf<NativeTrackOption>()
