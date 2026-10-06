@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,12 +36,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,8 +114,9 @@ private fun SeriesReady(
             .filter { it.isNotBlank() }
             .distinct()
     }
-    var selectedCategory by remember { mutableStateOf("Toutes") }
-    var sort by remember { mutableStateOf("Popularité") }
+    var selectedCategory by rememberSaveable { mutableStateOf("Toutes") }
+    var sort by rememberSaveable { mutableStateOf("Popularité") }
+    var lastSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val filtered = remember(items, selectedCategory, sort) {
         val base = when (selectedCategory) {
@@ -160,7 +166,11 @@ private fun SeriesReady(
                     items = filtered,
                     hasFilters = selectedCategory != "Toutes",
                     onReset = { selectedCategory = "Toutes" },
-                    onSeriesSelected = onSeriesSelected,
+                    lastSelectedId = lastSelectedId,
+                    onSeriesSelected = {
+                        lastSelectedId = it.id
+                        onSeriesSelected(it)
+                    },
                 )
             }
         } else {
@@ -177,7 +187,11 @@ private fun SeriesReady(
                 items = filtered,
                 hasFilters = selectedCategory != "Toutes",
                 onReset = { selectedCategory = "Toutes" },
-                onSeriesSelected = onSeriesSelected,
+                lastSelectedId = lastSelectedId,
+                    onSeriesSelected = {
+                        lastSelectedId = it.id
+                        onSeriesSelected(it)
+                    },
             )
         }
     }
@@ -190,6 +204,7 @@ private fun SeriesBody(
     items: List<SeriesCatalogItem>,
     hasFilters: Boolean,
     onReset: () -> Unit,
+    lastSelectedId: String?,
     onSeriesSelected: (SeriesCatalogItem) -> Unit,
 ) {
     if (items.isEmpty()) {
@@ -207,8 +222,24 @@ private fun SeriesBody(
         DeviceProfile.Television -> 6
     }
 
+    val gridState = rememberLazyGridState()
+    val focusRequesters = remember(items) {
+        items.associate { it.id to FocusRequester() }
+    }
+
+    LaunchedEffect(profile, lastSelectedId, items) {
+        if (profile == DeviceProfile.Television && lastSelectedId != null) {
+            val index = items.indexOfFirst { it.id == lastSelectedId }
+            if (index >= 0) {
+                gridState.scrollToItem(index)
+                focusRequesters[lastSelectedId]?.requestFocus()
+            }
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
+        state = gridState,
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(if (profile == DeviceProfile.Mobile) 8.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -220,6 +251,7 @@ private fun SeriesBody(
             SeriesCard(
                 item = series,
                 isTelevision = profile == DeviceProfile.Television,
+                focusRequester = focusRequesters[series.id],
                 onClick = { onSeriesSelected(series) },
             )
         }
@@ -317,10 +349,12 @@ private fun CategoryPanel(
 private fun SeriesCard(
     item: SeriesCatalogItem,
     isTelevision: Boolean,
+    focusRequester: FocusRequester?,
     onClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .tvFocusEffect(isTelevision, cornerRadiusDp = 10)
             .clickable(onClick = onClick),
     ) {
