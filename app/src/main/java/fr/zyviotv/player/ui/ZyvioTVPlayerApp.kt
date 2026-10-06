@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +66,7 @@ import fr.zyviotv.player.ui.catalog.toSeriesState
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
+import fr.zyviotv.player.ui.library.rememberLibrarySession
 import fr.zyviotv.player.ui.epg.EpgChannelUi
 import fr.zyviotv.player.ui.epg.EpgGuideState
 import fr.zyviotv.player.ui.epg.GuideEpgScreen
@@ -73,17 +75,34 @@ import fr.zyviotv.player.ui.movies.MovieDetailState
 import fr.zyviotv.player.ui.movies.MovieDetailUi
 import fr.zyviotv.player.ui.movies.MoviesScreen
 import fr.zyviotv.player.ui.series.EpisodeDetailUi
+import fr.zyviotv.player.ui.series.EpisodeWatchState
 import fr.zyviotv.player.ui.series.SeriesDetailScreen
 import fr.zyviotv.player.ui.series.SeriesDetailState
 import fr.zyviotv.player.ui.series.SeriesDetailUi
 import fr.zyviotv.player.ui.series.SeriesScreen
 import fr.zyviotv.player.ui.player.PlayerHost
+import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.PlaylistSecret
+import fr.zyviotv.player.shared.sync.ProgressContentType
+import fr.zyviotv.player.shared.sync.SyncedFavorite
+import fr.zyviotv.player.shared.sync.SyncedWatchProgress
 import fr.zyviotv.player.shared.xtream.XtreamCredentials
 import fr.zyviotv.player.ui.search.SearchScreen
 import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private data class PlaybackSyncContext(
+    val playlistId: String,
+    val contentType: ProgressContentType,
+    val contentId: String,
+    val title: String,
+    val seriesId: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+    val artworkUrl: String? = null,
+)
 
 private enum class AppDestination(
     val route: String,
@@ -104,12 +123,17 @@ fun ZyvioTVPlayerApp() {
     val profile = rememberDeviceProfile()
     val providerCatalog = rememberProviderCatalogSession()
     val providerState = providerCatalog.state.value
+    val librarySession = rememberLibrarySession()
+    val libraryState = librarySession.state.value
+    val scope = rememberCoroutineScope()
     var selectedMovie by remember { mutableStateOf<CatalogMovie?>(null) }
     var selectedSeries by remember { mutableStateOf<CatalogSeries?>(null) }
     var seriesDetailState by remember { mutableStateOf<SeriesDetailState>(SeriesDetailState.Loading) }
     var seriesEpisodeSources by remember { mutableStateOf<Map<String, SeriesEpisodeSource>>(emptyMap()) }
     var seriesDetailReloadToken by remember { mutableIntStateOf(0) }
     var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
+    var playbackSyncContext by remember { mutableStateOf<PlaybackSyncContext?>(null) }
+    var lastSyncedPositionMs by remember { mutableStateOf(0L) }
 
     NavHost(
         navController = navController,
@@ -128,6 +152,7 @@ fun ZyvioTVPlayerApp() {
                 profile = profile,
                 onAuthenticated = {
                     providerCatalog.reload()
+                    librarySession.reload()
                     navController.navigate(AppDestination.Home.route) {
                         popUpTo("auth") { inclusive = true }
                     }
@@ -301,6 +326,22 @@ fun ZyvioTVPlayerApp() {
                         }
                     },
                 ) {
+                    val readyProvider = providerState as? ProviderCatalogState.Ready
+                    val movieProgress = readyProvider?.let {
+                        librarySession.progressFor(
+                            playlistId = it.playlistId,
+                            type = ProgressContentType.Movie,
+                            contentId = movie.id,
+                        )
+                    }
+                    val movieFavorite = readyProvider?.let {
+                        librarySession.isFavorite(
+                            playlistId = it.playlistId,
+                            type = FavoriteContentType.Movie,
+                            contentId = movie.id,
+                        )
+                    } ?: false
+
                     MovieDetailScreen(
                         profile = profile,
                         state = MovieDetailState.Ready(
@@ -308,15 +349,46 @@ fun ZyvioTVPlayerApp() {
                                 id = movie.id,
                                 title = movie.title,
                                 posterUrl = movie.posterUrl,
+                                progress = movieProgress?.fraction ?: 0f,
+                                isFavorite = movieFavorite,
                             ),
                         ),
-                        onPlay = { _, _ ->
+                        onPlay = { _, resume ->
                             playbackRequest = PlaybackRequest(
                                 title = movie.title,
                                 streamUrl = movie.streamUrl,
                                 kind = PlaybackKind.Movie,
+                                resumePositionMs = if (resume) {
+                                    movieProgress?.positionMs ?: 0L
+                                } else {
+                                    0L
+                                },
                             )
+                            playbackSyncContext = readyProvider?.let {
+                                PlaybackSyncContext(
+                                    playlistId = it.playlistId,
+                                    contentType = ProgressContentType.Movie,
+                                    contentId = movie.id,
+                                    title = movie.title,
+                                    artworkUrl = movie.posterUrl,
+                                )
+                            }
+                            lastSyncedPositionMs = movieProgress?.positionMs ?: 0L
                             navController.navigate("player")
+                        },
+                        onToggleFavorite = {
+                            val provider = readyProvider ?: return@MovieDetailScreen
+                            scope.launch {
+                                librarySession.toggleFavorite(
+                                    SyncedFavorite(
+                                        playlistId = provider.playlistId,
+                                        contentType = FavoriteContentType.Movie,
+                                        contentId = movie.id,
+                                        title = movie.title,
+                                        artworkUrl = movie.posterUrl,
+                                    ),
+                                )
+                            }
                         },
                     )
                 }
@@ -386,13 +458,29 @@ fun ZyvioTVPlayerApp() {
                                         .distinct()
                                         .size,
                                     episodesCount = result.detail.episodes.size,
+                                    isFavorite = librarySession.isFavorite(
+                                        playlistId = readyProvider.playlistId,
+                                        type = FavoriteContentType.Series,
+                                        contentId = series.id,
+                                    ),
                                     episodes = result.detail.episodes.map { episode ->
+                                        val progress = librarySession.progressFor(
+                                            playlistId = readyProvider.playlistId,
+                                            type = ProgressContentType.Episode,
+                                            contentId = episode.id,
+                                        )
                                         EpisodeDetailUi(
                                             id = episode.id,
                                             season = episode.season,
                                             number = episode.number,
                                             title = episode.title,
                                             synopsis = episode.synopsis,
+                                            progress = progress?.fraction ?: 0f,
+                                            state = when {
+                                                progress?.completed == true -> EpisodeWatchState.Watched
+                                                (progress?.positionMs ?: 0L) > 0L -> EpisodeWatchState.InProgress
+                                                else -> EpisodeWatchState.Unwatched
+                                            },
                                         )
                                     },
                                 ),
@@ -417,16 +505,46 @@ fun ZyvioTVPlayerApp() {
                         onRetry = {
                             seriesDetailReloadToken += 1
                         },
+                        onToggleFavorite = {
+                            scope.launch {
+                                librarySession.toggleFavorite(
+                                    SyncedFavorite(
+                                        playlistId = readyProvider.playlistId,
+                                        contentType = FavoriteContentType.Series,
+                                        contentId = series.id,
+                                        title = series.title,
+                                        artworkUrl = series.posterUrl,
+                                    ),
+                                )
+                            }
+                        },
                         onPlayEpisode = { episode ->
                             val source = seriesEpisodeSources[episode.id]
                             if (source != null) {
+                                val progress = librarySession.progressFor(
+                                    playlistId = readyProvider.playlistId,
+                                    type = ProgressContentType.Episode,
+                                    contentId = source.id,
+                                )
                                 playbackRequest = PlaybackRequest(
                                     title = series.title + " — S" +
                                         source.season + " E" + source.number +
                                         " — " + source.title,
                                     streamUrl = source.streamUrl,
                                     kind = PlaybackKind.Episode,
+                                    resumePositionMs = progress?.positionMs ?: 0L,
                                 )
+                                playbackSyncContext = PlaybackSyncContext(
+                                    playlistId = readyProvider.playlistId,
+                                    contentType = ProgressContentType.Episode,
+                                    contentId = source.id,
+                                    title = source.title,
+                                    seriesId = series.id,
+                                    seasonNumber = source.season,
+                                    episodeNumber = source.number,
+                                    artworkUrl = series.posterUrl,
+                                )
+                                lastSyncedPositionMs = progress?.positionMs ?: 0L
                                 navController.navigate("player")
                             }
                         },
@@ -445,11 +563,43 @@ fun ZyvioTVPlayerApp() {
                     request = request,
                     onBack = {
                         playbackRequest = null
+                        playbackSyncContext = null
                         navController.popBackStack()
                     },
                     onOpenGuide = {
                         if (request.kind == PlaybackKind.Live) {
                             navController.navigate("guide")
+                        }
+                    },
+                    onProgressChanged = { positionMs, durationMs ->
+                        val sync = playbackSyncContext
+                        if (sync != null) {
+                            val completed = durationMs != null &&
+                                durationMs > 0L &&
+                                positionMs.toDouble() / durationMs.toDouble() >= 0.95
+                            val shouldSync = completed ||
+                                positionMs == 0L ||
+                                kotlin.math.abs(positionMs - lastSyncedPositionMs) >= 15_000L
+                            if (shouldSync) {
+                                lastSyncedPositionMs = positionMs
+                                scope.launch {
+                                    librarySession.saveProgress(
+                                        SyncedWatchProgress(
+                                            playlistId = sync.playlistId,
+                                            contentType = sync.contentType,
+                                            contentId = sync.contentId,
+                                            title = sync.title,
+                                            seriesId = sync.seriesId,
+                                            seasonNumber = sync.seasonNumber,
+                                            episodeNumber = sync.episodeNumber,
+                                            artworkUrl = sync.artworkUrl,
+                                            positionMs = positionMs.coerceAtLeast(0L),
+                                            durationMs = durationMs,
+                                            completed = completed,
+                                        ),
+                                    )
+                                }
+                            }
                         }
                     },
                 )
@@ -498,6 +648,7 @@ fun ZyvioTVPlayerApp() {
                                             streamUrl = source.streamUrl,
                                             kind = PlaybackKind.Live,
                                         )
+                                        playbackSyncContext = null
                                         navController.navigate("player")
                                     }
                                 },
