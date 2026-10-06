@@ -68,7 +68,7 @@ data class EpgWindow(
         fun around(
             nowEpochSeconds: Long,
             beforeSeconds: Long = 3 * 60 * 60,
-            afterSeconds: Long = 3 * 60 * 60,
+            afterSeconds: Long = 6 * 60 * 60,
         ): EpgWindow = EpgWindow(
             fromEpochSeconds = nowEpochSeconds - beforeSeconds,
             toEpochSeconds = nowEpochSeconds + afterSeconds,
