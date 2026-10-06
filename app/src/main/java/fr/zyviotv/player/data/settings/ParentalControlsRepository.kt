@@ -11,11 +11,22 @@ import org.json.JSONObject
 
 data class ParentalSettings(
     val hasPin: Boolean,
+    val enabled: Boolean,
+    val blockedUntil: String?,
+)
+
+data class ProfileParentalSettings(
+    val profileId: String,
+    val profileName: String,
+    val profileType: String,
+    val isPrimary: Boolean,
     val maxAge: Int?,
     val hideLocked: Boolean,
-    val scheduleEnabled: Boolean,
     val dailyLimitMinutes: Int?,
-    val blockedUntil: String?,
+    val weekendLimitMinutes: Int?,
+    val warningMinutes: Int,
+    val scheduleEnabled: Boolean,
+    val scheduleWindowsJson: String,
 )
 
 sealed interface PinVerificationResult {
@@ -41,14 +52,7 @@ class ParentalControlsRepository(
             val json = JSONObject(response.body)
             ParentalSettings(
                 hasPin = json.optBoolean("has_pin", false),
-                maxAge = if (json.isNull("max_age")) null else json.getInt("max_age"),
-                hideLocked = json.optBoolean("hide_locked", false),
-                scheduleEnabled = json.optBoolean("schedule_enabled", false),
-                dailyLimitMinutes = if (json.isNull("daily_limit_minutes")) {
-                    null
-                } else {
-                    json.getInt("daily_limit_minutes")
-                },
+                enabled = json.optBoolean("enabled", false),
                 blockedUntil = json.optString("blocked_until").takeIf {
                     it.isNotBlank() && it != "null"
                 },
@@ -118,27 +122,60 @@ class ParentalControlsRepository(
         }
     }
 
-    suspend fun updateSettings(
+    suspend fun loadProfileSettings(
+        profileId: String,
+    ): Result<ProfileParentalSettings> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = rpc(
+                "player_get_profile_parental_settings",
+                JSONObject().put("p_profile_id", profileId),
+            )
+            if (response.code !in 200..299) error("Impossible de charger les restrictions.")
+            val json = JSONObject(response.body)
+            ProfileParentalSettings(
+                profileId = json.getString("profile_id"),
+                profileName = json.getString("profile_name"),
+                profileType = json.optString("profile_type", "standard"),
+                isPrimary = json.optBoolean("is_primary", false),
+                maxAge = if (json.isNull("max_age")) null else json.getInt("max_age"),
+                hideLocked = json.optBoolean("hide_locked", false),
+                dailyLimitMinutes = if (json.isNull("daily_limit_minutes")) null else json.getInt("daily_limit_minutes"),
+                weekendLimitMinutes = if (json.isNull("weekend_limit_minutes")) null else json.getInt("weekend_limit_minutes"),
+                warningMinutes = json.optInt("warning_minutes", 10),
+                scheduleEnabled = json.optBoolean("schedule_enabled", false),
+                scheduleWindowsJson = json.optJSONArray("schedule_windows")?.toString() ?: "[]",
+            )
+        }
+    }
+
+    suspend fun updateProfileSettings(
+        profileId: String,
         pin: String,
         maxAge: Int?,
         hideLocked: Boolean,
-        scheduleEnabled: Boolean,
         dailyLimitMinutes: Int?,
+        weekendLimitMinutes: Int?,
+        warningMinutes: Int,
+        scheduleEnabled: Boolean,
+        scheduleWindowsJson: String = "[]",
     ): ParentalWriteResult = withContext(Dispatchers.IO) {
         val body = JSONObject()
+            .put("p_profile_id", profileId)
             .put("p_pin", pin)
             .put("p_max_age", maxAge ?: JSONObject.NULL)
             .put("p_hide_locked", hideLocked)
-            .put("p_schedule_enabled", scheduleEnabled)
             .put("p_daily_limit_minutes", dailyLimitMinutes ?: JSONObject.NULL)
+            .put("p_weekend_limit_minutes", weekendLimitMinutes ?: JSONObject.NULL)
+            .put("p_warning_minutes", warningMinutes)
+            .put("p_schedule_enabled", scheduleEnabled)
+            .put("p_schedule_windows", org.json.JSONArray(scheduleWindowsJson))
 
-        val response = rpc("player_update_parental_settings", body)
+        val response = rpc("player_update_profile_parental_settings", body)
         if (response.code !in 200..299) {
             return@withContext ParentalWriteResult.Failure(
-                "Impossible d’enregistrer le contrôle parental.",
+                "Impossible d’enregistrer les restrictions du profil.",
             )
         }
-
         val json = JSONObject(response.body)
         if (json.optBoolean("success", false)) {
             ParentalWriteResult.Success
@@ -148,8 +185,40 @@ class ParentalControlsRepository(
                 "pin_not_configured" -> "Configurez d’abord un code PIN."
                 "blocked" -> "Trop de tentatives. Réessayez dans quelques minutes."
                 "invalid_age" -> "Restriction d’âge invalide."
-                "invalid_limit" -> "Limite quotidienne invalide."
-                else -> "Impossible d’enregistrer le contrôle parental."
+                "invalid_limit" -> "Limite de temps invalide."
+                "invalid_warning" -> "Avertissement de fin invalide."
+                "invalid_schedule" -> "Plages horaires invalides."
+                "primary_unrestricted" -> "Le profil principal reste sans restriction d’âge."
+                else -> "Impossible d’enregistrer les restrictions du profil."
+            }
+            ParentalWriteResult.Failure(message)
+        }
+    }
+
+    suspend fun setEnabled(
+        pin: String,
+        enabled: Boolean,
+    ): ParentalWriteResult = withContext(Dispatchers.IO) {
+        val response = rpc(
+            "player_set_parental_enabled",
+            JSONObject()
+                .put("p_pin", pin)
+                .put("p_enabled", enabled),
+        )
+        if (response.code !in 200..299) {
+            return@withContext ParentalWriteResult.Failure(
+                "Impossible de modifier le contrôle parental.",
+            )
+        }
+        val json = JSONObject(response.body)
+        if (json.optBoolean("success", false)) {
+            ParentalWriteResult.Success
+        } else {
+            val message = when (json.optString("reason")) {
+                "pin_invalid" -> "Code PIN incorrect."
+                "pin_not_configured" -> "Configurez d’abord un code PIN."
+                "blocked" -> "Trop de tentatives. Réessayez dans quelques minutes."
+                else -> "Impossible de modifier le contrôle parental."
             }
             ParentalWriteResult.Failure(message)
         }
