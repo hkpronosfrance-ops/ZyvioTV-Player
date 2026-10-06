@@ -24,6 +24,13 @@ import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.shared.playback.PlaybackState
 import fr.zyviotv.player.shared.playback.PlaybackValidationResult
 import fr.zyviotv.player.shared.playback.PlaybackValidator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun NativeVideoPlayer(
@@ -32,6 +39,9 @@ fun NativeVideoPlayer(
     onStateChanged: (PlaybackState) -> Unit = {},
     onError: (String) -> Unit = {},
     onPositionChanged: (Long) -> Unit = {},
+    onDurationChanged: (Long?) -> Unit = {},
+    onIsPlayingChanged: (Boolean) -> Unit = {},
+    showNativeControls: Boolean = true,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -59,23 +69,87 @@ fun NativeVideoPlayer(
     }
 
     DisposableEffect(player, lifecycleOwner) {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        var bufferingJob: Job? = null
+        var silentRetryUsed = false
+
+        fun publishDuration() {
+            val duration = player.duration.takeIf { it > 0L && it != Player.TIME_UNSET }
+            onDurationChanged(duration)
+        }
+
+        fun failPlayback(message: String) {
+            bufferingJob?.cancel()
+            onStateChanged(PlaybackState.Error)
+            onError(message)
+        }
+
+        fun silentRetryOrFail(message: String) {
+            bufferingJob?.cancel()
+            if (!silentRetryUsed) {
+                silentRetryUsed = true
+                val position = player.currentPosition.coerceAtLeast(0L)
+                player.stop()
+                player.setMediaItem(buildMediaItem(request))
+                if (position > 0L) {
+                    player.seekTo(position)
+                }
+                player.prepare()
+                player.playWhenReady = true
+            } else {
+                failPlayback(message)
+            }
+        }
+
+        fun beginBufferingWatch() {
+            bufferingJob?.cancel()
+            bufferingJob = scope.launch {
+                delay(BUFFERING_INDICATOR_DELAY_MS)
+                if (player.playbackState != Player.STATE_BUFFERING) return@launch
+
+                onStateChanged(PlaybackState.Buffering)
+
+                delay(BUFFERING_ERROR_TIMEOUT_MS - BUFFERING_INDICATOR_DELAY_MS)
+                if (player.playbackState == Player.STATE_BUFFERING) {
+                    silentRetryOrFail(
+                        "Le flux met trop de temps à répondre. Réessayez ou choisissez un autre contenu.",
+                    )
+                }
+            }
+        }
+
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                val state = when (playbackState) {
-                    Player.STATE_BUFFERING -> PlaybackState.Buffering
-                    Player.STATE_READY -> PlaybackState.Ready
-                    Player.STATE_ENDED -> PlaybackState.Ended
-                    else -> PlaybackState.Idle
-                }
-                onStateChanged(state)
-                if (state == PlaybackState.Ready || state == PlaybackState.Ended) {
-                    onPositionChanged(player.currentPosition.coerceAtLeast(0L))
+                when (playbackState) {
+                    Player.STATE_BUFFERING -> beginBufferingWatch()
+                    Player.STATE_READY -> {
+                        bufferingJob?.cancel()
+                        silentRetryUsed = false
+                        onStateChanged(PlaybackState.Ready)
+                        onPositionChanged(player.currentPosition.coerceAtLeast(0L))
+                        publishDuration()
+                    }
+                    Player.STATE_ENDED -> {
+                        bufferingJob?.cancel()
+                        onStateChanged(PlaybackState.Ended)
+                        onPositionChanged(player.currentPosition.coerceAtLeast(0L))
+                        publishDuration()
+                    }
+                    else -> {
+                        bufferingJob?.cancel()
+                        onStateChanged(PlaybackState.Idle)
+                    }
                 }
             }
 
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                onIsPlayingChanged(isPlaying)
+            }
+
             override fun onPlayerError(error: PlaybackException) {
-                onStateChanged(PlaybackState.Error)
-                onError("Impossible de lire ce flux. Réessayez ou choisissez un autre contenu.")
+                silentRetryOrFail(
+                    "Impossible de lire ce flux. Réessayez ou choisissez un autre contenu.",
+                )
             }
         }
 
@@ -98,6 +172,8 @@ fun NativeVideoPlayer(
         lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
 
         onDispose {
+            bufferingJob?.cancel()
+            scope.cancel()
             onPositionChanged(player.currentPosition.coerceAtLeast(0L))
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
             player.removeListener(listener)
@@ -110,7 +186,7 @@ fun NativeVideoPlayer(
         factory = {
             PlayerView(context).apply {
                 this.player = player
-                useController = true
+                useController = showNativeControls
                 keepScreenOn = true
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -120,6 +196,7 @@ fun NativeVideoPlayer(
         },
         update = { view ->
             view.player = player
+            view.useController = showNativeControls
         },
     )
 }
@@ -140,3 +217,7 @@ private fun buildMediaItem(request: PlaybackRequest): MediaItem {
         }
         .build()
 }
+
+
+private const val BUFFERING_INDICATOR_DELAY_MS = 500L
+private const val BUFFERING_ERROR_TIMEOUT_MS = 15_000L
