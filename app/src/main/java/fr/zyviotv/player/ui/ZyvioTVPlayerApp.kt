@@ -346,6 +346,7 @@ fun ZyvioTVPlayerApp() {
                 ProfilesSettingsScreen(
                     profile = profile,
                     onBack = { navController.popBackStack() },
+                    onProfileSelectionChanged = librarySession::reload,
                 )
             }
         }
