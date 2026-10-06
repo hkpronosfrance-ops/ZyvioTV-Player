@@ -119,6 +119,7 @@ class AndroidXtreamCatalogLoader(
                         posterUrl = item.optString("stream_icon").takeIf { it.isNotBlank() },
                         streamUrl = XtreamEndpointBuilder.movieStream(credentials, id, extension),
                         containerExtension = extension,
+                        addedAtEpochSeconds = item.epochSeconds("added"),
                     ),
                 )
             }
@@ -136,6 +137,7 @@ class AndroidXtreamCatalogLoader(
                         title = title,
                         categoryId = item.optString("category_id").takeIf { it.isNotBlank() },
                         posterUrl = item.optString("cover").takeIf { it.isNotBlank() },
+                        addedAtEpochSeconds = item.epochSeconds("added"),
                     ),
                 )
             }
@@ -144,6 +146,12 @@ class AndroidXtreamCatalogLoader(
     private fun JSONObject.stringId(key: String): String? {
         val value = opt(key) ?: return null
         return value.toString().takeIf { it.isNotBlank() && it != "null" }
+    }
+
+    private fun JSONObject.epochSeconds(key: String): Long? {
+        val raw = opt(key)?.toString()?.trim().orEmpty()
+        val value = raw.toLongOrNull()?.takeIf { it > 0L } ?: return null
+        return if (value > 9_999_999_999L) value / 1_000L else value
     }
 
     private companion object {
