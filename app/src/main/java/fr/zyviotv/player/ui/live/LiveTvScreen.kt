@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
@@ -63,11 +64,15 @@ data class LiveChannelUi(
     val currentProgram: String? = null,
     val nextProgram: String? = null,
     val progress: Float? = null,
+    val isLocked: Boolean = false,
 )
 
 sealed interface LiveScreenState {
     data object Loading : LiveScreenState
-    data class Ready(val channels: List<LiveChannelUi>) : LiveScreenState
+    data class Ready(
+        val channels: List<LiveChannelUi>,
+        val lockedCategories: Set<String> = emptySet(),
+    ) : LiveScreenState
     data class Error(val message: String) : LiveScreenState
 }
 
@@ -89,6 +94,7 @@ fun LiveTvScreen(
         is LiveScreenState.Ready -> LiveReadyState(
             profile = profile,
             channels = state.channels,
+            lockedCategories = state.lockedCategories,
             onPreviewChannel = onPreviewChannel,
             onTuneChannel = onTuneChannel,
             onOpenGuide = onOpenGuide,
@@ -100,6 +106,7 @@ fun LiveTvScreen(
 private fun LiveReadyState(
     profile: DeviceProfile,
     channels: List<LiveChannelUi>,
+    lockedCategories: Set<String>,
     onPreviewChannel: (LiveChannelUi) -> Unit,
     onTuneChannel: (LiveChannelUi) -> Unit,
     onOpenGuide: () -> Unit,
@@ -141,6 +148,7 @@ private fun LiveReadyState(
         MobileLiveLayout(
             categories = categories,
             selectedCategory = selectedCategory,
+            lockedCategories = lockedCategories,
             onCategorySelected = {
                 selectedCategory = it
                 selectedChannelId = channels.firstOrNull { channel ->
@@ -179,6 +187,7 @@ private fun LiveReadyState(
 private fun MobileLiveLayout(
     categories: List<String>,
     selectedCategory: String,
+    lockedCategories: Set<String>,
     onCategorySelected: (String) -> Unit,
     channels: List<LiveChannelUi>,
     selectedChannel: LiveChannelUi?,
@@ -194,7 +203,7 @@ private fun MobileLiveLayout(
     ) {
         LiveHeader(onOpenGuide)
         Spacer(Modifier.height(16.dp))
-        CategoryRow(categories, selectedCategory, onCategorySelected, false)
+        CategoryRow(categories, selectedCategory, onCategorySelected, false, lockedCategories)
         Spacer(Modifier.height(16.dp))
         PlayerPanel(selectedChannel, onTuneChannel)
         Spacer(Modifier.height(18.dp))
@@ -224,7 +233,7 @@ private fun LargeLiveLayout(
     Column(Modifier.fillMaxSize()) {
         LiveHeader(onOpenGuide)
         Spacer(Modifier.height(14.dp))
-        CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision)
+        CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision, lockedCategories)
         Spacer(Modifier.height(18.dp))
 
         Row(
@@ -310,11 +319,20 @@ private fun CategoryRow(
                     containerColor = if (selected) MaterialTheme.colorScheme.primary else ZyvioSurface1,
                 ),
             ) {
-                Text(
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (category in lockedCategories) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Verrouillé",
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
                     text = category,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                )
+                    )
+                }
             }
         }
     }
