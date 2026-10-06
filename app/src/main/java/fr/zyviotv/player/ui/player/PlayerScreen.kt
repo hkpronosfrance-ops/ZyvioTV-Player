@@ -1,5 +1,6 @@
 package fr.zyviotv.player.ui.player
 
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +45,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,6 +95,7 @@ data class PlayerScreenUiState(
     val subtitlesLabel: String? = null,
     val errorMessage: String? = null,
     val unavailable: Boolean = false,
+    val channelNumberInput: String? = null,
 )
 
 @Composable
@@ -105,6 +111,9 @@ fun PlayerScreen(
     onOpenTracks: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
+    onChannelUp: () -> Unit = {},
+    onChannelDown: () -> Unit = {},
+    onChannelDigit: (Int) -> Unit = {},
     videoContent: @Composable () -> Unit = { VideoSurfacePlaceholder() },
 ) {
     var controlsVisible by remember(state.controlsVisible) { mutableStateOf(state.controlsVisible) }
@@ -124,6 +133,64 @@ fun PlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .onPreviewKeyEvent { keyEvent ->
+                if (
+                    profile != DeviceProfile.Television ||
+                    keyEvent.type != KeyEventType.KeyDown
+                ) {
+                    false
+                } else {
+                    when (val keyCode = keyEvent.key.keyCode.toInt()) {
+                        AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                        AndroidKeyEvent.KEYCODE_ENTER,
+                        -> {
+                            if (!controlsVisible && state.panel == PlayerPanel.None) {
+                                controlsVisible = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                            onTogglePlayPause()
+                            controlsVisible = true
+                            true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_CHANNEL_UP -> {
+                            if (state.metadata.kind == PlaybackKind.Live) {
+                                onChannelUp()
+                                controlsVisible = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                            if (state.metadata.kind == PlaybackKind.Live) {
+                                onChannelDown()
+                                controlsVisible = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        else -> {
+                            val digit = keyCodeToDigit(keyCode)
+                            if (digit != null && state.metadata.kind == PlaybackKind.Live) {
+                                onChannelDigit(digit)
+                                controlsVisible = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    }
+                }
+            }
             .clickable {
                 if (state.panel == PlayerPanel.None && state.playbackState != PlaybackState.Error) {
                     controlsVisible = !controlsVisible
@@ -181,7 +248,10 @@ fun PlayerScreen(
                 title = state.metadata.title,
                 timeline = state.timeline,
             )
-            PlayerPanel.ChannelNumber -> ChannelNumberPanel(profile)
+            PlayerPanel.ChannelNumber -> ChannelNumberPanel(
+                profile = profile,
+                input = state.channelNumberInput.orEmpty(),
+            )
             PlayerPanel.None -> Unit
         }
     }
@@ -623,7 +693,10 @@ private fun ResumePanel(
 }
 
 @Composable
-private fun ChannelNumberPanel(profile: DeviceProfile) {
+private fun ChannelNumberPanel(
+    profile: DeviceProfile,
+    input: String,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -644,7 +717,7 @@ private fun ChannelNumberPanel(profile: DeviceProfile) {
                     style = MaterialTheme.typography.labelSmall,
                 )
                 Text(
-                    text = "10_",
+                    text = if (input.isBlank()) "_" else input + "_",
                     modifier = Modifier.padding(top = 8.dp),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
@@ -658,4 +731,19 @@ private fun ChannelNumberPanel(profile: DeviceProfile) {
             }
         }
     }
+}
+
+
+private fun keyCodeToDigit(keyCode: Int): Int? = when (keyCode) {
+    AndroidKeyEvent.KEYCODE_0 -> 0
+    AndroidKeyEvent.KEYCODE_1 -> 1
+    AndroidKeyEvent.KEYCODE_2 -> 2
+    AndroidKeyEvent.KEYCODE_3 -> 3
+    AndroidKeyEvent.KEYCODE_4 -> 4
+    AndroidKeyEvent.KEYCODE_5 -> 5
+    AndroidKeyEvent.KEYCODE_6 -> 6
+    AndroidKeyEvent.KEYCODE_7 -> 7
+    AndroidKeyEvent.KEYCODE_8 -> 8
+    AndroidKeyEvent.KEYCODE_9 -> 9
+    else -> null
 }

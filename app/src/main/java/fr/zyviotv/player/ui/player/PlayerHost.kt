@@ -2,12 +2,14 @@ package fr.zyviotv.player.ui.player
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.delay
 import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.shared.playback.PlaybackState
 import fr.zyviotv.player.ui.DeviceProfile
@@ -24,6 +26,9 @@ fun PlayerHost(
     onNext: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
+    onPreviousChannel: () -> Unit = {},
+    onNextChannel: () -> Unit = {},
+    onChannelNumberEntered: (String) -> Unit = {},
     onPositionChanged: (Long) -> Unit = {},
 ) {
     val effectiveRequest = remember(request) {
@@ -46,10 +51,21 @@ fun PlayerHost(
     var panel by remember(effectiveRequest.streamUrl) { mutableStateOf(PlayerPanel.None) }
     var command by remember { mutableStateOf(NativePlayerCommand.None) }
     var commandToken by remember { mutableLongStateOf(0L) }
+    var channelDigits by remember(effectiveRequest.streamUrl) { mutableStateOf("") }
 
     fun sendCommand(next: NativePlayerCommand) {
         command = next
         commandToken += 1L
+    }
+
+    LaunchedEffect(channelDigits) {
+        if (channelDigits.isNotBlank()) {
+            delay(CHANNEL_NUMBER_CONFIRM_DELAY_MS)
+            val confirmed = channelDigits
+            channelDigits = ""
+            panel = PlayerPanel.None
+            onChannelNumberEntered(confirmed)
+        }
     }
 
     val uiState = PlayerScreenUiState(
@@ -63,6 +79,7 @@ fun PlayerHost(
             durationMs = durationMs,
         ),
         errorMessage = errorMessage,
+        channelNumberInput = channelDigits.takeIf { it.isNotBlank() },
     )
 
     PlayerScreen(
@@ -71,6 +88,10 @@ fun PlayerHost(
         onBack = {
             when (panel) {
                 PlayerPanel.None -> onBack()
+                PlayerPanel.ChannelNumber -> {
+                    channelDigits = ""
+                    panel = PlayerPanel.None
+                }
                 else -> panel = PlayerPanel.None
             }
         },
@@ -86,6 +107,14 @@ fun PlayerHost(
         onOpenTracks = { panel = PlayerPanel.Tracks },
         onOpenGuide = onOpenGuide,
         onToggleFavorite = onToggleFavorite,
+        onChannelUp = onNextChannel,
+        onChannelDown = onPreviousChannel,
+        onChannelDigit = { digit ->
+            if (request.kind == fr.zyviotv.player.shared.playback.PlaybackKind.Live) {
+                channelDigits = (channelDigits + digit.toString()).takeLast(MAX_CHANNEL_DIGITS)
+                panel = PlayerPanel.ChannelNumber
+            }
+        },
         videoContent = {
             NativeVideoPlayer(
                 request = effectiveRequest,
@@ -107,3 +136,5 @@ fun PlayerHost(
 }
 
 private const val RESUME_BACKOFF_MS = 5_000L
+private const val CHANNEL_NUMBER_CONFIRM_DELAY_MS = 1_500L
+private const val MAX_CHANNEL_DIGITS = 4
