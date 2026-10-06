@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -74,7 +75,7 @@ fun NativeVideoPlayer(
         var silentRetryUsed = false
 
         fun publishDuration() {
-            val duration = player.duration.takeIf { it > 0L && it != Player.TIME_UNSET }
+            val duration = player.duration.takeIf { it > 0L && it != C.TIME_UNSET }
             onDurationChanged(duration)
         }
 
