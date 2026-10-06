@@ -37,9 +37,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -103,8 +107,14 @@ private fun LiveReadyState(
     val categories = remember(channels) {
         listOf("Toutes") + channels.map { it.category }.filter { it.isNotBlank() }.distinct()
     }
-    var selectedCategory by remember { mutableStateOf("Toutes") }
-    var selectedChannelId by remember(channels) { mutableStateOf(channels.firstOrNull()?.id) }
+    var selectedCategory by rememberSaveable { mutableStateOf("Toutes") }
+    var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(channels) {
+        if (selectedChannelId == null || channels.none { it.id == selectedChannelId }) {
+            selectedChannelId = channels.firstOrNull()?.id
+        }
+    }
 
     val filteredChannels = remember(channels, selectedCategory) {
         if (selectedCategory == "Toutes") channels else channels.filter { it.category == selectedCategory }
@@ -140,6 +150,7 @@ private fun LiveReadyState(
             channels = filteredChannels,
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
+            restoreFocusChannelId = selectedChannelId,
             onTuneChannel = onTuneChannel,
             onOpenGuide = onOpenGuide,
         )
@@ -157,6 +168,7 @@ private fun LiveReadyState(
             channels = filteredChannels,
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
+            restoreFocusChannelId = selectedChannelId,
             onTuneChannel = onTuneChannel,
             onOpenGuide = onOpenGuide,
         )
@@ -171,6 +183,7 @@ private fun MobileLiveLayout(
     channels: List<LiveChannelUi>,
     selectedChannel: LiveChannelUi?,
     onChannelSelected: (LiveChannelUi) -> Unit,
+    restoreFocusChannelId: String?,
     onTuneChannel: (LiveChannelUi) -> Unit,
     onOpenGuide: () -> Unit,
 ) {
@@ -185,7 +198,13 @@ private fun MobileLiveLayout(
         Spacer(Modifier.height(16.dp))
         PlayerPanel(selectedChannel, onTuneChannel)
         Spacer(Modifier.height(18.dp))
-        ChannelList(channels, selectedChannel, onChannelSelected, false)
+        ChannelList(
+            channels = channels,
+            selectedChannel = selectedChannel,
+            onChannelSelected = onChannelSelected,
+            isTelevision = false,
+            restoreFocusChannelId = restoreFocusChannelId,
+        )
     }
 }
 
@@ -198,6 +217,7 @@ private fun LargeLiveLayout(
     channels: List<LiveChannelUi>,
     selectedChannel: LiveChannelUi?,
     onChannelSelected: (LiveChannelUi) -> Unit,
+    restoreFocusChannelId: String?,
     onTuneChannel: (LiveChannelUi) -> Unit,
     onOpenGuide: () -> Unit,
 ) {
@@ -217,7 +237,13 @@ private fun LargeLiveLayout(
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState()),
             ) {
-                ChannelList(channels, selectedChannel, onChannelSelected, isTelevision)
+                ChannelList(
+                    channels = channels,
+                    selectedChannel = selectedChannel,
+                    onChannelSelected = onChannelSelected,
+                    isTelevision = isTelevision,
+                    restoreFocusChannelId = restoreFocusChannelId,
+                )
             }
 
             Box(
@@ -372,13 +398,31 @@ private fun ChannelList(
     selectedChannel: LiveChannelUi?,
     onChannelSelected: (LiveChannelUi) -> Unit,
     isTelevision: Boolean,
+    restoreFocusChannelId: String?,
 ) {
+    val focusRequesters = remember(channels) {
+        channels.associate { it.id to FocusRequester() }
+    }
+
+    LaunchedEffect(isTelevision, restoreFocusChannelId, channels) {
+        if (isTelevision && restoreFocusChannelId != null) {
+            focusRequesters[restoreFocusChannelId]?.requestFocus()
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         channels.forEach { channel ->
             val selected = channel.id == selectedChannel?.id
+            val requester = focusRequesters[channel.id]
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+                    .onFocusChanged {
+                        if (isTelevision && it.isFocused) {
+                            onChannelSelected(channel)
+                        }
+                    }
                     .tvFocusEffect(isTelevision, cornerRadiusDp = 14)
                     .clickable { onChannelSelected(channel) },
                 colors = CardDefaults.cardColors(
