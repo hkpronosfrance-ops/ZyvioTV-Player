@@ -9,11 +9,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
 import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.shared.playback.PlaybackState
 import fr.zyviotv.player.ui.DeviceProfile
 
+@UnstableApi
 @Composable
 fun PlayerHost(
     profile: DeviceProfile,
