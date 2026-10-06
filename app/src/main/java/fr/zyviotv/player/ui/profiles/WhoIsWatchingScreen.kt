@@ -17,10 +17,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,14 +33,20 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.settings.ParentalControlsRepository
+import fr.zyviotv.player.data.settings.PinVerificationResult
 import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.data.settings.ProfileRepository
 import fr.zyviotv.player.shared.sync.PlayerProfile
@@ -46,6 +55,7 @@ import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
+import kotlinx.coroutines.launch
 
 private sealed interface ProfileGateState {
     data object Loading : ProfileGateState
@@ -56,6 +66,7 @@ private sealed interface ProfileGateState {
 @Composable
 fun WhoIsWatchingGate(
     deviceProfile: DeviceProfile,
+    forceChooser: Boolean = false,
     onProfileSelected: (PlayerProfile) -> Unit,
 ) {
     val context = LocalContext.current
@@ -66,13 +77,37 @@ fun WhoIsWatchingGate(
     val preferences = remember(appContext) {
         ProfilePreferences(appContext)
     }
+    val parentalRepository = remember(appContext) {
+        ParentalControlsRepository(SecureSessionStore(appContext))
+    }
+    val scope = rememberCoroutineScope()
 
     var state by remember { mutableStateOf<ProfileGateState>(ProfileGateState.Loading) }
     var reloadToken by remember { mutableIntStateOf(0) }
+    var currentProfile by remember { mutableStateOf<PlayerProfile?>(null) }
+    var pendingProfile by remember { mutableStateOf<PlayerProfile?>(null) }
+    var pin by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
+    var verifyingPin by remember { mutableStateOf(false) }
 
-    fun select(profile: PlayerProfile) {
+    fun completeSelection(profile: PlayerProfile) {
         preferences.setSelectedProfileId(profile.id)
         onProfileSelected(profile)
+    }
+
+    fun requestSelection(profile: PlayerProfile) {
+        val current = currentProfile
+        if (
+            current != null &&
+            current.type == PlayerProfileType.Child &&
+            current.id != profile.id
+        ) {
+            pendingProfile = profile
+            pin = ""
+            pinError = null
+        } else {
+            completeSelection(profile)
+        }
     }
 
     LaunchedEffect(reloadToken) {
@@ -93,15 +128,19 @@ fun WhoIsWatchingGate(
             return@LaunchedEffect
         }
 
-        if (profiles.size == 1) {
-            select(profiles.first())
+        currentProfile = profiles.firstOrNull {
+            it.id == preferences.selectedProfileId()
+        }
+
+        if (!forceChooser && profiles.size == 1) {
+            completeSelection(profiles.first())
             return@LaunchedEffect
         }
 
         val defaultProfileId = preferences.defaultProfileId()
         val defaultProfile = profiles.firstOrNull { it.id == defaultProfileId }
-        if (defaultProfile != null) {
-            select(defaultProfile)
+        if (!forceChooser && defaultProfile != null) {
+            completeSelection(defaultProfile)
             return@LaunchedEffect
         }
 
@@ -121,7 +160,93 @@ fun WhoIsWatchingGate(
         is ProfileGateState.Choose -> WhoIsWatchingScreen(
             deviceProfile = deviceProfile,
             profiles = current.profiles,
-            onSelect = ::select,
+            onSelect = ::requestSelection,
+        )
+    }
+
+    val target = pendingProfile
+    if (target != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!verifyingPin) {
+                    pendingProfile = null
+                    pin = ""
+                    pinError = null
+                }
+            },
+            title = { Text("Code PIN parental") },
+            text = {
+                Column {
+                    Text("Saisissez le code PIN pour quitter le profil Enfant.")
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { value ->
+                            pin = value.filter(Char::isDigit).take(4)
+                            pinError = null
+                        },
+                        enabled = !verifyingPin,
+                        singleLine = true,
+                        label = { Text("PIN") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    )
+                    pinError?.let { message ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !verifyingPin && pin.length == 4,
+                    onClick = {
+                        scope.launch {
+                            verifyingPin = true
+                            when (val result = parentalRepository.verifyPin(pin)) {
+                                PinVerificationResult.Verified -> {
+                                    pendingProfile = null
+                                    pin = ""
+                                    completeSelection(target)
+                                }
+                                is PinVerificationResult.Invalid -> {
+                                    pinError = result.attemptsRemaining?.let {
+                                        "Code incorrect. $it tentative(s) restante(s)."
+                                    } ?: "Code PIN incorrect."
+                                }
+                                is PinVerificationResult.Blocked -> {
+                                    pinError = "Trop de tentatives. Réessayez plus tard."
+                                }
+                                PinVerificationResult.NotConfigured -> {
+                                    pinError = "Configurez d’abord le code PIN parental."
+                                }
+                                is PinVerificationResult.Failure -> {
+                                    pinError = result.message
+                                }
+                            }
+                            verifyingPin = false
+                        }
+                    },
+                ) {
+                    Text("Valider")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !verifyingPin,
+                    onClick = {
+                        pendingProfile = null
+                        pin = ""
+                        pinError = null
+                    },
+                ) {
+                    Text("Annuler")
+                }
+            },
         )
     }
 }
