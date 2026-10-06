@@ -36,6 +36,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+@UnstableApi
 @Composable
 fun NativeVideoPlayer(
     request: PlaybackRequest,
