@@ -92,6 +92,31 @@ class LibrarySession internal constructor(
         return result
     }
 
+    suspend fun removeProgress(progress: SyncedWatchProgress): SyncResult {
+        val result = repository.removeWatchProgress(
+            playlistId = progress.playlistId,
+            contentType = progress.contentType,
+            contentId = progress.contentId,
+        )
+        if (result is SyncResult.Success) {
+            val ready = state.value as? LibraryState.Ready
+            if (ready != null) {
+                updateState(
+                    ready.copy(
+                        snapshot = ready.snapshot.copy(
+                            progress = ready.snapshot.progress.filterNot {
+                                it.playlistId == progress.playlistId &&
+                                    it.contentType == progress.contentType &&
+                                    it.contentId == progress.contentId
+                            },
+                        ),
+                    ),
+                )
+            }
+        }
+        return result
+    }
+
     fun isFavorite(
         playlistId: String,
         type: FavoriteContentType,
