@@ -15,14 +15,25 @@ fun ProviderCatalogState.toLiveState(): LiveScreenState =
         is ProviderCatalogState.Empty -> LiveScreenState.Ready(emptyList())
         is ProviderCatalogState.Ready -> {
             val categories = snapshot.liveCategories.associate { it.id to it.name }
+            val lockedCategories = contentLocks?.lockedCategoryKeys.orEmpty()
+            val lockedContents = contentLocks?.lockedContentKeys.orEmpty()
             LiveScreenState.Ready(
-                snapshot.liveChannels.map { channel ->
+                channels = snapshot.liveChannels.map { channel ->
                     LiveChannelUi(
                         id = channel.id,
                         name = channel.name,
                         category = channel.categoryId?.let(categories::get) ?: "Autres",
+                        isLocked = contentLocks?.parentalEnabled == true &&
+                            contentLocks?.isChild == true &&
+                            (
+                                "live:" + channel.id in lockedContents ||
+                                    channel.categoryId?.let { "live:" + it in lockedCategories } == true
+                                ),
                     )
                 },
+                lockedCategories = snapshot.liveCategories
+                    .filter { "live:" + it.id in lockedCategories }
+                    .mapTo(mutableSetOf()) { it.name },
             )
         }
     }
@@ -36,6 +47,8 @@ fun ProviderCatalogState.toMoviesState(
         is ProviderCatalogState.Empty -> MoviesScreenState.Ready(emptyList(), emptyList())
         is ProviderCatalogState.Ready -> {
             val categories = snapshot.movieCategories.associate { it.id to it.name }
+            val lockedCategories = contentLocks?.lockedCategoryKeys.orEmpty()
+            val lockedContents = contentLocks?.lockedContentKeys.orEmpty()
             MoviesScreenState.Ready(
                 items = snapshot.movies.map { movie ->
                     MovieCatalogItem(
@@ -44,9 +57,18 @@ fun ProviderCatalogState.toMoviesState(
                         category = movie.categoryId?.let(categories::get) ?: "Autres",
                         posterUrl = movie.posterUrl,
                         progress = progressByMovieId[movie.id],
+                        isLocked = contentLocks?.parentalEnabled == true &&
+                            contentLocks?.isChild == true &&
+                            (
+                                "movie:" + movie.id in lockedContents ||
+                                    movie.categoryId?.let { "movie:" + it in lockedCategories } == true
+                                ),
                     )
                 },
                 categories = snapshot.movieCategories.map { it.name },
+                lockedCategories = snapshot.movieCategories
+                    .filter { "movie:" + it.id in lockedCategories }
+                    .mapTo(mutableSetOf()) { it.name },
             )
         }
     }
@@ -60,6 +82,8 @@ fun ProviderCatalogState.toSeriesState(
         is ProviderCatalogState.Empty -> SeriesScreenState.Ready(emptyList(), emptyList())
         is ProviderCatalogState.Ready -> {
             val categories = snapshot.seriesCategories.associate { it.id to it.name }
+            val lockedCategories = contentLocks?.lockedCategoryKeys.orEmpty()
+            val lockedContents = contentLocks?.lockedContentKeys.orEmpty()
             SeriesScreenState.Ready(
                 items = snapshot.series.map { series ->
                     SeriesCatalogItem(
@@ -68,9 +92,18 @@ fun ProviderCatalogState.toSeriesState(
                         category = series.categoryId?.let(categories::get) ?: "Autres",
                         posterUrl = series.posterUrl,
                         progress = progressBySeriesId[series.id],
+                        isLocked = contentLocks?.parentalEnabled == true &&
+                            contentLocks?.isChild == true &&
+                            (
+                                "series:" + series.id in lockedContents ||
+                                    series.categoryId?.let { "series:" + it in lockedCategories } == true
+                                ),
                     )
                 },
                 categories = snapshot.seriesCategories.map { it.name },
+                lockedCategories = snapshot.seriesCategories
+                    .filter { "series:" + it.id in lockedCategories }
+                    .mapTo(mutableSetOf()) { it.name },
             )
         }
     }
