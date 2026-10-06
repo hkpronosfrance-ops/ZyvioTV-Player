@@ -6,6 +6,7 @@ import fr.zyviotv.player.shared.sync.CloudSyncRepository
 import fr.zyviotv.player.shared.sync.DeviceRegistration
 import fr.zyviotv.player.shared.sync.PlaylistSecret
 import fr.zyviotv.player.shared.sync.SyncResult
+import fr.zyviotv.player.shared.sync.SyncedDevice
 import fr.zyviotv.player.shared.sync.SyncedPlaylist
 import java.net.HttpURLConnection
 import java.net.URL
@@ -59,6 +60,81 @@ class SupabaseCloudSyncRepository(
             } else {
                 SyncResult.Failure("Impossible de synchroniser cet appareil.")
             }
+        }
+
+
+    override suspend fun listDevices(): Result<List<SyncedDevice>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val session = sessionStore.load() ?: error("Session absente.")
+                val response = request(
+                    path = "/rest/v1/player_devices?select=id,device_uid,display_name,platform,app_version,last_seen_at&order=last_seen_at.desc",
+                    method = "GET",
+                    body = null,
+                    accessToken = session.accessToken,
+                )
+                if (response.code !in 200..299) {
+                    error("Impossible de récupérer les appareils.")
+                }
+
+                val array = JSONArray(response.body)
+                buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.getJSONObject(index)
+                        val platform = fr.zyviotv.player.shared.sync.DevicePlatform.entries
+                            .firstOrNull { it.wireValue == item.optString("platform") }
+                            ?: fr.zyviotv.player.shared.sync.DevicePlatform.Other
+                        add(
+                            SyncedDevice(
+                                id = item.getString("id"),
+                                deviceUid = item.getString("device_uid"),
+                                displayName = item.optString("display_name").ifBlank { "Appareil" },
+                                platform = platform,
+                                appVersion = item.optString("app_version").takeIf { it.isNotBlank() },
+                                lastSeenAt = item.optString("last_seen_at").takeIf { it.isNotBlank() },
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+    override suspend fun renameDevice(
+        deviceId: String,
+        displayName: String,
+    ): SyncResult = withContext(Dispatchers.IO) {
+        val cleanName = displayName.trim()
+        if (cleanName.isBlank()) {
+            return@withContext SyncResult.Failure("Le nom de l’appareil est vide.")
+        }
+        val session = sessionStore.load()
+            ?: return@withContext SyncResult.Failure("Session absente.")
+        val response = request(
+            path = "/rest/v1/player_devices?id=eq." + deviceId,
+            method = "PATCH",
+            body = JSONObject()
+                .put("display_name", cleanName)
+                .put("updated_at", utcNow())
+                .toString(),
+            accessToken = session.accessToken,
+            extraHeaders = mapOf("Prefer" to "return=minimal"),
+        )
+        if (response.code in 200..299) SyncResult.Success
+        else SyncResult.Failure("Impossible de renommer cet appareil.")
+    }
+
+    override suspend fun deleteDevice(deviceId: String): SyncResult =
+        withContext(Dispatchers.IO) {
+            val session = sessionStore.load()
+                ?: return@withContext SyncResult.Failure("Session absente.")
+            val response = request(
+                path = "/rest/v1/player_devices?id=eq." + deviceId,
+                method = "DELETE",
+                body = null,
+                accessToken = session.accessToken,
+            )
+            if (response.code in 200..299) SyncResult.Success
+            else SyncResult.Failure("Impossible de déconnecter cet appareil.")
         }
 
     override suspend fun listPlaylists(): Result<List<SyncedPlaylist>> =

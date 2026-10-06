@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 fun AccountSettingsScreen(
     onSignedOut: () -> Unit,
     onOpenPlaylists: () -> Unit = {},
+    onOpenDevices: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember {
@@ -65,6 +66,15 @@ fun AccountSettingsScreen(
             onClick = onOpenPlaylists,
         ) {
             Text("Playlists")
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(0.6f),
+            onClick = onOpenDevices,
+        ) {
+            Text("Appareils")
         }
 
         Spacer(Modifier.height(12.dp))

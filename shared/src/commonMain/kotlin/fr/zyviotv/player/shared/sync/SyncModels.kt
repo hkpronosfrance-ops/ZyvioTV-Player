@@ -18,6 +18,15 @@ data class DeviceRegistration(
     val appVersion: String,
 )
 
+data class SyncedDevice(
+    val id: String,
+    val deviceUid: String,
+    val displayName: String,
+    val platform: DevicePlatform,
+    val appVersion: String?,
+    val lastSeenAt: String?,
+)
+
 data class SyncedPlaylist(
     val id: String,
     val name: String,
@@ -56,6 +65,9 @@ sealed interface SyncResult {
 
 interface CloudSyncRepository {
     suspend fun registerDevice(device: DeviceRegistration): SyncResult
+    suspend fun listDevices(): Result<List<SyncedDevice>>
+    suspend fun renameDevice(deviceId: String, displayName: String): SyncResult
+    suspend fun deleteDevice(deviceId: String): SyncResult
     suspend fun listPlaylists(): Result<List<SyncedPlaylist>>
     suspend fun createPlaylist(
         name: String,
