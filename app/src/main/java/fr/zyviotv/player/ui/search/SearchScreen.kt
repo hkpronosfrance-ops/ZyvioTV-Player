@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -44,6 +45,7 @@ import fr.zyviotv.player.shared.search.CatalogSearchEngine
 import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.shared.search.SearchResultItem
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
@@ -61,6 +63,8 @@ private enum class SearchFilter(val label: String) {
 fun SearchScreen(
     profile: DeviceProfile,
     snapshot: CatalogSnapshot = CatalogSnapshot(),
+    lockedCategoryKeys: Set<String> = emptySet(),
+    lockedContentKeys: Set<String> = emptySet(),
     onBack: () -> Unit,
     onResultSelected: (SearchResultItem) -> Unit = {},
 ) {
@@ -71,6 +75,7 @@ fun SearchScreen(
     var committedQuery by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(SearchFilter.All) }
     var recent by remember { mutableStateOf(recentStore.load()) }
+    var pendingResult by remember { mutableStateOf<SearchResultItem?>(null) }
 
     LaunchedEffect(query) {
         delay(250)
@@ -174,15 +179,36 @@ fun SearchScreen(
                         items = results,
                         key = { "${it.kind}:${it.id}" },
                     ) { result ->
+                        val locked = isSearchResultLocked(
+                            snapshot = snapshot,
+                            item = result,
+                            lockedCategoryKeys = lockedCategoryKeys,
+                            lockedContentKeys = lockedContentKeys,
+                        )
                         SearchResultRow(
                             item = result,
+                            isLocked = locked,
                             isTelevision = profile == DeviceProfile.Television,
-                            onClick = { onResultSelected(result) },
+                            onClick = {
+                                if (locked) pendingResult = result
+                                else onResultSelected(result)
+                            },
                         )
                     }
                 }
             }
         }
+
+        ParentalUnlockDialog(
+            visible = pendingResult != null,
+            title = "Contenu verrouillé",
+            onDismiss = { pendingResult = null },
+            onUnlocked = {
+                val result = pendingResult
+                pendingResult = null
+                if (result != null) onResultSelected(result)
+            },
+        )
     }
 }
 
@@ -272,6 +298,7 @@ private fun EmptySearchState(hasCatalog: Boolean) {
 @Composable
 private fun SearchResultRow(
     item: SearchResultItem,
+    isLocked: Boolean,
     isTelevision: Boolean,
     onClick: () -> Unit,
 ) {
@@ -310,12 +337,22 @@ private fun SearchResultRow(
             Spacer(Modifier.width(14.dp))
 
             Column(Modifier.weight(1f)) {
-                Text(
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isLocked) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Verrouillé",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
                     text = item.title,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold,
-                )
+                    )
+                }
                 val meta = listOfNotNull(
                     when (item.kind) {
                         SearchKind.Live -> "TV"
@@ -367,4 +404,26 @@ private class RecentSearchStore(context: Context) {
         const val SEPARATOR = "\u001F"
         const val MAX_RECENT = 10
     }
+}
+
+
+private fun isSearchResultLocked(
+    snapshot: CatalogSnapshot,
+    item: SearchResultItem,
+    lockedCategoryKeys: Set<String>,
+    lockedContentKeys: Set<String>,
+): Boolean {
+    val prefix = when (item.kind) {
+        SearchKind.Live -> "live"
+        SearchKind.Movie -> "movie"
+        SearchKind.Series -> "series"
+    }
+    if (prefix + ":" + item.id in lockedContentKeys) return true
+
+    val categoryId = when (item.kind) {
+        SearchKind.Live -> snapshot.liveChannels.firstOrNull { it.id == item.id }?.categoryId
+        SearchKind.Movie -> snapshot.movies.firstOrNull { it.id == item.id }?.categoryId
+        SearchKind.Series -> snapshot.series.firstOrNull { it.id == item.id }?.categoryId
+    }
+    return categoryId != null && prefix + ":" + categoryId in lockedCategoryKeys
 }

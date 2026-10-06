@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.Button
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -68,6 +70,7 @@ data class MovieCatalogItem(
     val posterUrl: String? = null,
     val progress: Float? = null,
     val isNew: Boolean = false,
+    val isLocked: Boolean = false,
 )
 
 sealed interface MoviesScreenState {
@@ -75,6 +78,7 @@ sealed interface MoviesScreenState {
     data class Ready(
         val items: List<MovieCatalogItem>,
         val categories: List<String>,
+        val lockedCategories: Set<String> = emptySet(),
     ) : MoviesScreenState
     data class Error(val message: String) : MoviesScreenState
 }
@@ -93,6 +97,7 @@ fun MoviesScreen(
             profile = profile,
             items = state.items,
             categories = state.categories,
+            lockedCategories = state.lockedCategories,
             onMovieSelected = onMovieSelected,
         )
     }
@@ -103,6 +108,7 @@ private fun MoviesReady(
     profile: DeviceProfile,
     items: List<MovieCatalogItem>,
     categories: List<String>,
+    lockedCategories: Set<String>,
     onMovieSelected: (MovieCatalogItem) -> Unit,
 ) {
     val configuration = LocalConfiguration.current
@@ -117,6 +123,8 @@ private fun MoviesReady(
     var selectedCategory by rememberSaveable { mutableStateOf("Toutes") }
     var sort by rememberSaveable { mutableStateOf("Popularité") }
     var lastSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCategory by remember { mutableStateOf<String?>(null) }
+    var pendingMovie by remember { mutableStateOf<MovieCatalogItem?>(null) }
 
     val filtered = remember(items, selectedCategory, sort) {
         val base = when (selectedCategory) {
@@ -157,8 +165,12 @@ private fun MoviesReady(
             ) {
                 CategoryPanel(
                     categories = allCategories,
+                    lockedCategories = lockedCategories,
                     selected = selectedCategory,
-                    onSelect = { selectedCategory = it },
+                    onSelect = { category ->
+                        if (category in lockedCategories) pendingCategory = category
+                        else selectedCategory = category
+                    },
                     modifier = Modifier.width(220.dp),
                     isTelevision = false,
                 )
@@ -171,15 +183,19 @@ private fun MoviesReady(
                     lastSelectedId = lastSelectedId,
                     onMovieSelected = {
                         lastSelectedId = it.id
-                        onMovieSelected(it)
+                        if (it.isLocked) pendingMovie = it else onMovieSelected(it)
                     },
                 )
             }
         } else {
             CategoryRow(
                 categories = allCategories,
+                lockedCategories = lockedCategories,
                 selected = selectedCategory,
-                onSelect = { selectedCategory = it },
+                onSelect = { category ->
+                    if (category in lockedCategories) pendingCategory = category
+                    else selectedCategory = category
+                },
                 isTelevision = profile == DeviceProfile.Television,
             )
             Spacer(Modifier.height(14.dp))
@@ -192,10 +208,31 @@ private fun MoviesReady(
                 lastSelectedId = lastSelectedId,
                     onMovieSelected = {
                         lastSelectedId = it.id
-                        onMovieSelected(it)
+                        if (it.isLocked) pendingMovie = it else onMovieSelected(it)
                     },
             )
         }
+
+        ParentalUnlockDialog(
+            visible = pendingCategory != null,
+            title = "Catégorie verrouillée",
+            onDismiss = { pendingCategory = null },
+            onUnlocked = {
+                selectedCategory = pendingCategory ?: selectedCategory
+                pendingCategory = null
+            },
+        )
+
+        ParentalUnlockDialog(
+            visible = pendingMovie != null,
+            title = "Film verrouillé",
+            onDismiss = { pendingMovie = null },
+            onUnlocked = {
+                val movie = pendingMovie ?: return@ParentalUnlockDialog
+                pendingMovie = null
+                onMovieSelected(movie)
+            },
+        )
     }
 }
 
@@ -293,6 +330,7 @@ private fun CatalogHeader(
 @Composable
 private fun CategoryRow(
     categories: List<String>,
+    lockedCategories: Set<String>,
     selected: String,
     onSelect: (String) -> Unit,
     isTelevision: Boolean,
@@ -308,7 +346,15 @@ private fun CategoryRow(
                 modifier = Modifier.tvFocusEffect(isTelevision, cornerRadiusDp = 999),
                 selected = category == selected,
                 onClick = { onSelect(category) },
-                label = { Text(category, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (category in lockedCategories) {
+                            Icon(Icons.Default.Lock, contentDescription = "Verrouillé")
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(category, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                },
             )
         }
     }
@@ -317,6 +363,7 @@ private fun CategoryRow(
 @Composable
 private fun CategoryPanel(
     categories: List<String>,
+    lockedCategories: Set<String>,
     selected: String,
     onSelect: (String) -> Unit,
     modifier: Modifier,
@@ -335,13 +382,21 @@ private fun CategoryPanel(
                 color = if (category == selected) ZyvioRedTint else ZyvioSurface1,
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Text(
-                    text = category,
+                Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (category in lockedCategories) {
+                        Icon(Icons.Default.Lock, contentDescription = "Verrouillé")
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                    text = category,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = if (category == selected) FontWeight.Bold else FontWeight.Medium,
-                )
+                    )
+                }
             }
         }
     }
@@ -390,6 +445,22 @@ private fun MovieCard(
                             maxLines = 4,
                             overflow = TextOverflow.Ellipsis,
                             fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+
+                if (item.isLocked) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(999.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Verrouillé",
+                            modifier = Modifier.padding(6.dp),
                         )
                     }
                 }

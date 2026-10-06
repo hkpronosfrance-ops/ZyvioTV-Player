@@ -32,6 +32,7 @@ sealed interface ProviderCatalogState {
         val playlistId: String,
         val playlistName: String,
         val snapshot: CatalogSnapshot,
+        val contentLocks: ProfileContentLocks? = null,
     ) : ProviderCatalogState
 
     data class Empty(val message: String) : ProviderCatalogState
@@ -125,6 +126,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     snapshot = loaded.snapshot,
                     locks = locks,
                 ),
+                contentLocks = locks,
             )
             else -> loaded
         }
