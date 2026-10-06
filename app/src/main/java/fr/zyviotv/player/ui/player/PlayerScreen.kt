@@ -105,6 +105,7 @@ fun PlayerScreen(
     onOpenTracks: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
+    videoContent: @Composable () -> Unit = { VideoSurfacePlaceholder() },
 ) {
     var controlsVisible by remember(state.controlsVisible) { mutableStateOf(state.controlsVisible) }
     val blocking = !state.isPlaying ||
@@ -129,7 +130,7 @@ fun PlayerScreen(
                 }
             },
     ) {
-        VideoSurfacePlaceholder()
+        videoContent()
 
         when {
             state.unavailable -> UnavailableOverlay(
