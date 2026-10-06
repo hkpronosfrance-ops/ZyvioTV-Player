@@ -141,6 +141,7 @@ private fun LiveReadyState(
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
             onTuneChannel = onTuneChannel,
+            onOpenGuide = onOpenGuide,
         )
     } else {
         LargeLiveLayout(
@@ -157,6 +158,7 @@ private fun LiveReadyState(
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
             onTuneChannel = onTuneChannel,
+            onOpenGuide = onOpenGuide,
         )
     }
 }
@@ -170,6 +172,7 @@ private fun MobileLiveLayout(
     selectedChannel: LiveChannelUi?,
     onChannelSelected: (LiveChannelUi) -> Unit,
     onTuneChannel: (LiveChannelUi) -> Unit,
+    onOpenGuide: () -> Unit,
 ) {
     Column(
         modifier = Modifier
