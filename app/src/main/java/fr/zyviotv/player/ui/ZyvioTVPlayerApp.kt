@@ -662,9 +662,12 @@ fun ZyvioTVPlayerApp() {
                     }
                 },
             ) {
+                val readyProvider = providerState as? ProviderCatalogState.Ready
                 SearchScreen(
                     profile = profile,
                     snapshot = providerState.snapshotOrEmpty(),
+                    lockedCategoryKeys = readyProvider?.contentLocks?.lockedCategoryKeys.orEmpty(),
+                    lockedContentKeys = readyProvider?.contentLocks?.lockedContentKeys.orEmpty(),
                     onBack = { navController.popBackStack() },
                     onResultSelected = { result ->
                         val route = when (result.kind) {
