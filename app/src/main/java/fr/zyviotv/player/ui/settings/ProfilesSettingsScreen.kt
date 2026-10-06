@@ -77,9 +77,29 @@ fun ProfilesSettingsScreen(
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var defaultProfileId by remember { mutableStateOf(preferences.defaultProfileId()) }
+    var editingProfile by remember { mutableStateOf<PlayerProfile?>(null) }
+    var editName by remember { mutableStateOf("") }
+    var editChild by remember { mutableStateOf(false) }
+    var editMaxAge by remember { mutableStateOf<Int?>(12) }
+    var editAvatarIndex by remember { mutableStateOf(1) }
+    var editError by remember { mutableStateOf<String?>(null) }
 
     fun reload() {
         reloadToken += 1
+    }
+
+    fun startEditing(item: PlayerProfile) {
+        editingProfile = item
+        editName = item.name
+        editChild = item.type == PlayerProfileType.Child
+        editMaxAge = item.maxAge ?: 12
+        editAvatarIndex = item.avatarKey
+            .substringAfter("avatar_", "01")
+            .toIntOrNull()
+            ?.coerceIn(1, 16)
+            ?: 1
+        editError = null
+        showCreate = false
     }
 
     LaunchedEffect(reloadToken) {
@@ -130,6 +150,97 @@ fun ProfilesSettingsScreen(
         }
 
         Spacer(Modifier.height(16.dp))
+
+        editingProfile?.let { item ->
+            ProfileEditPanel(
+                deviceProfile = profile,
+                profile = item,
+                name = editName,
+                child = editChild,
+                maxAge = editMaxAge,
+                avatarIndex = editAvatarIndex,
+                isDefault = defaultProfileId == item.id,
+                busy = busy,
+                error = editError,
+                onNameChange = {
+                    editName = it
+                    editError = null
+                },
+                onChildChange = {
+                    if (!item.isPrimary) {
+                        editChild = it
+                        if (it && editMaxAge == null) editMaxAge = 12
+                        editError = null
+                    }
+                },
+                onMaxAgeChange = {
+                    editMaxAge = it
+                    editError = null
+                },
+                onAvatarIndexChange = {
+                    editAvatarIndex = it.coerceIn(1, 16)
+                    editError = null
+                },
+                onDefaultChange = { enabled ->
+                    if (enabled) {
+                        defaultProfileId = item.id
+                        preferences.setDefaultProfileId(item.id)
+                        preferences.setSelectedProfileId(item.id)
+                        onProfileSelectionChanged()
+                        message = "Profil par défaut enregistré sur cet appareil."
+                    } else {
+                        defaultProfileId = null
+                        preferences.setDefaultProfileId(null)
+                        message = "Profil par défaut désactivé sur cet appareil."
+                    }
+                },
+                onSave = {
+                    val cleanName = editName.trim()
+                    val duplicate = profiles.any {
+                        it.id != item.id && it.name.equals(cleanName, ignoreCase = true)
+                    }
+                    if (duplicate) {
+                        editError = "Ce nom est déjà utilisé par un autre profil."
+                    } else {
+                        scope.launch {
+                            busy = true
+                            editError = null
+                            val updated = item.copy(
+                                name = cleanName,
+                                avatarKey = "avatar_" + editAvatarIndex.toString().padStart(2, '0'),
+                                type = if (item.isPrimary) {
+                                    PlayerProfileType.Standard
+                                } else if (editChild) {
+                                    PlayerProfileType.Child
+                                } else {
+                                    PlayerProfileType.Standard
+                                },
+                                maxAge = if (!item.isPrimary && editChild) editMaxAge else null,
+                            )
+                            when (val result = repository.updateProfile(updated)) {
+                                ProfileWriteResult.Success -> {
+                                    editingProfile = null
+                                    if (preferences.selectedProfileId() == item.id) {
+                                        onProfileSelectionChanged()
+                                    }
+                                    message = "Profil modifié."
+                                    reload()
+                                }
+                                is ProfileWriteResult.Failure -> {
+                                    editError = result.message
+                                }
+                            }
+                            busy = false
+                        }
+                    }
+                },
+                onCancel = {
+                    editingProfile = null
+                    editError = null
+                },
+            )
+            Spacer(Modifier.height(14.dp))
+        }
 
         if (showCreate) {
             Surface(
@@ -226,13 +337,17 @@ fun ProfilesSettingsScreen(
                         enabled = !busy && name.trim().isNotEmpty(),
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {
-                            scope.launch {
-                                busy = true
-                                message = null
-                                val avatarKey = "avatar_" + avatarIndex.toString().padStart(2, '0')
-                                when (
-                                    val result = repository.createProfile(
-                                        name = name,
+                            val cleanName = name.trim()
+                            if (profiles.any { it.name.equals(cleanName, ignoreCase = true) }) {
+                                message = "Ce nom est déjà utilisé par un autre profil."
+                            } else {
+                                scope.launch {
+                                    busy = true
+                                    message = null
+                                    val avatarKey = "avatar_" + avatarIndex.toString().padStart(2, '0')
+                                    when (
+                                        val result = repository.createProfile(
+                                        name = cleanName,
                                         avatarKey = avatarKey,
                                         type = if (child) {
                                             PlayerProfileType.Child
@@ -250,9 +365,10 @@ fun ProfilesSettingsScreen(
                                         showCreate = false
                                         reload()
                                     }
-                                    is ProfileWriteResult.Failure -> message = result.message
+                                        is ProfileWriteResult.Failure -> message = result.message
+                                    }
+                                    busy = false
                                 }
-                                busy = false
                             }
                         },
                     ) {
@@ -301,6 +417,7 @@ fun ProfilesSettingsScreen(
                         item = item,
                         isDefault = defaultProfileId == item.id,
                         isTelevision = profile == DeviceProfile.Television,
+                        onEdit = { startEditing(item) },
                         onSetDefault = {
                             defaultProfileId = item.id
                             preferences.setDefaultProfileId(item.id)
@@ -340,6 +457,7 @@ private fun ProfileRow(
     item: PlayerProfile,
     isDefault: Boolean,
     isTelevision: Boolean,
+    onEdit: () -> Unit,
     onSetDefault: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -394,6 +512,10 @@ private fun ProfileRow(
                     color = ZyvioTextSecondary,
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+
+            TextButton(onClick = onEdit) {
+                Text("Modifier")
             }
 
             if (!isDefault) {
