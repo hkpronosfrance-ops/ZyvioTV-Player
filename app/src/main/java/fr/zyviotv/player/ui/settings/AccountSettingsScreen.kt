@@ -36,6 +36,7 @@ fun AccountSettingsScreen(
     onOpenCache: () -> Unit = {},
     onOpenParentalControls: () -> Unit = {},
     onOpenProfiles: () -> Unit = {},
+    onSwitchProfile: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember {
@@ -115,6 +116,15 @@ fun AccountSettingsScreen(
             onClick = onOpenProfiles,
         ) {
             Text("Profils")
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(0.6f),
+            onClick = onSwitchProfile,
+        ) {
+            Text("Changer de profil")
         }
 
         Spacer(Modifier.height(12.dp))
