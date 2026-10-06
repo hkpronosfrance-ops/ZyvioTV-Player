@@ -13,6 +13,9 @@ import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.catalog.AndroidXtreamCatalogLoader
 import fr.zyviotv.player.data.catalog.M3uCatalogMapper
 import fr.zyviotv.player.data.m3u.AndroidM3uClient
+import fr.zyviotv.player.data.settings.ParentalControlsRepository
+import fr.zyviotv.player.data.settings.ProfileContentLocks
+import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
 import fr.zyviotv.player.shared.catalog.CatalogLoadResult
 import fr.zyviotv.player.shared.catalog.CatalogSnapshot
@@ -47,10 +50,19 @@ class ProviderCatalogSession internal constructor(
 fun rememberProviderCatalogSession(): ProviderCatalogSession {
     val context = LocalContext.current
     val applicationContext = context.applicationContext
+    val sessionStore = remember(applicationContext) {
+        SecureSessionStore(applicationContext)
+    }
     val repository = remember(applicationContext) {
         SupabaseCloudSyncRepository(
-            sessionStore = SecureSessionStore(applicationContext),
+            sessionStore = sessionStore,
         )
+    }
+    val parentalRepository = remember(applicationContext) {
+        ParentalControlsRepository(sessionStore)
+    }
+    val profilePreferences = remember(applicationContext) {
+        ProfilePreferences(applicationContext)
     }
     val m3uClient = remember { AndroidM3uClient() }
 
@@ -94,11 +106,28 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
             return@LaunchedEffect
         }
 
-        state.value = loadCatalog(
+        val loaded = loadCatalog(
             playlist = playlist,
             secret = secret,
             m3uClient = m3uClient,
         )
+
+        val profileId = profilePreferences.selectedProfileId()
+        val locks = if (profileId != null) {
+            parentalRepository.loadContentLocks(profileId).getOrNull()
+        } else {
+            null
+        }
+
+        state.value = when (loaded) {
+            is ProviderCatalogState.Ready -> loaded.copy(
+                snapshot = applyParentalCatalogPolicy(
+                    snapshot = loaded.snapshot,
+                    locks = locks,
+                ),
+            )
+            else -> loaded
+        }
     }
 
     return remember(state) {
@@ -155,3 +184,82 @@ private suspend fun loadCatalog(
 }
 
 private const val MAX_M3U_ENTRIES = 20_000
+
+
+private fun applyParentalCatalogPolicy(
+    snapshot: CatalogSnapshot,
+    locks: ProfileContentLocks?,
+): CatalogSnapshot {
+    if (locks == null || !locks.parentalEnabled || !locks.isChild) return snapshot
+
+    val liveAdultCategories = snapshot.liveCategories
+        .filter { isAdultCategory(it.name) }
+        .mapTo(mutableSetOf()) { it.id }
+    val movieAdultCategories = snapshot.movieCategories
+        .filter { isAdultCategory(it.name) }
+        .mapTo(mutableSetOf()) { it.id }
+    val seriesAdultCategories = snapshot.seriesCategories
+        .filter { isAdultCategory(it.name) }
+        .mapTo(mutableSetOf()) { it.id }
+
+    val hiddenCategoryKeys = if (locks.hideLocked) locks.lockedCategoryKeys else emptySet()
+    val hiddenContentKeys = if (locks.hideLocked) locks.lockedContentKeys else emptySet()
+
+    fun categoryHidden(kind: String, categoryId: String?): Boolean =
+        categoryId != null && (kind + ":" + categoryId) in hiddenCategoryKeys
+
+    return snapshot.copy(
+        liveCategories = snapshot.liveCategories.filterNot {
+            it.id in liveAdultCategories || "live:" + it.id in hiddenCategoryKeys
+        },
+        liveChannels = snapshot.liveChannels.filterNot {
+            it.categoryId in liveAdultCategories ||
+                categoryHidden("live", it.categoryId) ||
+                "live:" + it.id in hiddenContentKeys
+        },
+        movieCategories = snapshot.movieCategories.filterNot {
+            it.id in movieAdultCategories || "movie:" + it.id in hiddenCategoryKeys
+        },
+        movies = snapshot.movies.filterNot {
+            it.categoryId in movieAdultCategories ||
+                categoryHidden("movie", it.categoryId) ||
+                "movie:" + it.id in hiddenContentKeys
+        },
+        seriesCategories = snapshot.seriesCategories.filterNot {
+            it.id in seriesAdultCategories || "series:" + it.id in hiddenCategoryKeys
+        },
+        series = snapshot.series.filterNot {
+            it.categoryId in seriesAdultCategories ||
+                categoryHidden("series", it.categoryId) ||
+                "series:" + it.id in hiddenContentKeys
+        },
+    )
+}
+
+private fun isAdultCategory(name: String): Boolean {
+    val normalized = name
+        .lowercase()
+        .replace("é", "e")
+        .replace("è", "e")
+        .replace("ê", "e")
+        .replace("à", "a")
+        .replace("â", "a")
+        .replace("î", "i")
+        .replace("ï", "i")
+        .replace("ô", "o")
+        .replace("ù", "u")
+        .replace("û", "u")
+
+    return ADULT_CATEGORY_TOKENS.any { token -> normalized.contains(token) }
+}
+
+private val ADULT_CATEGORY_TOKENS = listOf(
+    "adult",
+    "adulte",
+    "xxx",
+    "porn",
+    "erotic",
+    "erotique",
+    "18+",
+    "+18",
+)
