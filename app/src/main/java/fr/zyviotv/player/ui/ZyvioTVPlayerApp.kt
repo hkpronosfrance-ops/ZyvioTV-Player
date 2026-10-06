@@ -1280,6 +1280,8 @@ fun ZyvioTVPlayerApp(
                             DeviceSyncEffect()
                             HomeScreen(
                                 profile = profile,
+                                providerState = providerState,
+                                libraryState = libraryState,
                                 onOpenLive = { navController.navigate(AppDestination.Live.route) },
                                 onOpenMovies = { navController.navigate(AppDestination.Movies.route) },
                                 onOpenSeries = { navController.navigate(AppDestination.Series.route) },
