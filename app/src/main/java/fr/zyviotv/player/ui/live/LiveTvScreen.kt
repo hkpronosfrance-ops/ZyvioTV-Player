@@ -203,6 +203,7 @@ private fun LiveReadyState(
             isTelevision = profile == DeviceProfile.Television,
             categories = categories,
             selectedCategory = selectedCategory,
+            lockedCategories = lockedCategories,
             onCategorySelected = { category ->
                 if (category in lockedCategories) {
                     pendingCategory = category
@@ -217,10 +218,39 @@ private fun LiveReadyState(
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
             restoreFocusChannelId = selectedChannelId,
-            onTuneChannel = onTuneChannel,
+            onTuneChannel = { channel ->
+                if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
+            },
             onOpenGuide = onOpenGuide,
         )
     }
+
+    ParentalUnlockDialog(
+        visible = pendingCategory != null,
+        title = "Catégorie verrouillée",
+        onDismiss = { pendingCategory = null },
+        onUnlocked = {
+            val category = pendingCategory
+            if (category != null) {
+                selectedCategory = category
+                selectedChannelId = channels.firstOrNull { channel ->
+                    category == "Toutes" || channel.category == category
+                }?.id
+            }
+            pendingCategory = null
+        },
+    )
+
+    ParentalUnlockDialog(
+        visible = pendingChannel != null,
+        title = "Chaîne verrouillée",
+        onDismiss = { pendingChannel = null },
+        onUnlocked = {
+            val channel = pendingChannel
+            pendingChannel = null
+            if (channel != null) onTuneChannel(channel)
+        },
+    )
 }
 
 @Composable
