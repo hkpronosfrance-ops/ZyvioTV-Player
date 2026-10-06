@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -102,6 +103,7 @@ fun ZyvioTVPlayerApp() {
     var selectedSeries by remember { mutableStateOf<CatalogSeries?>(null) }
     var seriesDetailState by remember { mutableStateOf<SeriesDetailState>(SeriesDetailState.Loading) }
     var seriesEpisodeSources by remember { mutableStateOf<Map<String, SeriesEpisodeSource>>(emptyMap()) }
+    var seriesDetailReloadToken by remember { mutableIntStateOf(0) }
     var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
 
     NavHost(
@@ -225,7 +227,7 @@ fun ZyvioTVPlayerApp() {
                     )
                 }
 
-                LaunchedEffect(series.id, readyProvider.playlistId) {
+                LaunchedEffect(series.id, readyProvider.playlistId, seriesDetailReloadToken) {
                     seriesDetailState = SeriesDetailState.Loading
                     seriesEpisodeSources = emptyMap()
 
@@ -302,10 +304,7 @@ fun ZyvioTVPlayerApp() {
                         profile = profile,
                         state = seriesDetailState,
                         onRetry = {
-                            seriesDetailState = SeriesDetailState.Loading
-                            navController.navigate("series-detail") {
-                                launchSingleTop = true
-                            }
+                            seriesDetailReloadToken += 1
                         },
                         onPlayEpisode = { episode ->
                             val source = seriesEpisodeSources[episode.id]
@@ -425,6 +424,7 @@ fun ZyvioTVPlayerApp() {
                                     if (selectedSeries != null) {
                                         seriesDetailState = SeriesDetailState.Loading
                                         seriesEpisodeSources = emptyMap()
+                                        seriesDetailReloadToken += 1
                                         navController.navigate("series-detail")
                                     }
                                 },
