@@ -111,7 +111,8 @@ $$;
 
 create or replace function public.player_parental_screen_time_heartbeat(
   p_profile_id uuid,
-  p_playing boolean
+  p_playing boolean,
+  p_content_key text default ''
 )
 returns jsonb
 language plpgsql
@@ -128,6 +129,7 @@ declare
   v_row public.player_profile_screen_time_daily%rowtype;
   v_delta integer := 0;
   v_limit integer;
+  v_exception_until timestamptz;
 begin
   if v_user_id is null then
     raise exception 'not_authenticated';
@@ -196,15 +198,26 @@ begin
     v_limit := v_settings.daily_limit_minutes;
   end if;
 
+  if nullif(p_content_key, '') is not null then
+    select max(expires_at) into v_exception_until
+    from public.player_parental_exceptions
+    where profile_id = p_profile_id
+      and user_id = v_user_id
+      and content_key = p_content_key
+      and expires_at > v_now;
+  end if;
+
   return jsonb_build_object(
     'consumed_seconds', v_row.consumed_seconds,
     'limit_minutes', v_limit,
     'warning_minutes', coalesce(v_settings.warning_minutes, 10),
+    'exception_until', v_exception_until,
     'blocked_by_time',
       coalesce(v_control.enabled, false)
       and v_profile.profile_type = 'child'
       and v_limit is not null
       and v_row.consumed_seconds >= v_limit * 60
+      and v_exception_until is null
   );
 end;
 $$;
@@ -301,11 +314,11 @@ end;
 $$;
 
 revoke all on function public.player_parental_runtime_state(uuid, text) from public;
-revoke all on function public.player_parental_screen_time_heartbeat(uuid, boolean) from public;
+revoke all on function public.player_parental_screen_time_heartbeat(uuid, boolean, text) from public;
 revoke all on function public.player_parental_grant_exception(uuid, text, text) from public;
 revoke all on function public.player_parental_end_exception(uuid, text) from public;
 
 grant execute on function public.player_parental_runtime_state(uuid, text) to authenticated;
-grant execute on function public.player_parental_screen_time_heartbeat(uuid, boolean) to authenticated;
+grant execute on function public.player_parental_screen_time_heartbeat(uuid, boolean, text) to authenticated;
 grant execute on function public.player_parental_grant_exception(uuid, text, text) to authenticated;
 grant execute on function public.player_parental_end_exception(uuid, text) to authenticated;
