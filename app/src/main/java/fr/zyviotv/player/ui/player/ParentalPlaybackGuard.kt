@@ -18,8 +18,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.settings.ParentalControlsRepository
 import fr.zyviotv.player.data.settings.ParentalExceptionResult
+import fr.zyviotv.player.data.settings.ParentalRuntimeCache
+import fr.zyviotv.player.data.settings.ParentalScheduleEvaluator
 import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.shared.playback.PlaybackState
+import android.os.SystemClock
 import java.security.MessageDigest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -38,6 +41,7 @@ internal fun ParentalPlaybackGuard(
     val repository = remember(context) {
         ParentalControlsRepository(SecureSessionStore(context))
     }
+    val runtimeCache = remember(context) { ParentalRuntimeCache(context) }
     val scope = rememberCoroutineScope()
 
     val profileId = remember { profilePreferences.selectedProfileId() }
@@ -46,20 +50,49 @@ internal fun ParentalPlaybackGuard(
     }
 
     var blocked by remember(contentKey, profileId) { mutableStateOf(false) }
+    var blockTitle by remember(contentKey, profileId) { mutableStateOf("Temps d’écran atteint") }
+    var exceptionUntilElapsed by remember(contentKey, profileId) { mutableStateOf(0L) }
     var pin by remember(contentKey, profileId) { mutableStateOf("") }
     var error by remember(contentKey, profileId) { mutableStateOf<String?>(null) }
     var submitting by remember(contentKey, profileId) { mutableStateOf(false) }
 
     LaunchedEffect(profileId, contentKey) {
         if (profileId == null) return@LaunchedEffect
-        repository.loadRuntimeState(profileId, contentKey)
-            .getOrNull()
-            ?.let { state ->
-                if (state.parentalEnabled && state.isChild && state.blockedByTime) {
-                    blocked = true
-                    onBlockPlayback()
-                }
+
+        val onlineState = repository.loadRuntimeState(profileId, contentKey).getOrNull()
+        if (onlineState != null) {
+            runtimeCache.store(profileId, onlineState)
+
+            if (
+                onlineState.exceptionUntilEpochMillis != null &&
+                onlineState.serverNowEpochMillis != null
+            ) {
+                val remainingMillis = (
+                    onlineState.exceptionUntilEpochMillis -
+                        onlineState.serverNowEpochMillis
+                    ).coerceAtLeast(0L)
+                exceptionUntilElapsed = SystemClock.elapsedRealtime() + remainingMillis
             }
+
+            if (onlineState.parentalEnabled && onlineState.isChild && onlineState.blockedByTime) {
+                blockTitle = "Temps d’écran atteint"
+                blocked = true
+                onBlockPlayback()
+                return@LaunchedEffect
+            }
+        }
+
+        val cached = runtimeCache.load(profileId)
+        val exceptionActive = SystemClock.elapsedRealtime() < exceptionUntilElapsed
+        if (
+            cached != null &&
+            !exceptionActive &&
+            !ParentalScheduleEvaluator.isAllowedNow(cached)
+        ) {
+            blockTitle = "Pas maintenant"
+            blocked = true
+            onBlockPlayback()
+        }
     }
 
     LaunchedEffect(
@@ -82,6 +115,20 @@ internal fun ParentalPlaybackGuard(
         }
 
         while (true) {
+            val exceptionActive = SystemClock.elapsedRealtime() < exceptionUntilElapsed
+            val cached = runtimeCache.load(profileId)
+
+            if (
+                cached != null &&
+                !exceptionActive &&
+                !ParentalScheduleEvaluator.isAllowedNow(cached)
+            ) {
+                blockTitle = "Pas maintenant"
+                blocked = true
+                onBlockPlayback()
+                break
+            }
+
             val activelyPlaying =
                 playbackState == PlaybackState.Ready &&
                     isPlaying &&
@@ -93,7 +140,8 @@ internal fun ParentalPlaybackGuard(
                 contentKey = contentKey,
             ).getOrNull()
 
-            if (heartbeat?.blockedByTime == true) {
+            if (heartbeat?.blockedByTime == true && !exceptionActive) {
+                blockTitle = "Temps d’écran atteint"
                 blocked = true
                 onBlockPlayback()
                 break
@@ -106,7 +154,7 @@ internal fun ParentalPlaybackGuard(
     if (blocked && profileId != null) {
         AlertDialog(
             onDismissRequest = {},
-            title = { Text("Temps d’écran atteint") },
+            title = { Text(blockTitle) },
             text = {
                 OutlinedTextField(
                     value = pin,
@@ -142,6 +190,8 @@ internal fun ParentalPlaybackGuard(
                                 is ParentalExceptionResult.Granted -> {
                                     pin = ""
                                     error = null
+                                    exceptionUntilElapsed =
+                                        SystemClock.elapsedRealtime() + 30L * 60L * 1000L
                                     blocked = false
                                     onResumePlayback()
                                 }

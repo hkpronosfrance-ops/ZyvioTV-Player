@@ -16,6 +16,7 @@ data class ParentalSettings(
 )
 
 data class ParentalRuntimeState(
+    val serverNowEpochMillis: Long?,
     val parentalEnabled: Boolean,
     val isChild: Boolean,
     val consumedSeconds: Int,
@@ -24,6 +25,7 @@ data class ParentalRuntimeState(
     val scheduleEnabled: Boolean,
     val scheduleWindowsJson: String,
     val exceptionUntil: String?,
+    val exceptionUntilEpochMillis: Long?,
     val blockedByTime: Boolean,
 )
 
@@ -233,6 +235,11 @@ class ParentalControlsRepository(
             if (response.code !in 200..299) error("Impossible de charger l’état parental.")
             val json = JSONObject(response.body)
             ParentalRuntimeState(
+                serverNowEpochMillis = if (json.isNull("server_now_epoch_ms")) {
+                    null
+                } else {
+                    json.optLong("server_now_epoch_ms")
+                },
                 parentalEnabled = json.optBoolean("parental_enabled", false),
                 isChild = json.optBoolean("is_child", false),
                 consumedSeconds = json.optInt("consumed_seconds", 0),
@@ -242,6 +249,11 @@ class ParentalControlsRepository(
                 scheduleWindowsJson = json.optJSONArray("schedule_windows")?.toString() ?: "[]",
                 exceptionUntil = json.optString("exception_until").takeIf {
                     it.isNotBlank() && it != "null"
+                },
+                exceptionUntilEpochMillis = if (json.isNull("exception_until_epoch_ms")) {
+                    null
+                } else {
+                    json.optLong("exception_until_epoch_ms")
                 },
                 blockedByTime = json.optBoolean("blocked_by_time", false),
             )
