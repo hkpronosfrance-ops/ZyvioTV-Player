@@ -41,6 +41,14 @@ sealed interface ParentalExceptionResult {
     data class Failure(val message: String) : ParentalExceptionResult
 }
 
+data class ProfileContentLocks(
+    val parentalEnabled: Boolean,
+    val isChild: Boolean,
+    val hideLocked: Boolean,
+    val lockedCategoryKeys: Set<String>,
+    val lockedContentKeys: Set<String>,
+)
+
 data class ProfileParentalSettings(
     val profileId: String,
     val profileName: String,
@@ -143,6 +151,64 @@ class ParentalControlsRepository(
                 "current_pin_invalid" -> "Le code PIN actuel est incorrect."
                 "blocked" -> "Trop de tentatives. Réessayez dans quelques minutes."
                 else -> "Impossible d’enregistrer le code PIN."
+            }
+            ParentalWriteResult.Failure(message)
+        }
+    }
+
+    suspend fun loadContentLocks(
+        profileId: String,
+    ): Result<ProfileContentLocks> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = rpc(
+                "player_get_profile_content_locks",
+                JSONObject().put("p_profile_id", profileId),
+            )
+            if (response.code !in 200..299) {
+                error("Impossible de charger les verrouillages parentaux.")
+            }
+            val json = JSONObject(response.body)
+            ProfileContentLocks(
+                parentalEnabled = json.optBoolean("parental_enabled", false),
+                isChild = json.optBoolean("is_child", false),
+                hideLocked = json.optBoolean("hide_locked", false),
+                lockedCategoryKeys = json.optJSONArray("locked_category_keys").toStringSet(),
+                lockedContentKeys = json.optJSONArray("locked_content_keys").toStringSet(),
+            )
+        }
+    }
+
+    suspend fun updateContentLocks(
+        profileId: String,
+        pin: String,
+        lockedCategoryKeys: Set<String>,
+        lockedContentKeys: Set<String>,
+    ): ParentalWriteResult = withContext(Dispatchers.IO) {
+        val response = rpc(
+            "player_update_profile_content_locks",
+            JSONObject()
+                .put("p_profile_id", profileId)
+                .put("p_pin", pin)
+                .put("p_locked_category_keys", org.json.JSONArray(lockedCategoryKeys.sorted()))
+                .put("p_locked_content_keys", org.json.JSONArray(lockedContentKeys.sorted())),
+        )
+        if (response.code !in 200..299) {
+            return@withContext ParentalWriteResult.Failure(
+                "Impossible d’enregistrer les verrouillages.",
+            )
+        }
+        val json = JSONObject(response.body)
+        if (json.optBoolean("success", false)) {
+            ParentalWriteResult.Success
+        } else {
+            val message = when (json.optString("reason")) {
+                "pin_invalid" -> "Code PIN incorrect."
+                "pin_not_configured" -> "Configurez d’abord un code PIN."
+                "blocked" -> "Trop de tentatives. Réessayez dans quelques minutes."
+                "standard_profile" -> "Les profils Standard n’utilisent pas de verrouillages parentaux."
+                "invalid_categories" -> "Liste de catégories verrouillées invalide."
+                "invalid_content" -> "Liste de contenus verrouillés invalide."
+                else -> "Impossible d’enregistrer les verrouillages."
             }
             ParentalWriteResult.Failure(message)
         }
@@ -402,4 +468,17 @@ class ParentalControlsRepository(
         val code: Int,
         val body: String,
     )
+}
+
+
+private fun org.json.JSONArray?.toStringSet(): Set<String> {
+    if (this == null) return emptySet()
+    return buildSet {
+        for (index in 0 until length()) {
+            optString(index)
+                .trim()
+                .takeIf { it.isNotBlank() }
+                ?.let(::add)
+        }
+    }
 }
