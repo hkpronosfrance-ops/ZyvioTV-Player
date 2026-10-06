@@ -60,6 +60,8 @@ fun HomeScreen(
     profile: DeviceProfile,
     providerState: ProviderCatalogState,
     libraryState: LibraryState,
+    nextEpisodes: List<HomeNextEpisode>,
+    onPlayNextEpisode: (HomeNextEpisode) -> Unit,
     onOpenLive: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
@@ -134,9 +136,13 @@ fun HomeScreen(
         .take(MAX_HOME_ITEMS)
         .map { HomeCardUi(title = it.name, poster = false) }
 
-    val heroTitle = continueItems.firstOrNull()?.title
+    val heroNextEpisode = nextEpisodes.firstOrNull()
+    val heroTitle = heroNextEpisode?.let {
+        it.seriesTitle + " — S" + it.episode.season + " E" + it.episode.number
+    } ?: continueItems.firstOrNull()?.title
     val hasAnyContent =
-        continueItems.isNotEmpty() ||
+        nextEpisodes.isNotEmpty() ||
+            continueItems.isNotEmpty() ||
             favoriteItems.isNotEmpty() ||
             movieItems.isNotEmpty() ||
             seriesItems.isNotEmpty() ||
@@ -152,9 +158,19 @@ fun HomeScreen(
             Hero(
                 profile = profile,
                 title = heroTitle,
-                subtitle = "Reprenez votre lecture là où vous l’avez arrêtée.",
-                actionLabel = "Continuer",
-                onAction = onOpenContinueWatching,
+                subtitle = if (heroNextEpisode != null) {
+                    "Votre prochain épisode est prêt."
+                } else {
+                    "Reprenez votre lecture là où vous l’avez arrêtée."
+                },
+                actionLabel = if (heroNextEpisode != null) "Lire l’épisode" else "Continuer",
+                onAction = {
+                    if (heroNextEpisode != null) {
+                        onPlayNextEpisode(heroNextEpisode)
+                    } else {
+                        onOpenContinueWatching()
+                    }
+                },
             )
             Spacer(Modifier.height(24.dp))
         }
@@ -196,6 +212,14 @@ fun HomeScreen(
                         showAll = filteredProgress.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenContinueWatching,
+                    )
+                }
+
+                if (nextEpisodes.isNotEmpty()) {
+                    HomeNextEpisodesSection(
+                        items = nextEpisodes.take(MAX_HOME_ITEMS),
+                        isTelevision = profile == DeviceProfile.Television,
+                        onPlay = onPlayNextEpisode,
                     )
                 }
 
@@ -377,6 +401,88 @@ private fun HomeEmpty(
             Button(onClick = onOpenSeries) { Text("Séries") }
         }
     }
+}
+
+@Composable
+private fun HomeNextEpisodesSection(
+    items: List<HomeNextEpisode>,
+    isTelevision: Boolean,
+    onPlay: (HomeNextEpisode) -> Unit,
+) {
+    if (items.isEmpty()) return
+
+    Text(
+        text = "Prochains épisodes",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items.forEach { item ->
+            Card(
+                onClick = { onPlay(item) },
+                modifier = Modifier
+                    .width(if (isTelevision) 280.dp else 210.dp)
+                    .aspectRatio(16f / 9f)
+                    .tvFocusEffect(isTelevision),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF2A2A2A),
+                                    Color(0xFF151515),
+                                ),
+                            ),
+                        ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.align(Alignment.Center),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.72f))
+                            .padding(10.dp),
+                    ) {
+                        Text(
+                            text = item.seriesTitle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "S" + item.episode.season +
+                                " E" + item.episode.number +
+                                " — " + item.episode.title,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(28.dp))
 }
 
 @Composable
