@@ -108,14 +108,31 @@ class ProfileRepository(
 
     suspend fun updateProfile(profile: PlayerProfile): ProfileWriteResult =
         withContext(Dispatchers.IO) {
-            val body = JSONObject()
-                .put("name", profile.name.trim())
-                .put("avatar_key", profile.avatarKey)
-                .put("profile_type", profile.type.wireValue)
-                .put("max_age", profile.maxAge ?: JSONObject.NULL)
-                .put("updated_at", "now()")
+            val cleanName = profile.name.trim()
+            if (cleanName.isBlank()) {
+                return@withContext ProfileWriteResult.Failure("Le nom du profil est vide.")
+            }
+            if (!profile.avatarKey.matches(Regex("avatar_(0[1-9]|1[0-6])"))) {
+                return@withContext ProfileWriteResult.Failure("Avatar de profil invalide.")
+            }
 
-            body.remove("updated_at")
+            val safeType = if (profile.isPrimary) {
+                PlayerProfileType.Standard
+            } else {
+                profile.type
+            }
+            val safeMaxAge = if (safeType == PlayerProfileType.Child) {
+                profile.maxAge
+            } else {
+                null
+            }
+
+            val body = JSONObject()
+                .put("name", cleanName)
+                .put("avatar_key", profile.avatarKey)
+                .put("profile_type", safeType.wireValue)
+                .put("max_age", safeMaxAge ?: JSONObject.NULL)
+
             val response = request(
                 path = "/rest/v1/player_profiles?id=eq." + encoded(profile.id),
                 method = "PATCH",
