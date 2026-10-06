@@ -76,9 +76,87 @@ sealed interface ParentalWriteResult {
     data class Failure(val message: String) : ParentalWriteResult
 }
 
+sealed interface ParentalRecoveryResult {
+    data class Sent(val maskedEmail: String) : ParentalRecoveryResult
+    data class Failure(val message: String) : ParentalRecoveryResult
+}
+
 class ParentalControlsRepository(
     private val sessionStore: SecureSessionStore,
 ) {
+    suspend fun requestPinRecoveryEmail(): ParentalRecoveryResult =
+        withContext(Dispatchers.IO) {
+            val session = sessionStore.load()
+                ?: return@withContext ParentalRecoveryResult.Failure(
+                    "Session expirée. Reconnectez-vous.",
+                )
+
+            val userResponse = authRequest(
+                path = "/auth/v1/user",
+                method = "GET",
+                body = null,
+                bearerToken = session.accessToken,
+            )
+            if (userResponse.code !in 200..299) {
+                return@withContext ParentalRecoveryResult.Failure(
+                    "Impossible de récupérer l’adresse email du compte.",
+                )
+            }
+
+            val email = runCatching {
+                JSONObject(userResponse.body).optString("email").trim()
+            }.getOrDefault("")
+            if (email.isBlank()) {
+                return@withContext ParentalRecoveryResult.Failure(
+                    "Aucune adresse email n’est associée au compte.",
+                )
+            }
+
+            val otpResponse = authRequest(
+                path = "/auth/v1/otp",
+                method = "POST",
+                body = JSONObject()
+                    .put("email", email)
+                    .put("create_user", false)
+                    .toString(),
+                bearerToken = null,
+            )
+
+            if (otpResponse.code !in 200..299) {
+                return@withContext ParentalRecoveryResult.Failure(
+                    "Impossible d’envoyer l’email de récupération.",
+                )
+            }
+
+            ParentalRecoveryResult.Sent(maskEmail(email))
+        }
+
+    suspend fun resetPinAfterRecentAuth(
+        newPin: String,
+    ): ParentalWriteResult = withContext(Dispatchers.IO) {
+        val response = rpc(
+            "player_reset_parental_pin_after_recent_auth",
+            JSONObject().put("p_new_pin", newPin),
+        )
+        if (response.code !in 200..299) {
+            return@withContext ParentalWriteResult.Failure(
+                "Impossible de réinitialiser le code PIN.",
+            )
+        }
+
+        val json = JSONObject(response.body)
+        if (json.optBoolean("success", false)) {
+            ParentalWriteResult.Success
+        } else {
+            val message = when (json.optString("reason")) {
+                "invalid_format" -> "Le code PIN doit contenir exactement 4 chiffres."
+                "reauth_required" -> "Ouvrez d’abord le lien reçu sur l’email du compte."
+                else -> "Impossible de réinitialiser le code PIN."
+            }
+            ParentalWriteResult.Failure(message)
+        }
+    }
+
     suspend fun loadSettings(): Result<ParentalSettings> = withContext(Dispatchers.IO) {
         runCatching {
             val response = rpc("player_get_parental_settings", JSONObject())
@@ -424,6 +502,52 @@ class ParentalControlsRepository(
             }
             ParentalWriteResult.Failure(message)
         }
+    }
+
+    private fun authRequest(
+        path: String,
+        method: String,
+        body: String?,
+        bearerToken: String?,
+    ): HttpResponse {
+        val connection = (
+            URL(BuildConfig.SUPABASE_URL + path)
+                .openConnection() as HttpURLConnection
+            )
+        try {
+            connection.requestMethod = method
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            connection.doInput = true
+            connection.doOutput = body != null
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+            connection.setRequestProperty(
+                "Authorization",
+                "Bearer " + (bearerToken ?: BuildConfig.SUPABASE_PUBLISHABLE_KEY),
+            )
+            if (body != null) {
+                connection.outputStream.bufferedWriter(StandardCharsets.UTF_8).use {
+                    it.write(body)
+                }
+            }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            return HttpResponse(
+                code = code,
+                body = stream?.bufferedReader()?.use { it.readText() }.orEmpty(),
+            )
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun maskEmail(email: String): String {
+        val at = email.indexOf('@')
+        if (at <= 1) return "***"
+        val local = email.substring(0, at)
+        val domain = email.substring(at)
+        return local.take(1) + "***" + local.takeLast(1) + domain
     }
 
     private fun rpc(
