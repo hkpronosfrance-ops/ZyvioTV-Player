@@ -97,37 +97,10 @@ fun LiveTvScreen(
             channels = state.channels,
             lockedCategories = state.lockedCategories,
             onPreviewChannel = onPreviewChannel,
-            onTuneChannel = { channel ->
-                if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
-            },
+            onTuneChannel = onTuneChannel,
             onOpenGuide = onOpenGuide,
         )
     }
-
-    ParentalUnlockDialog(
-        visible = pendingCategory != null,
-        title = "Catégorie verrouillée",
-        onDismiss = { pendingCategory = null },
-        onUnlocked = {
-            val category = pendingCategory ?: return@ParentalUnlockDialog
-            pendingCategory = null
-            selectedCategory = category
-            selectedChannelId = channels.firstOrNull { channel ->
-                category == "Toutes" || channel.category == category
-            }?.id
-        },
-    )
-
-    ParentalUnlockDialog(
-        visible = pendingChannel != null,
-        title = "Chaîne verrouillée",
-        onDismiss = { pendingChannel = null },
-        onUnlocked = {
-            val channel = pendingChannel ?: return@ParentalUnlockDialog
-            pendingChannel = null
-            onTuneChannel(channel)
-        },
-    )
 }
 
 @Composable
