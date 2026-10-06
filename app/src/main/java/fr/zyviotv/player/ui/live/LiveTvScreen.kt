@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -96,10 +97,37 @@ fun LiveTvScreen(
             channels = state.channels,
             lockedCategories = state.lockedCategories,
             onPreviewChannel = onPreviewChannel,
-            onTuneChannel = onTuneChannel,
+            onTuneChannel = { channel ->
+                if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
+            },
             onOpenGuide = onOpenGuide,
         )
     }
+
+    ParentalUnlockDialog(
+        visible = pendingCategory != null,
+        title = "Catégorie verrouillée",
+        onDismiss = { pendingCategory = null },
+        onUnlocked = {
+            val category = pendingCategory ?: return@ParentalUnlockDialog
+            pendingCategory = null
+            selectedCategory = category
+            selectedChannelId = channels.firstOrNull { channel ->
+                category == "Toutes" || channel.category == category
+            }?.id
+        },
+    )
+
+    ParentalUnlockDialog(
+        visible = pendingChannel != null,
+        title = "Chaîne verrouillée",
+        onDismiss = { pendingChannel = null },
+        onUnlocked = {
+            val channel = pendingChannel ?: return@ParentalUnlockDialog
+            pendingChannel = null
+            onTuneChannel(channel)
+        },
+    )
 }
 
 @Composable
@@ -116,6 +144,8 @@ private fun LiveReadyState(
     }
     var selectedCategory by rememberSaveable { mutableStateOf("Toutes") }
     var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCategory by remember { mutableStateOf<String?>(null) }
+    var pendingChannel by remember { mutableStateOf<LiveChannelUi?>(null) }
 
     LaunchedEffect(channels) {
         if (selectedChannelId == null || channels.none { it.id == selectedChannelId }) {
@@ -133,7 +163,7 @@ private fun LiveReadyState(
 
     LaunchedEffect(selectedChannel?.id, profile) {
         val channel = selectedChannel ?: return@LaunchedEffect
-        if (profile == DeviceProfile.Television) {
+        if (profile == DeviceProfile.Television && !channel.isLocked) {
             delay(TV_PREVIEW_DELAY_MS)
             onPreviewChannel(channel)
         }
@@ -149,17 +179,23 @@ private fun LiveReadyState(
             categories = categories,
             selectedCategory = selectedCategory,
             lockedCategories = lockedCategories,
-            onCategorySelected = {
-                selectedCategory = it
-                selectedChannelId = channels.firstOrNull { channel ->
-                    it == "Toutes" || channel.category == it
-                }?.id
+            onCategorySelected = { category ->
+                if (category in lockedCategories) {
+                    pendingCategory = category
+                } else {
+                    selectedCategory = category
+                    selectedChannelId = channels.firstOrNull { channel ->
+                        category == "Toutes" || channel.category == category
+                    }?.id
+                }
             },
             channels = filteredChannels,
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
             restoreFocusChannelId = selectedChannelId,
-            onTuneChannel = onTuneChannel,
+            onTuneChannel = { channel ->
+                if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
+            },
             onOpenGuide = onOpenGuide,
         )
     } else {
@@ -167,11 +203,15 @@ private fun LiveReadyState(
             isTelevision = profile == DeviceProfile.Television,
             categories = categories,
             selectedCategory = selectedCategory,
-            onCategorySelected = {
-                selectedCategory = it
-                selectedChannelId = channels.firstOrNull { channel ->
-                    it == "Toutes" || channel.category == it
-                }?.id
+            onCategorySelected = { category ->
+                if (category in lockedCategories) {
+                    pendingCategory = category
+                } else {
+                    selectedCategory = category
+                    selectedChannelId = channels.firstOrNull { channel ->
+                        category == "Toutes" || channel.category == category
+                    }?.id
+                }
             },
             channels = filteredChannels,
             selectedChannel = selectedChannel,
@@ -222,6 +262,7 @@ private fun LargeLiveLayout(
     isTelevision: Boolean,
     categories: List<String>,
     selectedCategory: String,
+    lockedCategories: Set<String>,
     onCategorySelected: (String) -> Unit,
     channels: List<LiveChannelUi>,
     selectedChannel: LiveChannelUi?,
@@ -301,6 +342,7 @@ private fun CategoryRow(
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
     isTelevision: Boolean,
+    lockedCategories: Set<String>,
 ) {
     Row(
         modifier = Modifier
