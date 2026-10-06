@@ -45,7 +45,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.nativeKeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -134,11 +136,11 @@ fun PlayerScreen(
             .onPreviewKeyEvent { keyEvent ->
                 if (
                     profile != DeviceProfile.Television ||
-                    keyEvent.nativeKeyEvent.action != AndroidKeyEvent.ACTION_DOWN
+                    keyEvent.type != KeyEventType.KeyDown
                 ) {
                     false
                 } else {
-                    when (val keyCode = keyEvent.nativeKeyEvent.keyCode) {
+                    when (val keyCode = keyEvent.key.keyCode.toInt()) {
                         AndroidKeyEvent.KEYCODE_DPAD_CENTER,
                         AndroidKeyEvent.KEYCODE_ENTER,
                         -> {
