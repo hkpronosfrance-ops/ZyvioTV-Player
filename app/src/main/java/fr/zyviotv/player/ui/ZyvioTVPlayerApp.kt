@@ -1327,6 +1327,26 @@ fun ZyvioTVPlayerApp(
                                     lastSyncedPositionMs = 0L
                                     navController.navigate("player")
                                 },
+                                onTuneRecentChannel = { channel ->
+                                    val ready = providerState as? ProviderCatalogState.Ready
+                                    if (ready != null) {
+                                        playbackRequest = PlaybackRequest(
+                                            title = channel.name,
+                                            streamUrl = channel.streamUrl,
+                                            kind = PlaybackKind.Live,
+                                        )
+                                        playbackSyncContext = null
+                                        scope.launch {
+                                            librarySession.recordLiveHistory(
+                                                playlistId = ready.playlistId,
+                                                channelId = channel.id,
+                                                channelName = channel.name,
+                                                logoUrl = channel.logoUrl,
+                                            )
+                                        }
+                                        navController.navigate("player")
+                                    }
+                                },
                                 onOpenLive = { navController.navigate(AppDestination.Live.route) },
                                 onOpenMovies = { navController.navigate(AppDestination.Movies.route) },
                                 onOpenSeries = { navController.navigate(AppDestination.Series.route) },
@@ -1343,15 +1363,26 @@ fun ZyvioTVPlayerApp(
                                 state = providerState.toLiveState(),
                                 onRetry = providerCatalog::reload,
                                 onTuneChannel = { channel ->
-                                    val snapshot = providerState.snapshotOrEmpty()
-                                    val source = snapshot.liveChannels.firstOrNull { it.id == channel.id }
-                                    if (source != null) {
+                                    val ready = providerState as? ProviderCatalogState.Ready
+                                    val source = ready
+                                        ?.snapshot
+                                        ?.liveChannels
+                                        ?.firstOrNull { it.id == channel.id }
+                                    if (ready != null && source != null) {
                                         playbackRequest = PlaybackRequest(
                                             title = source.name,
                                             streamUrl = source.streamUrl,
                                             kind = PlaybackKind.Live,
                                         )
                                         playbackSyncContext = null
+                                        scope.launch {
+                                            librarySession.recordLiveHistory(
+                                                playlistId = ready.playlistId,
+                                                channelId = source.id,
+                                                channelName = source.name,
+                                                logoUrl = source.logoUrl,
+                                            )
+                                        }
                                         navController.navigate("player")
                                     }
                                 },

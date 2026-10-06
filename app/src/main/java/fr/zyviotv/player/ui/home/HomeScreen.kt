@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fr.zyviotv.player.shared.catalog.CatalogLiveChannel
 import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.ProgressContentType
 import fr.zyviotv.player.ui.DeviceProfile
@@ -62,6 +63,7 @@ fun HomeScreen(
     libraryState: LibraryState,
     nextEpisodes: List<HomeNextEpisode>,
     onPlayNextEpisode: (HomeNextEpisode) -> Unit,
+    onTuneRecentChannel: (CatalogLiveChannel) -> Unit,
     onOpenLive: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
@@ -131,10 +133,17 @@ fun HomeScreen(
         .take(MAX_HOME_ITEMS)
         .map { HomeCardUi(title = it.title, poster = true) }
 
-    val liveItems = readyProvider?.snapshot?.liveChannels
+    val liveById = readyProvider?.snapshot?.liveChannels
         .orEmpty()
+        .associateBy { it.id }
+    val recentChannels = readyLibrary?.snapshot?.liveHistory
+        .orEmpty()
+        .asSequence()
+        .filter { it.playlistId == readyProvider?.playlistId }
+        .mapNotNull { liveById[it.channelId] }
+        .distinctBy { it.id }
         .take(MAX_HOME_ITEMS)
-        .map { HomeCardUi(title = it.name, poster = false) }
+        .toList()
 
     val heroNextEpisode = nextEpisodes.firstOrNull()
     val heroTitle = heroNextEpisode?.let {
@@ -146,7 +155,7 @@ fun HomeScreen(
             favoriteItems.isNotEmpty() ||
             movieItems.isNotEmpty() ||
             seriesItems.isNotEmpty() ||
-            liveItems.isNotEmpty()
+            recentChannels.isNotEmpty()
 
     Column(
         modifier = Modifier
@@ -223,6 +232,14 @@ fun HomeScreen(
                     )
                 }
 
+                if (recentChannels.isNotEmpty()) {
+                    HomeRecentChannelsSection(
+                        items = recentChannels,
+                        isTelevision = profile == DeviceProfile.Television,
+                        onTune = onTuneRecentChannel,
+                    )
+                }
+
                 if (favoriteItems.isNotEmpty()) {
                     HomeSection(
                         title = "Favoris",
@@ -230,16 +247,6 @@ fun HomeScreen(
                         showAll = filteredFavorites.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenFavorites,
-                    )
-                }
-
-                if (liveItems.isNotEmpty()) {
-                    HomeSection(
-                        title = "Chaînes disponibles",
-                        items = liveItems,
-                        showAll = readyProvider?.snapshot?.liveChannels.orEmpty().size > MAX_HOME_ITEMS,
-                        isTelevision = profile == DeviceProfile.Television,
-                        onOpenSection = onOpenLive,
                     )
                 }
 
@@ -401,6 +408,76 @@ private fun HomeEmpty(
             Button(onClick = onOpenSeries) { Text("Séries") }
         }
     }
+}
+
+@Composable
+private fun HomeRecentChannelsSection(
+    items: List<CatalogLiveChannel>,
+    isTelevision: Boolean,
+    onTune: (CatalogLiveChannel) -> Unit,
+) {
+    if (items.isEmpty()) return
+
+    Text(
+        text = "Chaînes récentes",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items.forEach { channel ->
+            Card(
+                onClick = { onTune(channel) },
+                modifier = Modifier
+                    .width(if (isTelevision) 280.dp else 210.dp)
+                    .aspectRatio(16f / 9f)
+                    .tvFocusEffect(isTelevision),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF2A2A2A),
+                                    Color(0xFF151515),
+                                ),
+                            ),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tv,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    )
+                    Text(
+                        text = channel.name,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.72f))
+                            .padding(10.dp),
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(28.dp))
 }
 
 @Composable

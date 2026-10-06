@@ -13,6 +13,7 @@ import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.data.settings.ProfileRepository
 import fr.zyviotv.player.data.sync.SupabaseLibrarySyncRepository
+import fr.zyviotv.player.data.sync.SyncedLiveHistory
 import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.ProgressContentType
 import fr.zyviotv.player.shared.sync.SyncedFavorite
@@ -23,6 +24,7 @@ data class LibrarySnapshot(
     val profileId: String,
     val favorites: List<SyncedFavorite> = emptyList(),
     val progress: List<SyncedWatchProgress> = emptyList(),
+    val liveHistory: List<SyncedLiveHistory> = emptyList(),
 )
 
 sealed interface LibraryState {
@@ -97,6 +99,37 @@ class LibrarySession internal constructor(
         return result
     }
 
+    suspend fun recordLiveHistory(
+        playlistId: String,
+        channelId: String,
+        channelName: String,
+        logoUrl: String?,
+    ): SyncResult {
+        val ready = state.value as? LibraryState.Ready
+            ?: return SyncResult.Failure("Bibliothèque indisponible.")
+        val item = SyncedLiveHistory(
+            profileId = ready.snapshot.profileId,
+            playlistId = playlistId,
+            channelId = channelId,
+            channelName = channelName,
+            logoUrl = logoUrl,
+        )
+        val result = repository.recordLiveHistory(item)
+        if (result is SyncResult.Success) {
+            val next = listOf(item) + ready.snapshot.liveHistory.filterNot {
+                it.playlistId == playlistId && it.channelId == channelId
+            }
+            updateState(
+                ready.copy(
+                    snapshot = ready.snapshot.copy(
+                        liveHistory = next.take(MAX_LIVE_HISTORY),
+                    ),
+                ),
+            )
+        }
+        return result
+    }
+
     suspend fun removeProgress(progress: SyncedWatchProgress): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
@@ -150,6 +183,7 @@ class LibrarySession internal constructor(
 
     private companion object {
         const val MAX_PROGRESS = 200
+        const val MAX_LIVE_HISTORY = 50
     }
 }
 
@@ -204,12 +238,20 @@ fun rememberLibrarySession(): LibrarySession {
             state.value = LibraryState.Error("Impossible de charger votre progression.")
             return@LaunchedEffect
         }
+        val liveHistory = repository.listLiveHistory(
+            profileId = activeProfileId,
+            limit = 50,
+        ).getOrElse {
+            state.value = LibraryState.Error("Impossible de charger vos chaînes récentes.")
+            return@LaunchedEffect
+        }
 
         state.value = LibraryState.Ready(
             LibrarySnapshot(
                 profileId = activeProfileId,
                 favorites = favorites,
                 progress = progress,
+                liveHistory = liveHistory,
             ),
         )
     }

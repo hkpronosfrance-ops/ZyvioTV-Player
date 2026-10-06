@@ -21,6 +21,14 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+data class SyncedLiveHistory(
+    val profileId: String,
+    val playlistId: String,
+    val channelId: String,
+    val channelName: String,
+    val logoUrl: String? = null,
+)
+
 class SupabaseLibrarySyncRepository(
     private val sessionStore: SecureSessionStore,
 ) : CloudLibraryRepository {
@@ -210,6 +218,81 @@ class SupabaseLibrarySyncRepository(
         if (response.code in 200..299) SyncResult.Success
         else SyncResult.Failure("Impossible de supprimer la progression.")
     }
+
+    suspend fun listLiveHistory(
+        profileId: String,
+        limit: Int = 50,
+    ): Result<List<SyncedLiveHistory>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val session = sessionStore.load() ?: error("Session absente.")
+            val safeLimit = limit.coerceIn(1, 100)
+            val response = request(
+                path = "/rest/v1/player_live_history?profile_id=eq." +
+                    encoded(profileId) +
+                    "&select=profile_id,playlist_id,channel_id,channel_name,logo_url" +
+                    "&order=last_watched_at.desc&limit=" + safeLimit,
+                method = "GET",
+                accessToken = session.accessToken,
+            )
+            if (response.code !in 200..299) {
+                error("Impossible de récupérer les chaînes récentes.")
+            }
+
+            val array = JSONArray(response.body)
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    add(
+                        SyncedLiveHistory(
+                            profileId = item.getString("profile_id"),
+                            playlistId = item.getString("playlist_id"),
+                            channelId = item.getString("channel_id"),
+                            channelName = item.getString("channel_name"),
+                            logoUrl = item.optString("logo_url").takeIf { it.isNotBlank() },
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun recordLiveHistory(item: SyncedLiveHistory): SyncResult =
+        withContext(Dispatchers.IO) {
+            val session = sessionStore.load()
+                ?: return@withContext SyncResult.Failure("Session absente.")
+            val userId = fetchCurrentUserId(session.accessToken)
+                ?: return@withContext SyncResult.Failure("Compte utilisateur introuvable.")
+            val now = utcNow()
+
+            val body = JSONArray().put(
+                JSONObject()
+                    .put("user_id", userId)
+                    .put("profile_id", item.profileId)
+                    .put("playlist_id", item.playlistId)
+                    .put("channel_id", item.channelId)
+                    .put("channel_name", item.channelName)
+                    .put("logo_url", item.logoUrl ?: JSONObject.NULL)
+                    .put("last_watched_at", now)
+                    .put("updated_at", now),
+            ).toString()
+
+            val response = request(
+                path = "/rest/v1/player_live_history" +
+                    "?on_conflict=user_id,profile_id,playlist_id,channel_id",
+                method = "POST",
+                body = body,
+                accessToken = session.accessToken,
+                extraHeaders = mapOf(
+                    "Prefer" to "resolution=merge-duplicates,return=minimal",
+                ),
+            )
+
+            if (response.code in 200..299) {
+                SyncResult.Success
+            } else {
+                SyncResult.Failure("Impossible de synchroniser la chaîne récente.")
+            }
+        }
 
     private fun fetchCurrentUserId(accessToken: String): String? {
         val response = request(
