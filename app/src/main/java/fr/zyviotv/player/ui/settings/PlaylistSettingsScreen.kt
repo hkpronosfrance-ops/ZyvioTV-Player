@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 fun PlaylistSettingsScreen(
     profile: DeviceProfile,
     onBack: () -> Unit,
+    onAddPlaylist: () -> Unit,
     onChanged: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -100,6 +101,9 @@ fun PlaylistSettingsScreen(
                     text = "${playlists.size} / 10",
                     color = ZyvioTextSecondary,
                 )
+            }
+            TextButton(onClick = onAddPlaylist) {
+                Text("Ajouter")
             }
             IconButton(onClick = { reload() }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Actualiser")

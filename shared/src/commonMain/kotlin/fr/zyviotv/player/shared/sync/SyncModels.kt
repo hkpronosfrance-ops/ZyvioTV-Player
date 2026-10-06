@@ -57,6 +57,13 @@ sealed interface SyncResult {
 interface CloudSyncRepository {
     suspend fun registerDevice(device: DeviceRegistration): SyncResult
     suspend fun listPlaylists(): Result<List<SyncedPlaylist>>
+    suspend fun createPlaylist(
+        name: String,
+        providerType: String,
+        priority: Int,
+        serverHost: String? = null,
+        playlistUrlHint: String? = null,
+    ): Result<String>
     suspend fun updatePlaylistPriority(playlistId: String, priority: Int): SyncResult
     suspend fun updatePlaylistEnabled(playlistId: String, isEnabled: Boolean): SyncResult
     suspend fun renamePlaylist(playlistId: String, name: String): SyncResult
