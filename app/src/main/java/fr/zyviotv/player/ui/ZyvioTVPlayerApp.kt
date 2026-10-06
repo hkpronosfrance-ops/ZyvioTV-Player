@@ -66,6 +66,7 @@ import fr.zyviotv.player.ui.catalog.toSeriesState
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.settings.DevicesSettingsScreen
 import fr.zyviotv.player.ui.settings.AddPlaylistScreen
+import fr.zyviotv.player.ui.settings.PlaybackDataSettingsScreen
 import fr.zyviotv.player.ui.settings.PlaylistSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
@@ -323,6 +324,24 @@ fun ZyvioTVPlayerApp() {
 
 
 
+
+
+        composable("settings-playback-data") {
+            AdaptiveShell(
+                profile = profile,
+                destinations = AppDestination.entries,
+                selectedRoute = AppDestination.Settings.route,
+                onDestinationSelected = { target ->
+                    navController.navigate(target.route) {
+                        launchSingleTop = true
+                    }
+                },
+            ) {
+                PlaybackDataSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
 
         composable("settings-devices") {
             AdaptiveShell(
@@ -1003,6 +1022,7 @@ fun ZyvioTVPlayerApp() {
                             AccountSettingsScreen(
                                 onOpenPlaylists = { navController.navigate("settings-playlists") },
                                 onOpenDevices = { navController.navigate("settings-devices") },
+                                onOpenPlaybackData = { navController.navigate("settings-playback-data") },
                                 onSignedOut = {
                                     navController.navigate("auth") {
                                         popUpTo(AppDestination.Home.route) { inclusive = true }

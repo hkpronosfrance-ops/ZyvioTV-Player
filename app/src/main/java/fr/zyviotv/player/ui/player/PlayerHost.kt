@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import fr.zyviotv.player.data.settings.PlayerPreferences
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
 import fr.zyviotv.player.shared.playback.PlaybackRequest
@@ -35,6 +37,14 @@ fun PlayerHost(
     onProgressChanged: (Long, Long?) -> Unit = { _, _ -> },
     onPlaybackExit: (Long, Long?) -> Unit = { _, _ -> },
 ) {
+    val context = LocalContext.current
+    val playerPreferences = remember(context.applicationContext) {
+        PlayerPreferences(context.applicationContext)
+    }
+    val preferenceSnapshot = remember(effectiveKey(request.streamUrl)) {
+        playerPreferences.read()
+    }
+
     val effectiveRequest = remember(request) {
         request.copy(
             resumePositionMs = if (request.resumePositionMs > 0L) {
@@ -54,9 +64,15 @@ fun PlayerHost(
     var errorMessage by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
     var panel by remember(effectiveRequest.streamUrl) { mutableStateOf(PlayerPanel.None) }
     var tracks by remember(effectiveRequest.streamUrl) { mutableStateOf(NativeTrackCatalog()) }
-    var selectedAudioLanguage by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
-    var selectedSubtitleLanguage by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
-    var subtitlesEnabled by remember(effectiveRequest.streamUrl) { mutableStateOf(true) }
+    var selectedAudioLanguage by remember(effectiveRequest.streamUrl) {
+        mutableStateOf(preferenceSnapshot.preferredAudioLanguage)
+    }
+    var selectedSubtitleLanguage by remember(effectiveRequest.streamUrl) {
+        mutableStateOf(preferenceSnapshot.preferredSubtitleLanguage)
+    }
+    var subtitlesEnabled by remember(effectiveRequest.streamUrl) {
+        mutableStateOf(preferenceSnapshot.subtitlesEnabled)
+    }
     var command by remember { mutableStateOf(NativePlayerCommand.None) }
     var commandToken by remember { mutableLongStateOf(0L) }
     var channelDigits by remember(effectiveRequest.streamUrl) { mutableStateOf("") }
@@ -142,16 +158,22 @@ fun PlayerHost(
         onOpenGuide = onOpenGuide,
         onToggleFavorite = onToggleFavorite,
         onSelectAudioTrack = { track ->
-            track.language?.let { selectedAudioLanguage = it }
+            track.language?.let {
+                selectedAudioLanguage = it
+                playerPreferences.setPreferredAudioLanguage(it)
+            }
         },
         onSelectSubtitleTrack = { track ->
             track.language?.let {
                 selectedSubtitleLanguage = it
                 subtitlesEnabled = true
+                playerPreferences.setPreferredSubtitleLanguage(it)
+                playerPreferences.setSubtitlesEnabled(true)
             }
         },
         onDisableSubtitles = {
             subtitlesEnabled = false
+            playerPreferences.setSubtitlesEnabled(false)
         },
         onChannelUp = onNextChannel,
         onChannelDown = onPreviousChannel,
@@ -188,6 +210,8 @@ fun PlayerHost(
         },
     )
 }
+
+private fun effectiveKey(streamUrl: String): String = streamUrl
 
 private const val RESUME_BACKOFF_MS = 5_000L
 private const val CHANNEL_NUMBER_CONFIRM_DELAY_MS = 1_500L
