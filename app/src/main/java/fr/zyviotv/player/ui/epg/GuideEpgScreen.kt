@@ -33,9 +33,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +61,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 
 data class EpgChannelUi(
     val id: String,
@@ -104,8 +111,10 @@ private fun GuideReady(
     onRemindProgramme: (EpgChannelUi, EpgProgramme) -> Unit,
 ) {
     val window = remember(nowEpochSeconds) { EpgWindow.around(nowEpochSeconds) }
-    val horizontal = rememberScrollState()
-    val vertical = rememberScrollState()
+    var savedHorizontalOffset by rememberSaveable { mutableStateOf(0) }
+    var savedVerticalOffset by rememberSaveable { mutableStateOf(0) }
+    val horizontal = rememberScrollState(initial = savedHorizontalOffset)
+    val vertical = rememberScrollState(initial = savedVerticalOffset)
     val scope = rememberCoroutineScope()
     val scale = when (profile) {
         DeviceProfile.Mobile -> 4.dp
@@ -117,7 +126,46 @@ private fun GuideReady(
         DeviceProfile.Tablet -> 168.dp
         DeviceProfile.Television -> 360.dp
     }
-    var selected by remember { mutableStateOf<Pair<EpgChannelUi, EpgProgramme>?>(null) }
+    var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedProgrammeStart by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    val selected = remember(channels, selectedChannelId, selectedProgrammeStart) {
+        val channel = channels.firstOrNull { it.id == selectedChannelId }
+        val programme = channel?.programmes?.firstOrNull {
+            it.startEpochSeconds == selectedProgrammeStart
+        }
+        if (channel != null && programme != null) channel to programme else null
+    }
+
+    val programmeFocusRequesters = remember(channels) {
+        buildMap<String, FocusRequester> {
+            channels.take(MAX_VISIBLE_CHANNELS).forEach { channel ->
+                channel.programmes
+                    .filter(window::contains)
+                    .forEach { programme ->
+                        put(epgFocusKey(channel.id, programme.startEpochSeconds), FocusRequester())
+                    }
+            }
+        }
+    }
+
+    LaunchedEffect(horizontal) {
+        snapshotFlow { horizontal.value }.collectLatest { savedHorizontalOffset = it }
+    }
+    LaunchedEffect(vertical) {
+        snapshotFlow { vertical.value }.collectLatest { savedVerticalOffset = it }
+    }
+
+    LaunchedEffect(profile, selectedChannelId, selectedProgrammeStart, channels) {
+        if (profile == DeviceProfile.Television &&
+            selectedChannelId != null &&
+            selectedProgrammeStart != null
+        ) {
+            programmeFocusRequesters[
+                epgFocusKey(selectedChannelId!!, selectedProgrammeStart!!)
+            ]?.requestFocus()
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -242,12 +290,21 @@ private fun GuideReady(
                             }
                         } else {
                             programmes.forEach { programme ->
+                                val focusKey = epgFocusKey(channel.id, programme.startEpochSeconds)
                                 ProgrammeBlock(
                                     programme = programme,
                                     nowEpochSeconds = nowEpochSeconds,
                                     scale = scale,
                                     isTelevision = profile == DeviceProfile.Television,
-                                    onClick = { selected = channel to programme },
+                                    focusRequester = programmeFocusRequesters[focusKey],
+                                    onFocused = {
+                                        selectedChannelId = channel.id
+                                        selectedProgrammeStart = programme.startEpochSeconds
+                                    },
+                                    onClick = {
+                                        selectedChannelId = channel.id
+                                        selectedProgrammeStart = programme.startEpochSeconds
+                                    },
                                 )
                             }
                         }
@@ -313,6 +370,8 @@ private fun ProgrammeBlock(
     nowEpochSeconds: Long,
     scale: Dp,
     isTelevision: Boolean,
+    focusRequester: FocusRequester?,
+    onFocused: () -> Unit,
     onClick: () -> Unit,
 ) {
     val durationMinutes = ((programme.endEpochSeconds - programme.startEpochSeconds) / 60L)
@@ -331,6 +390,10 @@ private fun ProgrammeBlock(
             .width(width)
             .fillMaxSize()
             .padding(end = 2.dp)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged {
+                if (isTelevision && it.isFocused) onFocused()
+            }
             .tvFocusEffect(isTelevision, cornerRadiusDp = 8)
             .clickable(onClick = onClick),
         color = color,
@@ -540,5 +603,8 @@ private fun formatRange(start: Long, end: Long): String {
     return formatter.format(Date(start * 1000L)) + " – " +
         formatter.format(Date(end * 1000L))
 }
+
+private fun epgFocusKey(channelId: String, startEpochSeconds: Long): String =
+    channelId + ":" + startEpochSeconds
 
 private const val MAX_VISIBLE_CHANNELS = 50
