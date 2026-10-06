@@ -34,6 +34,7 @@ fun AccountSettingsScreen(
     onOpenDevices: () -> Unit = {},
     onOpenPlaybackData: () -> Unit = {},
     onOpenCache: () -> Unit = {},
+    onOpenParentalControls: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember {
@@ -95,6 +96,15 @@ fun AccountSettingsScreen(
             onClick = onOpenCache,
         ) {
             Text("Données et cache")
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(0.6f),
+            onClick = onOpenParentalControls,
+        ) {
+            Text("Contrôle parental")
         }
 
         Spacer(Modifier.height(12.dp))
