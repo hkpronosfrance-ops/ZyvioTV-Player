@@ -29,11 +29,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
@@ -42,9 +44,16 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import fr.zyviotv.player.shared.AppIdentity
 import fr.zyviotv.player.shared.catalog.CatalogMovie
+import fr.zyviotv.player.shared.catalog.CatalogSeries
 import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.ui.auth.AuthScreen
+import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.catalog.AndroidXtreamSeriesDetailLoader
+import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
+import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
+import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
+import fr.zyviotv.player.ui.catalog.ProviderCatalogState
 import fr.zyviotv.player.ui.catalog.rememberProviderCatalogSession
 import fr.zyviotv.player.ui.catalog.snapshotOrEmpty
 import fr.zyviotv.player.ui.catalog.toLiveState
@@ -58,8 +67,14 @@ import fr.zyviotv.player.ui.movies.MovieDetailScreen
 import fr.zyviotv.player.ui.movies.MovieDetailState
 import fr.zyviotv.player.ui.movies.MovieDetailUi
 import fr.zyviotv.player.ui.movies.MoviesScreen
+import fr.zyviotv.player.ui.series.EpisodeDetailUi
+import fr.zyviotv.player.ui.series.SeriesDetailScreen
+import fr.zyviotv.player.ui.series.SeriesDetailState
+import fr.zyviotv.player.ui.series.SeriesDetailUi
 import fr.zyviotv.player.ui.series.SeriesScreen
 import fr.zyviotv.player.ui.player.PlayerHost
+import fr.zyviotv.player.shared.sync.PlaylistSecret
+import fr.zyviotv.player.shared.xtream.XtreamCredentials
 import fr.zyviotv.player.ui.search.SearchScreen
 import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
@@ -85,6 +100,10 @@ fun ZyvioTVPlayerApp() {
     val providerCatalog = rememberProviderCatalogSession()
     val providerState = providerCatalog.state.value
     var selectedMovie by remember { mutableStateOf<CatalogMovie?>(null) }
+    var selectedSeries by remember { mutableStateOf<CatalogSeries?>(null) }
+    var seriesDetailState by remember { mutableStateOf<SeriesDetailState>(SeriesDetailState.Loading) }
+    var seriesEpisodeSources by remember { mutableStateOf<Map<String, SeriesEpisodeSource>>(emptyMap()) }
+    var seriesDetailReloadToken by remember { mutableIntStateOf(0) }
     var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
 
     NavHost(
@@ -193,6 +212,118 @@ fun ZyvioTVPlayerApp() {
             }
         }
 
+
+        composable("series-detail") {
+            val series = selectedSeries
+            val context = LocalContext.current
+            val readyProvider = providerState as? ProviderCatalogState.Ready
+
+            if (series == null || readyProvider == null) {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            } else {
+                val repository = remember(context.applicationContext) {
+                    SupabaseCloudSyncRepository(
+                        sessionStore = SecureSessionStore(context.applicationContext),
+                    )
+                }
+
+                LaunchedEffect(series.id, readyProvider.playlistId, seriesDetailReloadToken) {
+                    seriesDetailState = SeriesDetailState.Loading
+                    seriesEpisodeSources = emptyMap()
+
+                    val secret = repository
+                        .getPlaylistSecret(readyProvider.playlistId)
+                        .getOrElse {
+                            seriesDetailState = SeriesDetailState.Error(
+                                "Impossible de restaurer la configuration de la playlist.",
+                            )
+                            return@LaunchedEffect
+                        }
+
+                    val xtream = secret as? PlaylistSecret.Xtream
+                    if (xtream == null) {
+                        seriesDetailState = SeriesDetailState.Error(
+                            "Les saisons et épisodes détaillés sont disponibles pour les playlists Xtream.",
+                        )
+                        return@LaunchedEffect
+                    }
+
+                    when (
+                        val result = AndroidXtreamSeriesDetailLoader(
+                            credentials = XtreamCredentials(
+                                serverUrl = xtream.serverUrl,
+                                username = xtream.username,
+                                password = xtream.password,
+                            ),
+                        ).load(series.id)
+                    ) {
+                        is SeriesDetailLoadResult.Failure -> {
+                            seriesDetailState = SeriesDetailState.Error(result.message)
+                        }
+
+                        is SeriesDetailLoadResult.Success -> {
+                            seriesEpisodeSources = result.detail.episodes.associateBy { it.id }
+                            seriesDetailState = SeriesDetailState.Ready(
+                                SeriesDetailUi(
+                                    id = series.id,
+                                    title = result.detail.title ?: series.title,
+                                    year = result.detail.year,
+                                    genres = result.detail.genres,
+                                    synopsis = result.detail.synopsis,
+                                    seasonsCount = result.detail.episodes
+                                        .map { it.season }
+                                        .distinct()
+                                        .size,
+                                    episodesCount = result.detail.episodes.size,
+                                    episodes = result.detail.episodes.map { episode ->
+                                        EpisodeDetailUi(
+                                            id = episode.id,
+                                            season = episode.season,
+                                            number = episode.number,
+                                            title = episode.title,
+                                            synopsis = episode.synopsis,
+                                        )
+                                    },
+                                ),
+                            )
+                        }
+                    }
+                }
+
+                AdaptiveShell(
+                    profile = profile,
+                    destinations = AppDestination.entries,
+                    selectedRoute = AppDestination.Series.route,
+                    onDestinationSelected = { target ->
+                        navController.navigate(target.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                ) {
+                    SeriesDetailScreen(
+                        profile = profile,
+                        state = seriesDetailState,
+                        onRetry = {
+                            seriesDetailReloadToken += 1
+                        },
+                        onPlayEpisode = { episode ->
+                            val source = seriesEpisodeSources[episode.id]
+                            if (source != null) {
+                                playbackRequest = PlaybackRequest(
+                                    title = series.title + " — S" +
+                                        source.season + " E" + source.number +
+                                        " — " + source.title,
+                                    streamUrl = source.streamUrl,
+                                    kind = PlaybackKind.Episode,
+                                )
+                                navController.navigate("player")
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
         composable("player") {
             val request = playbackRequest
             if (request == null) {
@@ -285,6 +416,18 @@ fun ZyvioTVPlayerApp() {
                                 profile = profile,
                                 state = providerState.toSeriesState(),
                                 onRetry = providerCatalog::reload,
+                                onSeriesSelected = { seriesUi ->
+                                    selectedSeries = providerState
+                                        .snapshotOrEmpty()
+                                        .series
+                                        .firstOrNull { it.id == seriesUi.id }
+                                    if (selectedSeries != null) {
+                                        seriesDetailState = SeriesDetailState.Loading
+                                        seriesEpisodeSources = emptyMap()
+                                        seriesDetailReloadToken += 1
+                                        navController.navigate("series-detail")
+                                    }
+                                },
                             )
                         }
 
