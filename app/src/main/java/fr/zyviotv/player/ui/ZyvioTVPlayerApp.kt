@@ -92,6 +92,7 @@ import fr.zyviotv.player.ui.series.SeriesDetailState
 import fr.zyviotv.player.ui.series.SeriesDetailUi
 import fr.zyviotv.player.ui.series.SeriesScreen
 import fr.zyviotv.player.ui.player.PlayerHost
+import fr.zyviotv.player.ui.profiles.WhoIsWatchingGate
 import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.PlaylistSecret
 import fr.zyviotv.player.shared.sync.ProgressContentType
@@ -189,10 +190,35 @@ fun ZyvioTVPlayerApp() {
             AuthScreen(
                 profile = profile,
                 onAuthenticated = {
+                    navController.navigate("profile-gate") {
+                        popUpTo("auth") { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable("profile-gate") {
+            WhoIsWatchingGate(
+                deviceProfile = profile,
+                onProfileSelected = {
                     providerCatalog.reload()
                     librarySession.reload()
                     navController.navigate(AppDestination.Home.route) {
-                        popUpTo("auth") { inclusive = true }
+                        popUpTo("profile-gate") { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable("profile-switch") {
+            WhoIsWatchingGate(
+                deviceProfile = profile,
+                forceChooser = true,
+                onProfileSelected = {
+                    providerCatalog.reload()
+                    librarySession.reload()
+                    navController.navigate(AppDestination.Home.route) {
+                        popUpTo("profile-switch") { inclusive = true }
                     }
                 },
             )
@@ -1085,6 +1111,7 @@ fun ZyvioTVPlayerApp() {
                                 onOpenCache = { navController.navigate("settings-cache") },
                                 onOpenParentalControls = { navController.navigate("settings-parental") },
                                 onOpenProfiles = { navController.navigate("settings-profiles") },
+                                onSwitchProfile = { navController.navigate("profile-switch") },
                                 onSignedOut = {
                                     navController.navigate("auth") {
                                         popUpTo(AppDestination.Home.route) { inclusive = true }
