@@ -129,6 +129,19 @@ fun PlayerHost(
         channelNumberInput = channelDigits.takeIf { it.isNotBlank() },
     )
 
+    ParentalPlaybackGuard(
+        streamUrl = effectiveRequest.streamUrl,
+        playbackKind = effectiveRequest.kind.name,
+        playbackState = playbackState,
+        isPlaying = isPlaying,
+        onBlockPlayback = {
+            sendCommand(NativePlayerCommand.Pause)
+        },
+        onResumePlayback = {
+            sendCommand(NativePlayerCommand.Play)
+        },
+    )
+
     PlayerScreen(
         profile = profile,
         state = uiState,
