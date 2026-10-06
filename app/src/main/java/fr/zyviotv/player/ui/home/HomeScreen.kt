@@ -2,7 +2,6 @@ package fr.zyviotv.player.ui.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -29,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,12 +42,24 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fr.zyviotv.player.shared.sync.FavoriteContentType
+import fr.zyviotv.player.shared.sync.ProgressContentType
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.catalog.ProviderCatalogState
+import fr.zyviotv.player.ui.library.LibraryState
 import fr.zyviotv.player.ui.tv.tvFocusEffect
+
+private data class HomeCardUi(
+    val title: String,
+    val poster: Boolean,
+    val progress: Float? = null,
+)
 
 @Composable
 fun HomeScreen(
     profile: DeviceProfile,
+    providerState: ProviderCatalogState,
+    libraryState: LibraryState,
     onOpenLive: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
@@ -56,6 +69,78 @@ fun HomeScreen(
     onOpenHistory: () -> Unit,
 ) {
     val contentPadding = if (profile == DeviceProfile.Mobile) 4.dp else 12.dp
+    val readyProvider = providerState as? ProviderCatalogState.Ready
+    val readyLibrary = libraryState as? LibraryState.Ready
+
+    val allowedMovieIds = readyProvider?.snapshot?.movies?.mapTo(hashSetOf()) { it.id }.orEmpty()
+    val allowedSeriesIds = readyProvider?.snapshot?.series?.mapTo(hashSetOf()) { it.id }.orEmpty()
+    val allowedLiveIds = readyProvider?.snapshot?.liveChannels?.mapTo(hashSetOf()) { it.id }.orEmpty()
+
+    val filteredProgress = readyLibrary?.snapshot?.progress
+        .orEmpty()
+        .filter { progress ->
+            !progress.completed &&
+                progress.positionMs > 0L &&
+                when (progress.contentType) {
+                    ProgressContentType.Movie -> progress.contentId in allowedMovieIds
+                    ProgressContentType.Episode ->
+                        progress.seriesId != null && progress.seriesId in allowedSeriesIds
+                }
+        }
+
+    val continueItems = filteredProgress
+        .asSequence()
+        .take(MAX_HOME_ITEMS)
+        .map {
+            HomeCardUi(
+                title = it.title,
+                poster = it.contentType != ProgressContentType.Movie || it.artworkUrl != null,
+                progress = it.fraction.takeIf { fraction -> fraction > 0f },
+            )
+        }
+        .toList()
+
+    val filteredFavorites = readyLibrary?.snapshot?.favorites
+        .orEmpty()
+        .filter { favorite ->
+            when (favorite.contentType) {
+                FavoriteContentType.Live -> favorite.contentId in allowedLiveIds
+                FavoriteContentType.Movie -> favorite.contentId in allowedMovieIds
+                FavoriteContentType.Series -> favorite.contentId in allowedSeriesIds
+            }
+        }
+
+    val favoriteItems = filteredFavorites
+        .take(MAX_HOME_ITEMS)
+        .map {
+            HomeCardUi(
+                title = it.title,
+                poster = it.contentType != FavoriteContentType.Live,
+            )
+        }
+
+    val movieItems = readyProvider?.snapshot?.movies
+        .orEmpty()
+        .take(MAX_HOME_ITEMS)
+        .map { HomeCardUi(title = it.title, poster = true) }
+
+    val seriesItems = readyProvider?.snapshot?.series
+        .orEmpty()
+        .take(MAX_HOME_ITEMS)
+        .map { HomeCardUi(title = it.title, poster = true) }
+
+    val liveItems = readyProvider?.snapshot?.liveChannels
+        .orEmpty()
+        .take(MAX_HOME_ITEMS)
+        .map { HomeCardUi(title = it.name, poster = false) }
+
+    val heroTitle = continueItems.firstOrNull()?.title
+    val hasAnyContent =
+        continueItems.isNotEmpty() ||
+            favoriteItems.isNotEmpty() ||
+            movieItems.isNotEmpty() ||
+            seriesItems.isNotEmpty() ||
+            liveItems.isNotEmpty()
 
     Column(
         modifier = Modifier
@@ -63,12 +148,16 @@ fun HomeScreen(
             .padding(horizontal = contentPadding)
             .verticalScroll(rememberScrollState()),
     ) {
-        Hero(
-            profile = profile,
-            onOpenLive = onOpenLive,
-        )
-
-        Spacer(Modifier.height(24.dp))
+        if (heroTitle != null) {
+            Hero(
+                profile = profile,
+                title = heroTitle,
+                subtitle = "Reprenez votre lecture là où vous l’avez arrêtée.",
+                actionLabel = "Continuer",
+                onAction = onOpenContinueWatching,
+            )
+            Spacer(Modifier.height(24.dp))
+        }
 
         QuickActions(
             isTelevision = profile == DeviceProfile.Television,
@@ -83,63 +172,88 @@ fun HomeScreen(
 
         Spacer(Modifier.height(28.dp))
 
-        HomeSection(
-            title = "Reprendre la lecture",
-            items = listOf(
-                "Votre dernier contenu",
-                "Épisode en cours",
-                "Film commencé",
-            ),
-            poster = false,
-            isTelevision = profile == DeviceProfile.Television,
-        )
+        when {
+            providerState is ProviderCatalogState.Loading &&
+                libraryState is LibraryState.Loading -> {
+                HomeLoading()
+            }
 
-        HomeSection(
-            title = "TV en direct",
-            items = listOf(
-                "Chaînes récentes",
-                "Sports",
-                "Information",
-                "Divertissement",
-            ),
-            poster = false,
-            isTelevision = profile == DeviceProfile.Television,
-        )
+            !hasAnyContent -> {
+                HomeEmpty(
+                    providerState = providerState,
+                    libraryState = libraryState,
+                    onOpenLive = onOpenLive,
+                    onOpenMovies = onOpenMovies,
+                    onOpenSeries = onOpenSeries,
+                )
+            }
 
-        HomeSection(
-            title = "Films",
-            items = listOf(
-                "Films populaires",
-                "Nouveautés",
-                "À découvrir",
-                "Vos favoris",
-            ),
-            poster = true,
-            isTelevision = profile == DeviceProfile.Television,
-        )
+            else -> {
+                if (continueItems.isNotEmpty()) {
+                    HomeSection(
+                        title = "Continuer à regarder",
+                        items = continueItems,
+                        showAll = filteredProgress.size > MAX_HOME_ITEMS,
+                        isTelevision = profile == DeviceProfile.Television,
+                        onOpenSection = onOpenContinueWatching,
+                    )
+                }
 
-        HomeSection(
-            title = "Séries",
-            items = listOf(
-                "Séries populaires",
-                "Nouvelles saisons",
-                "À continuer",
-                "Vos favoris",
-            ),
-            poster = true,
-            isTelevision = profile == DeviceProfile.Television,
-        )
+                if (favoriteItems.isNotEmpty()) {
+                    HomeSection(
+                        title = "Favoris",
+                        items = favoriteItems,
+                        showAll = filteredFavorites.size > MAX_HOME_ITEMS,
+                        isTelevision = profile == DeviceProfile.Television,
+                        onOpenSection = onOpenFavorites,
+                    )
+                }
+
+                if (liveItems.isNotEmpty()) {
+                    HomeSection(
+                        title = "Chaînes disponibles",
+                        items = liveItems,
+                        showAll = readyProvider?.snapshot?.liveChannels.orEmpty().size > MAX_HOME_ITEMS,
+                        isTelevision = profile == DeviceProfile.Television,
+                        onOpenSection = onOpenLive,
+                    )
+                }
+
+                if (movieItems.isNotEmpty()) {
+                    HomeSection(
+                        title = "Films disponibles",
+                        items = movieItems,
+                        showAll = readyProvider?.snapshot?.movies.orEmpty().size > MAX_HOME_ITEMS,
+                        isTelevision = profile == DeviceProfile.Television,
+                        onOpenSection = onOpenMovies,
+                    )
+                }
+
+                if (seriesItems.isNotEmpty()) {
+                    HomeSection(
+                        title = "Séries disponibles",
+                        items = seriesItems,
+                        showAll = readyProvider?.snapshot?.series.orEmpty().size > MAX_HOME_ITEMS,
+                        isTelevision = profile == DeviceProfile.Television,
+                        onOpenSection = onOpenSeries,
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun Hero(
     profile: DeviceProfile,
-    onOpenLive: () -> Unit,
+    title: String,
+    subtitle: String,
+    actionLabel: String,
+    onAction: () -> Unit,
 ) {
     val heroHeight = when (profile) {
         DeviceProfile.Mobile -> 220.dp
-        DeviceProfile.Tablet -> 270.dp
+        DeviceProfile.Tablet -> 260.dp
         DeviceProfile.Television -> 330.dp
     }
 
@@ -162,45 +276,105 @@ private fun Hero(
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.75f),
+                .fillMaxWidth(0.78f),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = "ZYVIOTV",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Black,
-            )
-            Text(
-                text = "PLAYER",
-                style = MaterialTheme.typography.titleSmall,
+                text = "À reprendre",
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(18.dp))
-            Text(
-                text = "Tout votre univers au même endroit.",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Retrouvez vos chaînes, films, séries et votre progression sur vos appareils.",
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 3,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(18.dp))
             Button(
-                onClick = onOpenLive,
+                onClick = onAction,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
+                ),
+                modifier = Modifier.tvFocusEffect(
+                    profile == DeviceProfile.Television,
+                    cornerRadiusDp = 12,
                 ),
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Regarder la TV")
+                Text(actionLabel)
             }
+        }
+    }
+}
+
+@Composable
+private fun HomeLoading() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "Chargement de votre contenu…",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeEmpty(
+    providerState: ProviderCatalogState,
+    libraryState: LibraryState,
+    onOpenLive: () -> Unit,
+    onOpenMovies: () -> Unit,
+    onOpenSeries: () -> Unit,
+) {
+    val message = when {
+        providerState is ProviderCatalogState.Error -> providerState.message
+        libraryState is LibraryState.Error -> libraryState.message
+        providerState is ProviderCatalogState.Empty -> providerState.message
+        else -> "Aucun contenu n’est disponible pour le moment."
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 36.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "Votre Accueil est prêt",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = message,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(18.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = onOpenLive) { Text("TV") }
+            Button(onClick = onOpenMovies) { Text("Films") }
+            Button(onClick = onOpenSeries) { Text("Séries") }
         }
     }
 }
@@ -249,19 +423,14 @@ private fun QuickActionCard(
         ),
         shape = RoundedCornerShape(18.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-        ) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
             )
             Spacer(Modifier.height(14.dp))
-            Text(
-                text = label,
-                fontWeight = FontWeight.Bold,
-            )
+            Text(text = label, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -269,15 +438,32 @@ private fun QuickActionCard(
 @Composable
 private fun HomeSection(
     title: String,
-    items: List<String>,
-    poster: Boolean,
+    items: List<HomeCardUi>,
+    showAll: Boolean,
     isTelevision: Boolean,
+    onOpenSection: () -> Unit,
 ) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
-    )
+    if (items.isEmpty()) return
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        if (showAll) {
+            Button(
+                onClick = onOpenSection,
+                modifier = Modifier.tvFocusEffect(isTelevision, cornerRadiusDp = 10),
+            ) {
+                Text("Tout voir")
+            }
+        }
+    }
     Spacer(Modifier.height(12.dp))
 
     Row(
@@ -286,19 +472,20 @@ private fun HomeSection(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items.forEachIndexed { index, label ->
+        items.forEach { item ->
             Card(
+                onClick = onOpenSection,
                 modifier = Modifier
                     .width(
                         if (isTelevision) {
-                            if (poster) 180.dp else 280.dp
+                            if (item.poster) 180.dp else 280.dp
                         } else {
-                            if (poster) 132.dp else 210.dp
+                            if (item.poster) 132.dp else 210.dp
                         },
                     )
                     .tvFocusEffect(isTelevision)
                     .then(
-                        if (poster) Modifier.aspectRatio(2f / 3f)
+                        if (item.poster) Modifier.aspectRatio(2f / 3f)
                         else Modifier.aspectRatio(16f / 9f),
                     ),
                 colors = CardDefaults.cardColors(
@@ -319,7 +506,7 @@ private fun HomeSection(
                         ),
                 ) {
                     Icon(
-                        imageVector = if (poster) Icons.Default.Movie else Icons.Default.Tv,
+                        imageVector = if (item.poster) Icons.Default.Movie else Icons.Default.Tv,
                         contentDescription = null,
                         modifier = Modifier.align(Alignment.Center),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
@@ -332,20 +519,27 @@ private fun HomeSection(
                             .padding(10.dp),
                     ) {
                         Text(
-                            text = label,
+                            text = item.title,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (index == 0 && title == "Reprendre la lecture") {
+                        item.progress?.let { progress ->
                             Spacer(Modifier.height(6.dp))
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.62f)
+                                    .fillMaxWidth()
                                     .height(3.dp)
-                                    .background(MaterialTheme.colorScheme.primary),
-                            )
+                                    .background(Color.White.copy(alpha = 0.18f)),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                        .height(3.dp)
+                                        .background(MaterialTheme.colorScheme.primary),
+                                )
+                            }
                         }
                     }
                 }
@@ -355,3 +549,5 @@ private fun HomeSection(
 
     Spacer(Modifier.height(28.dp))
 }
+
+private const val MAX_HOME_ITEMS = 20
