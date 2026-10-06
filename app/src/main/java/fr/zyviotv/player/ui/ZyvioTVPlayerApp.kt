@@ -37,6 +37,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import fr.zyviotv.player.shared.AppIdentity
 import fr.zyviotv.player.ui.auth.AuthScreen
+import fr.zyviotv.player.ui.catalog.rememberProviderCatalogSession
+import fr.zyviotv.player.ui.catalog.snapshotOrEmpty
+import fr.zyviotv.player.ui.catalog.toLiveState
+import fr.zyviotv.player.ui.catalog.toMoviesState
+import fr.zyviotv.player.ui.catalog.toSeriesState
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
@@ -64,6 +69,8 @@ private enum class AppDestination(
 fun ZyvioTVPlayerApp() {
     val navController = rememberNavController()
     val profile = rememberDeviceProfile()
+    val providerCatalog = rememberProviderCatalogSession()
+    val providerState = providerCatalog.state.value
 
     NavHost(
         navController = navController,
@@ -81,6 +88,7 @@ fun ZyvioTVPlayerApp() {
             AuthScreen(
                 profile = profile,
                 onAuthenticated = {
+                    providerCatalog.reload()
                     navController.navigate(AppDestination.Home.route) {
                         popUpTo("auth") { inclusive = true }
                     }
@@ -118,6 +126,7 @@ fun ZyvioTVPlayerApp() {
             ) {
                 SearchScreen(
                     profile = profile,
+                    snapshot = providerState.snapshotOrEmpty(),
                     onBack = { navController.popBackStack() },
                     onResultSelected = { result ->
                         val route = when (result.kind) {
@@ -162,16 +171,26 @@ fun ZyvioTVPlayerApp() {
                         AppDestination.Live -> {
                             LiveTvScreen(
                                 profile = profile,
+                                state = providerState.toLiveState(),
+                                onRetry = providerCatalog::reload,
                                 onOpenGuide = { navController.navigate("guide") },
                             )
                         }
 
                         AppDestination.Movies -> {
-                            MoviesScreen(profile = profile)
+                            MoviesScreen(
+                                profile = profile,
+                                state = providerState.toMoviesState(),
+                                onRetry = providerCatalog::reload,
+                            )
                         }
 
                         AppDestination.Series -> {
-                            SeriesScreen(profile = profile)
+                            SeriesScreen(
+                                profile = profile,
+                                state = providerState.toSeriesState(),
+                                onRetry = providerCatalog::reload,
+                            )
                         }
 
                         AppDestination.Settings -> {
