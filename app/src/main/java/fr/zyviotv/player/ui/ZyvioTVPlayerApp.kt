@@ -224,16 +224,16 @@ fun ZyvioTVPlayerApp(
     var lastSyncedPositionMs by remember { mutableStateOf(0L) }
 
     val advanceToNextEpisode: (Boolean) -> Unit = { automatic ->
-        val sync = playbackSyncContext
-        val seriesId = sync?.seriesId
-        val isEpisode = sync?.contentType == ProgressContentType.Episode
+        val current = playbackSyncContext
+        val seriesId = current?.seriesId
         val selectedProfileId = profilePreferences.selectedProfileId()
         val autoNextEnabled = selectedProfileId
             ?.let { setupPreferences.profile(it).autoNextEpisode }
             ?: true
 
         if (
-            isEpisode &&
+            current != null &&
+            current.contentType == ProgressContentType.Episode &&
             !seriesId.isNullOrBlank() &&
             (!automatic || autoNextEnabled)
         ) {
@@ -244,11 +244,11 @@ fun ZyvioTVPlayerApp(
                     ),
                 )
                 val next = resolver.resolveNext(
-                    playlistId = sync!!.playlistId,
+                    playlistId = current.playlistId,
                     seriesId = seriesId,
-                    currentContentId = sync.contentId,
-                    currentSeason = sync.seasonNumber,
-                    currentEpisode = sync.episodeNumber,
+                    currentContentId = current.contentId,
+                    currentSeason = current.seasonNumber,
+                    currentEpisode = current.episodeNumber,
                 ) ?: return@launch
                 val series = (providerState as? ProviderCatalogState.Ready)
                     ?.snapshot
@@ -263,14 +263,14 @@ fun ZyvioTVPlayerApp(
                     kind = PlaybackKind.Episode,
                 )
                 playbackSyncContext = PlaybackSyncContext(
-                    playlistId = sync.playlistId,
+                    playlistId = current.playlistId,
                     contentType = ProgressContentType.Episode,
                     contentId = next.id,
                     title = next.title,
                     seriesId = seriesId,
                     seasonNumber = next.season,
                     episodeNumber = next.number,
-                    artworkUrl = series?.posterUrl ?: sync.artworkUrl,
+                    artworkUrl = series?.posterUrl ?: current.artworkUrl,
                 )
                 lastSyncedPositionMs = 0L
             }
