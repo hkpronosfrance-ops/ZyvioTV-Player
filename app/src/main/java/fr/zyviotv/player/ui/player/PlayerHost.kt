@@ -32,6 +32,8 @@ fun PlayerHost(
     onNextChannel: () -> Unit = {},
     onChannelNumberEntered: (String) -> Unit = {},
     onPositionChanged: (Long) -> Unit = {},
+    onProgressChanged: (Long, Long?) -> Unit = { _, _ -> },
+    onPlaybackExit: (Long, Long?) -> Unit = { _, _ -> },
 ) {
     val effectiveRequest = remember(request) {
         request.copy(
@@ -116,7 +118,10 @@ fun PlayerHost(
         state = uiState,
         onBack = {
             when (panel) {
-                PlayerPanel.None -> onBack()
+                PlayerPanel.None -> {
+                    onPlaybackExit(positionMs, durationMs)
+                    onBack()
+                }
                 PlayerPanel.ChannelNumber -> {
                     channelDigits = ""
                     panel = PlayerPanel.None
@@ -165,8 +170,12 @@ fun PlayerHost(
                 onPositionChanged = {
                     positionMs = it
                     onPositionChanged(it)
+                    onProgressChanged(it, durationMs)
                 },
-                onDurationChanged = { durationMs = it },
+                onDurationChanged = {
+                    durationMs = it
+                    onProgressChanged(positionMs, it)
+                },
                 onIsPlayingChanged = { isPlaying = it },
                 onTracksChanged = { tracks = it },
                 selectedAudioLanguage = selectedAudioLanguage,

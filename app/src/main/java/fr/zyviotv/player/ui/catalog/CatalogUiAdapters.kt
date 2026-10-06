@@ -27,7 +27,9 @@ fun ProviderCatalogState.toLiveState(): LiveScreenState =
         }
     }
 
-fun ProviderCatalogState.toMoviesState(): MoviesScreenState =
+fun ProviderCatalogState.toMoviesState(
+    progressByMovieId: Map<String, Float> = emptyMap(),
+): MoviesScreenState =
     when (this) {
         ProviderCatalogState.Loading -> MoviesScreenState.Loading
         is ProviderCatalogState.Error -> MoviesScreenState.Error(message)
@@ -41,6 +43,7 @@ fun ProviderCatalogState.toMoviesState(): MoviesScreenState =
                         title = movie.title,
                         category = movie.categoryId?.let(categories::get) ?: "Autres",
                         posterUrl = movie.posterUrl,
+                        progress = progressByMovieId[movie.id],
                     )
                 },
                 categories = snapshot.movieCategories.map { it.name },
@@ -48,7 +51,9 @@ fun ProviderCatalogState.toMoviesState(): MoviesScreenState =
         }
     }
 
-fun ProviderCatalogState.toSeriesState(): SeriesScreenState =
+fun ProviderCatalogState.toSeriesState(
+    progressBySeriesId: Map<String, Float> = emptyMap(),
+): SeriesScreenState =
     when (this) {
         ProviderCatalogState.Loading -> SeriesScreenState.Loading
         is ProviderCatalogState.Error -> SeriesScreenState.Error(message)
@@ -62,6 +67,7 @@ fun ProviderCatalogState.toSeriesState(): SeriesScreenState =
                         title = series.title,
                         category = series.categoryId?.let(categories::get) ?: "Autres",
                         posterUrl = series.posterUrl,
+                        progress = progressBySeriesId[series.id],
                     )
                 },
                 categories = snapshot.seriesCategories.map { it.name },
