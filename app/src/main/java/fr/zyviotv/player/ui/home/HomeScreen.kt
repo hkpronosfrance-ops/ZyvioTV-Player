@@ -123,13 +123,19 @@ fun HomeScreen(
             )
         }
 
-    val movieItems = readyProvider?.snapshot?.movies
+    val recentMovies = readyProvider?.snapshot?.movies
         .orEmpty()
+        .filter { it.addedAtEpochSeconds != null }
+        .sortedByDescending { it.addedAtEpochSeconds }
+    val recentMovieItems = recentMovies
         .take(MAX_HOME_ITEMS)
         .map { HomeCardUi(title = it.title, poster = true) }
 
-    val seriesItems = readyProvider?.snapshot?.series
+    val recentSeries = readyProvider?.snapshot?.series
         .orEmpty()
+        .filter { it.addedAtEpochSeconds != null }
+        .sortedByDescending { it.addedAtEpochSeconds }
+    val recentSeriesItems = recentSeries
         .take(MAX_HOME_ITEMS)
         .map { HomeCardUi(title = it.title, poster = true) }
 
@@ -146,15 +152,23 @@ fun HomeScreen(
         .toList()
 
     val heroNextEpisode = nextEpisodes.firstOrNull()
+    val newestMovie = recentMovies.firstOrNull()
+    val newestSeries = recentSeries.firstOrNull()
+    val newestAdded = listOfNotNull(
+        newestMovie?.let { Triple(it.title, it.addedAtEpochSeconds ?: 0L, true) },
+        newestSeries?.let { Triple(it.title, it.addedAtEpochSeconds ?: 0L, false) },
+    ).maxByOrNull { it.second }
     val heroTitle = heroNextEpisode?.let {
         it.seriesTitle + " — S" + it.episode.season + " E" + it.episode.number
-    } ?: continueItems.firstOrNull()?.title
+    } ?: newestAdded?.first
+        ?: continueItems.firstOrNull()?.title
+        ?: recentChannels.firstOrNull()?.name
     val hasAnyContent =
         nextEpisodes.isNotEmpty() ||
             continueItems.isNotEmpty() ||
             favoriteItems.isNotEmpty() ||
-            movieItems.isNotEmpty() ||
-            seriesItems.isNotEmpty() ||
+            readyProvider?.snapshot?.movies.orEmpty().isNotEmpty() ||
+            readyProvider?.snapshot?.series.orEmpty().isNotEmpty() ||
             recentChannels.isNotEmpty()
 
     Column(
@@ -167,17 +181,25 @@ fun HomeScreen(
             Hero(
                 profile = profile,
                 title = heroTitle,
-                subtitle = if (heroNextEpisode != null) {
-                    "Votre prochain épisode est prêt."
-                } else {
-                    "Reprenez votre lecture là où vous l’avez arrêtée."
+                subtitle = when {
+                    heroNextEpisode != null -> "Votre prochain épisode est prêt."
+                    newestAdded != null -> "Nouveau contenu ajouté à votre catalogue."
+                    continueItems.isNotEmpty() -> "Reprenez votre lecture là où vous l’avez arrêtée."
+                    else -> "Revenez rapidement à votre dernière chaîne."
                 },
-                actionLabel = if (heroNextEpisode != null) "Lire l’épisode" else "Continuer",
+                actionLabel = when {
+                    heroNextEpisode != null -> "Lire l’épisode"
+                    newestAdded != null -> "Découvrir"
+                    continueItems.isNotEmpty() -> "Continuer"
+                    else -> "Regarder"
+                },
                 onAction = {
-                    if (heroNextEpisode != null) {
-                        onPlayNextEpisode(heroNextEpisode)
-                    } else {
-                        onOpenContinueWatching()
+                    when {
+                        heroNextEpisode != null -> onPlayNextEpisode(heroNextEpisode)
+                        newestAdded?.third == true -> onOpenMovies()
+                        newestAdded != null -> onOpenSeries()
+                        continueItems.isNotEmpty() -> onOpenContinueWatching()
+                        recentChannels.isNotEmpty() -> onTuneRecentChannel(recentChannels.first())
                     }
                 },
             )
@@ -250,21 +272,21 @@ fun HomeScreen(
                     )
                 }
 
-                if (movieItems.isNotEmpty()) {
+                if (recentMovieItems.isNotEmpty()) {
                     HomeSection(
-                        title = "Films disponibles",
-                        items = movieItems,
-                        showAll = readyProvider?.snapshot?.movies.orEmpty().size > MAX_HOME_ITEMS,
+                        title = "Films récemment ajoutés",
+                        items = recentMovieItems,
+                        showAll = recentMovies.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenMovies,
                     )
                 }
 
-                if (seriesItems.isNotEmpty()) {
+                if (recentSeriesItems.isNotEmpty()) {
                     HomeSection(
-                        title = "Séries disponibles",
-                        items = seriesItems,
-                        showAll = readyProvider?.snapshot?.series.orEmpty().size > MAX_HOME_ITEMS,
+                        title = "Séries récemment ajoutées",
+                        items = recentSeriesItems,
+                        showAll = recentSeries.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenSeries,
                     )

@@ -20,6 +20,7 @@ data class CatalogMovie(
     val posterUrl: String?,
     val streamUrl: String,
     val containerExtension: String,
+    val addedAtEpochSeconds: Long? = null,
 )
 
 data class CatalogSeries(
@@ -27,6 +28,7 @@ data class CatalogSeries(
     val title: String,
     val categoryId: String?,
     val posterUrl: String?,
+    val addedAtEpochSeconds: Long? = null,
 )
 
 data class CatalogSnapshot(
