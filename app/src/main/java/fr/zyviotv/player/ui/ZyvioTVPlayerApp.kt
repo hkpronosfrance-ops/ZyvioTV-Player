@@ -27,15 +27,23 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.util.UnstableApi
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import fr.zyviotv.player.shared.AppIdentity
+import fr.zyviotv.player.shared.catalog.CatalogMovie
+import fr.zyviotv.player.shared.playback.PlaybackKind
+import fr.zyviotv.player.shared.playback.PlaybackRequest
 import fr.zyviotv.player.ui.auth.AuthScreen
 import fr.zyviotv.player.ui.catalog.rememberProviderCatalogSession
 import fr.zyviotv.player.ui.catalog.snapshotOrEmpty
@@ -46,8 +54,12 @@ import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
 import fr.zyviotv.player.ui.epg.GuideEpgScreen
+import fr.zyviotv.player.ui.movies.MovieDetailScreen
+import fr.zyviotv.player.ui.movies.MovieDetailState
+import fr.zyviotv.player.ui.movies.MovieDetailUi
 import fr.zyviotv.player.ui.movies.MoviesScreen
 import fr.zyviotv.player.ui.series.SeriesScreen
+import fr.zyviotv.player.ui.player.PlayerHost
 import fr.zyviotv.player.ui.search.SearchScreen
 import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
@@ -65,12 +77,15 @@ private enum class AppDestination(
     Settings("settings", "Plus", Icons.Default.Settings),
 }
 
+@UnstableApi
 @Composable
 fun ZyvioTVPlayerApp() {
     val navController = rememberNavController()
     val profile = rememberDeviceProfile()
     val providerCatalog = rememberProviderCatalogSession()
     val providerState = providerCatalog.state.value
+    var selectedMovie by remember { mutableStateOf<CatalogMovie?>(null) }
+    var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
 
     NavHost(
         navController = navController,
@@ -140,6 +155,65 @@ fun ZyvioTVPlayerApp() {
             }
         }
 
+
+        composable("movie-detail") {
+            val movie = selectedMovie
+            if (movie == null) {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            } else {
+                AdaptiveShell(
+                    profile = profile,
+                    destinations = AppDestination.entries,
+                    selectedRoute = AppDestination.Movies.route,
+                    onDestinationSelected = { target ->
+                        navController.navigate(target.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                ) {
+                    MovieDetailScreen(
+                        profile = profile,
+                        state = MovieDetailState.Ready(
+                            MovieDetailUi(
+                                id = movie.id,
+                                title = movie.title,
+                                posterUrl = movie.posterUrl,
+                            ),
+                        ),
+                        onPlay = { _, _ ->
+                            playbackRequest = PlaybackRequest(
+                                title = movie.title,
+                                streamUrl = movie.streamUrl,
+                                kind = PlaybackKind.Movie,
+                            )
+                            navController.navigate("player")
+                        },
+                    )
+                }
+            }
+        }
+
+        composable("player") {
+            val request = playbackRequest
+            if (request == null) {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            } else {
+                PlayerHost(
+                    profile = profile,
+                    request = request,
+                    onBack = {
+                        playbackRequest = null
+                        navController.popBackStack()
+                    },
+                    onOpenGuide = {
+                        if (request.kind == PlaybackKind.Live) {
+                            navController.navigate("guide")
+                        }
+                    },
+                )
+            }
+        }
+
         AppDestination.entries.forEach { destination ->
             composable(destination.route) {
                 AdaptiveShell(
@@ -173,6 +247,18 @@ fun ZyvioTVPlayerApp() {
                                 profile = profile,
                                 state = providerState.toLiveState(),
                                 onRetry = providerCatalog::reload,
+                                onTuneChannel = { channel ->
+                                    val snapshot = providerState.snapshotOrEmpty()
+                                    val source = snapshot.liveChannels.firstOrNull { it.id == channel.id }
+                                    if (source != null) {
+                                        playbackRequest = PlaybackRequest(
+                                            title = source.name,
+                                            streamUrl = source.streamUrl,
+                                            kind = PlaybackKind.Live,
+                                        )
+                                        navController.navigate("player")
+                                    }
+                                },
                                 onOpenGuide = { navController.navigate("guide") },
                             )
                         }
@@ -182,6 +268,15 @@ fun ZyvioTVPlayerApp() {
                                 profile = profile,
                                 state = providerState.toMoviesState(),
                                 onRetry = providerCatalog::reload,
+                                onMovieSelected = { movieUi ->
+                                    selectedMovie = providerState
+                                        .snapshotOrEmpty()
+                                        .movies
+                                        .firstOrNull { it.id == movieUi.id }
+                                    if (selectedMovie != null) {
+                                        navController.navigate("movie-detail")
+                                    }
+                                },
                             )
                         }
 
