@@ -139,6 +139,69 @@ fun HomeScreen(
         .take(MAX_HOME_ITEMS)
         .map { HomeCardUi(title = it.title, poster = true) }
 
+    val activePlaylistProgress = readyLibrary?.snapshot?.progress
+        .orEmpty()
+        .filter { it.playlistId == readyProvider?.playlistId }
+    val lastWatched = activePlaylistProgress.firstOrNull { progress ->
+        when (progress.contentType) {
+            ProgressContentType.Movie -> progress.contentId in allowedMovieIds
+            ProgressContentType.Episode ->
+                progress.seriesId != null && progress.seriesId in allowedSeriesIds
+        }
+    }
+
+    val sameCategoryMovies = if (lastWatched?.contentType == ProgressContentType.Movie) {
+        val source = readyProvider?.snapshot?.movies
+            .orEmpty()
+            .firstOrNull { it.id == lastWatched.contentId }
+        val categoryId = source?.categoryId
+        if (categoryId != null) {
+            readyProvider?.snapshot?.movies
+                .orEmpty()
+                .filter { it.categoryId == categoryId && it.id != source.id }
+                .orEmpty()
+        } else {
+            emptyList()
+        }
+    } else {
+        emptyList()
+    }
+
+    val sameCategorySeries = if (lastWatched?.contentType == ProgressContentType.Episode) {
+        val sourceSeriesId = lastWatched.seriesId
+        val source = readyProvider?.snapshot?.series
+            .orEmpty()
+            .firstOrNull { it.id == sourceSeriesId }
+        val categoryId = source?.categoryId
+        if (categoryId != null) {
+            readyProvider?.snapshot?.series
+                .orEmpty()
+                .filter { it.categoryId == categoryId && it.id != source.id }
+                .orEmpty()
+        } else {
+            emptyList()
+        }
+    } else {
+        emptyList()
+    }
+
+    val sameCategorySource = when {
+        sameCategoryMovies.size >= MIN_CATEGORY_RECOMMENDATIONS ->
+            SameCategorySource.Movies
+        sameCategorySeries.size >= MIN_CATEGORY_RECOMMENDATIONS ->
+            SameCategorySource.Series
+        else -> null
+    }
+    val sameCategoryItems = when (sameCategorySource) {
+        SameCategorySource.Movies -> sameCategoryMovies
+            .take(MAX_HOME_ITEMS)
+            .map { HomeCardUi(title = it.title, poster = true) }
+        SameCategorySource.Series -> sameCategorySeries
+            .take(MAX_HOME_ITEMS)
+            .map { HomeCardUi(title = it.title, poster = true) }
+        null -> emptyList()
+    }
+
     val liveById = readyProvider?.snapshot?.liveChannels
         .orEmpty()
         .associateBy { it.id }
@@ -289,6 +352,28 @@ fun HomeScreen(
                         showAll = recentSeries.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenSeries,
+                    )
+                }
+
+                if (sameCategoryItems.isNotEmpty()) {
+                    HomeSection(
+                        title = "Même catégorie que le dernier titre regardé",
+                        items = sameCategoryItems,
+                        showAll = when (sameCategorySource) {
+                            SameCategorySource.Movies ->
+                                sameCategoryMovies.size > MAX_HOME_ITEMS
+                            SameCategorySource.Series ->
+                                sameCategorySeries.size > MAX_HOME_ITEMS
+                            null -> false
+                        },
+                        isTelevision = profile == DeviceProfile.Television,
+                        onOpenSection = {
+                            when (sameCategorySource) {
+                                SameCategorySource.Movies -> onOpenMovies()
+                                SameCategorySource.Series -> onOpenSeries()
+                                null -> Unit
+                            }
+                        },
                     )
                 }
             }
@@ -755,4 +840,10 @@ private fun HomeSection(
     Spacer(Modifier.height(28.dp))
 }
 
+private enum class SameCategorySource {
+    Movies,
+    Series,
+}
+
+private const val MIN_CATEGORY_RECOMMENDATIONS = 2
 private const val MAX_HOME_ITEMS = 20
