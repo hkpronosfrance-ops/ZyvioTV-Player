@@ -309,13 +309,14 @@ class ParentalControlsRepository(
     suspend fun endRuntimeException(
         profileId: String,
         contentKey: String,
-    ) = withContext(Dispatchers.IO) {
+    ): Unit = withContext(Dispatchers.IO) {
         rpc(
             "player_parental_end_exception",
             JSONObject()
                 .put("p_profile_id", profileId)
                 .put("p_content_key", contentKey),
         )
+        Unit
     }
 
     suspend fun setEnabled(
