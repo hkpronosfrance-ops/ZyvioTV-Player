@@ -51,9 +51,9 @@ import fr.zyviotv.player.ui.theme.ZyvioSurface3
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.theme.ZyvioTextTertiary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 data class EpgChannelUi(
@@ -521,13 +521,13 @@ private fun GuideEmpty() {
 private data class TimeMarker(val label: String, val width: Dp)
 
 private fun timeMarkers(window: EpgWindow, scale: Dp): List<TimeMarker> {
-    val formatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
     val markerSeconds = 30 * 60L
     val count = ((window.toEpochSeconds - window.fromEpochSeconds) / markerSeconds).toInt()
     return List(count) { index ->
         val epoch = window.fromEpochSeconds + index * markerSeconds
         TimeMarker(
-            label = formatter.format(Instant.ofEpochSecond(epoch)),
+            label = formatter.format(Date(epoch * 1000L)),
             width = (30 * scale.value).dp,
         )
     }
@@ -536,9 +536,9 @@ private fun timeMarkers(window: EpgWindow, scale: Dp): List<TimeMarker> {
 private fun totalTimelineWidth(scale: Dp): Dp = (9 * 60 * scale.value).dp
 
 private fun formatRange(start: Long, end: Long): String {
-    val formatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
-    return formatter.format(Instant.ofEpochSecond(start)) + " – " +
-        formatter.format(Instant.ofEpochSecond(end))
+    val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return formatter.format(Date(start * 1000L)) + " – " +
+        formatter.format(Date(end * 1000L))
 }
 
 private const val MAX_VISIBLE_CHANNELS = 50
