@@ -51,6 +51,7 @@ fun HomeScreen(
     onOpenSeries: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenFavorites: () -> Unit,
+    onOpenContinueWatching: () -> Unit,
 ) {
     val contentPadding = if (profile == DeviceProfile.Mobile) 4.dp else 12.dp
 
@@ -74,6 +75,7 @@ fun HomeScreen(
             onOpenSeries = onOpenSeries,
             onOpenSearch = onOpenSearch,
             onOpenFavorites = onOpenFavorites,
+            onOpenContinueWatching = onOpenContinueWatching,
         )
 
         Spacer(Modifier.height(28.dp))
@@ -208,6 +210,7 @@ private fun QuickActions(
     onOpenSeries: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenFavorites: () -> Unit,
+    onOpenContinueWatching: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -220,6 +223,7 @@ private fun QuickActions(
         QuickActionCard("Séries", Icons.Default.VideoLibrary, isTelevision, onOpenSeries)
         QuickActionCard("Recherche", Icons.Default.Search, isTelevision, onOpenSearch)
         QuickActionCard("Favoris", Icons.Default.Favorite, isTelevision, onOpenFavorites)
+        QuickActionCard("Continuer", Icons.Default.PlayArrow, isTelevision, onOpenContinueWatching)
     }
 }
 
