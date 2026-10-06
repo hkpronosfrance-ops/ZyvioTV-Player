@@ -5,6 +5,7 @@ import android.widget.FrameLayout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +44,8 @@ fun NativeVideoPlayer(
     onDurationChanged: (Long?) -> Unit = {},
     onIsPlayingChanged: (Boolean) -> Unit = {},
     showNativeControls: Boolean = true,
+    command: NativePlayerCommand = NativePlayerCommand.None,
+    commandToken: Long = 0L,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -66,6 +69,31 @@ fun NativeVideoPlayer(
             }
             prepare()
             playWhenReady = true
+        }
+    }
+
+    LaunchedEffect(player, commandToken) {
+        when (command) {
+            NativePlayerCommand.None -> Unit
+            NativePlayerCommand.TogglePlayPause -> {
+                if (player.isPlaying) player.pause() else player.play()
+            }
+            NativePlayerCommand.SeekBack10 -> {
+                player.seekTo((player.currentPosition - SEEK_STEP_MS).coerceAtLeast(0L))
+            }
+            NativePlayerCommand.SeekForward10 -> {
+                val duration = player.duration.takeIf { it > 0L && it != C.TIME_UNSET }
+                val target = player.currentPosition + SEEK_STEP_MS
+                player.seekTo(if (duration != null) target.coerceAtMost(duration) else target)
+            }
+            NativePlayerCommand.Retry -> {
+                val position = player.currentPosition.coerceAtLeast(0L)
+                player.stop()
+                player.setMediaItem(buildMediaItem(request))
+                if (position > 0L) player.seekTo(position)
+                player.prepare()
+                player.playWhenReady = true
+            }
         }
     }
 
@@ -202,6 +230,14 @@ fun NativeVideoPlayer(
     )
 }
 
+enum class NativePlayerCommand {
+    None,
+    TogglePlayPause,
+    SeekBack10,
+    SeekForward10,
+    Retry,
+}
+
 private fun buildMediaItem(request: PlaybackRequest): MediaItem {
     val mimeType = when (PlaybackMediaTypeResolver.resolve(request)) {
         PlaybackMediaType.Hls -> MimeTypes.APPLICATION_M3U8
@@ -222,3 +258,4 @@ private fun buildMediaItem(request: PlaybackRequest): MediaItem {
 
 private const val BUFFERING_INDICATOR_DELAY_MS = 500L
 private const val BUFFERING_ERROR_TIMEOUT_MS = 15_000L
+private const val SEEK_STEP_MS = 10_000L
