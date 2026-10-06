@@ -66,6 +66,7 @@ import fr.zyviotv.player.ui.catalog.toSeriesState
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
+import fr.zyviotv.player.ui.library.LibraryState
 import fr.zyviotv.player.ui.library.rememberLibrarySession
 import fr.zyviotv.player.ui.epg.EpgChannelUi
 import fr.zyviotv.player.ui.epg.EpgGuideState
@@ -124,7 +125,35 @@ fun ZyvioTVPlayerApp() {
     val providerCatalog = rememberProviderCatalogSession()
     val providerState = providerCatalog.state.value
     val librarySession = rememberLibrarySession()
+    val libraryState = librarySession.state.value
     val scope = rememberCoroutineScope()
+
+    val activePlaylistId = (providerState as? ProviderCatalogState.Ready)?.playlistId
+    val movieProgressById = remember(libraryState, activePlaylistId) {
+        val ready = libraryState as? LibraryState.Ready
+        ready?.snapshot?.progress
+            ?.filter {
+                it.playlistId == activePlaylistId &&
+                    it.contentType == ProgressContentType.Movie
+            }
+            ?.associate { it.contentId to it.fraction }
+            .orEmpty()
+    }
+    val seriesProgressById = remember(libraryState, activePlaylistId) {
+        val ready = libraryState as? LibraryState.Ready
+        ready?.snapshot?.progress
+            ?.filter {
+                it.playlistId == activePlaylistId &&
+                    it.contentType == ProgressContentType.Episode &&
+                    !it.seriesId.isNullOrBlank()
+            }
+            ?.groupBy { it.seriesId!! }
+            ?.mapValues { (_, episodes) ->
+                episodes.firstOrNull { !it.completed && it.positionMs > 0L }?.fraction
+                    ?: if (episodes.isNotEmpty() && episodes.all { it.completed }) 1f else 0f
+            }
+            .orEmpty()
+    }
     var selectedMovie by remember { mutableStateOf<CatalogMovie?>(null) }
     var selectedSeries by remember { mutableStateOf<CatalogSeries?>(null) }
     var seriesDetailState by remember { mutableStateOf<SeriesDetailState>(SeriesDetailState.Loading) }
@@ -377,8 +406,9 @@ fun ZyvioTVPlayerApp() {
                             navController.navigate("player")
                         },
                         onToggleFavorite = {
-                            val provider = readyProvider ?: return@MovieDetailScreen
-                            scope.launch {
+                            val provider = readyProvider
+                            if (provider != null) {
+                                scope.launch {
                                 librarySession.toggleFavorite(
                                     SyncedFavorite(
                                         playlistId = provider.playlistId,
@@ -388,6 +418,7 @@ fun ZyvioTVPlayerApp() {
                                         artworkUrl = movie.posterUrl,
                                     ),
                                 )
+                                }
                             }
                         },
                     )
@@ -696,7 +727,7 @@ fun ZyvioTVPlayerApp() {
                         AppDestination.Movies -> {
                             MoviesScreen(
                                 profile = profile,
-                                state = providerState.toMoviesState(),
+                                state = providerState.toMoviesState(movieProgressById),
                                 onRetry = providerCatalog::reload,
                                 onMovieSelected = { movieUi ->
                                     selectedMovie = providerState
@@ -713,7 +744,7 @@ fun ZyvioTVPlayerApp() {
                         AppDestination.Series -> {
                             SeriesScreen(
                                 profile = profile,
-                                state = providerState.toSeriesState(),
+                                state = providerState.toSeriesState(seriesProgressById),
                                 onRetry = providerCatalog::reload,
                                 onSeriesSelected = { seriesUi ->
                                     selectedSeries = providerState
