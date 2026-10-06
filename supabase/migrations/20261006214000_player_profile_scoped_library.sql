@@ -2,6 +2,27 @@
 -- Existing library rows are preserved and assigned to the account primary profile.
 
 -- Ensure every existing account has a primary profile before backfilling library rows.
+-- Reuse the oldest existing profile when an account already has profiles but no primary,
+-- so the migration never exceeds the 5-profile account limit.
+with oldest_profile_without_primary as (
+  select distinct on (p.user_id)
+    p.user_id,
+    p.id
+  from public.player_profiles p
+  where not exists (
+    select 1
+    from public.player_profiles primary_profile
+    where primary_profile.user_id = p.user_id
+      and primary_profile.is_primary = true
+  )
+  order by p.user_id, p.created_at asc, p.id asc
+)
+update public.player_profiles p
+set is_primary = true,
+    updated_at = now()
+from oldest_profile_without_primary candidate
+where p.id = candidate.id;
+
 insert into public.player_profiles (
   user_id,
   name,
@@ -20,7 +41,6 @@ where not exists (
   select 1
   from public.player_profiles p
   where p.user_id = u.id
-    and p.is_primary = true
 );
 
 alter table public.player_favorites
