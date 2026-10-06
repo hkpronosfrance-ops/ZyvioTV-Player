@@ -72,6 +72,13 @@ data class PlayerMetadataUi(
     val isFavorite: Boolean = false,
 )
 
+data class PlayerTrackUi(
+    val id: String,
+    val label: String,
+    val language: String?,
+    val selected: Boolean,
+)
+
 data class PlayerTimelineUi(
     val positionMs: Long = 0L,
     val durationMs: Long? = null,
@@ -93,6 +100,9 @@ data class PlayerScreenUiState(
     val timeline: PlayerTimelineUi = PlayerTimelineUi(),
     val audioLabel: String? = null,
     val subtitlesLabel: String? = null,
+    val audioTracks: List<PlayerTrackUi> = emptyList(),
+    val subtitleTracks: List<PlayerTrackUi> = emptyList(),
+    val subtitlesEnabled: Boolean = true,
     val errorMessage: String? = null,
     val unavailable: Boolean = false,
     val channelNumberInput: String? = null,
@@ -111,6 +121,9 @@ fun PlayerScreen(
     onOpenTracks: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
+    onSelectAudioTrack: (PlayerTrackUi) -> Unit = {},
+    onSelectSubtitleTrack: (PlayerTrackUi) -> Unit = {},
+    onDisableSubtitles: () -> Unit = {},
     onChannelUp: () -> Unit = {},
     onChannelDown: () -> Unit = {},
     onChannelDigit: (Int) -> Unit = {},
@@ -240,8 +253,12 @@ fun PlayerScreen(
         when (state.panel) {
             PlayerPanel.Tracks -> TracksPanel(
                 profile = profile,
-                audioLabel = state.audioLabel,
-                subtitlesLabel = state.subtitlesLabel,
+                audioTracks = state.audioTracks,
+                subtitleTracks = state.subtitleTracks,
+                subtitlesEnabled = state.subtitlesEnabled,
+                onSelectAudioTrack = onSelectAudioTrack,
+                onSelectSubtitleTrack = onSelectSubtitleTrack,
+                onDisableSubtitles = onDisableSubtitles,
             )
             PlayerPanel.Resume -> ResumePanel(
                 profile = profile,
@@ -608,8 +625,12 @@ private fun UnavailableOverlay(
 @Composable
 private fun TracksPanel(
     profile: DeviceProfile,
-    audioLabel: String?,
-    subtitlesLabel: String?,
+    audioTracks: List<PlayerTrackUi>,
+    subtitleTracks: List<PlayerTrackUi>,
+    subtitlesEnabled: Boolean,
+    onSelectAudioTrack: (PlayerTrackUi) -> Unit,
+    onSelectSubtitleTrack: (PlayerTrackUi) -> Unit,
+    onDisableSubtitles: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
@@ -626,19 +647,81 @@ private fun TracksPanel(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
+
             Spacer(Modifier.height(20.dp))
             Text("AUDIO", color = ZyvioTextSecondary, style = MaterialTheme.typography.labelSmall)
-            Text(audioLabel ?: "Automatique", modifier = Modifier.padding(top = 8.dp))
+            Spacer(Modifier.height(8.dp))
+
+            if (audioTracks.isEmpty()) {
+                Text("Aucune piste audio détectée", color = ZyvioTextSecondary)
+            } else {
+                audioTracks.forEach { track ->
+                    TrackChoice(
+                        profile = profile,
+                        label = track.label,
+                        selected = track.selected,
+                        onClick = { onSelectAudioTrack(track) },
+                    )
+                }
+            }
+
             Spacer(Modifier.height(18.dp))
             Text("SOUS-TITRES", color = ZyvioTextSecondary, style = MaterialTheme.typography.labelSmall)
-            Text(subtitlesLabel ?: "Désactivés", modifier = Modifier.padding(top = 8.dp))
+            Spacer(Modifier.height(8.dp))
+
+            TrackChoice(
+                profile = profile,
+                label = "Désactivés",
+                selected = !subtitlesEnabled,
+                onClick = onDisableSubtitles,
+            )
+
+            subtitleTracks.forEach { track ->
+                TrackChoice(
+                    profile = profile,
+                    label = track.label,
+                    selected = subtitlesEnabled && track.selected,
+                    onClick = { onSelectSubtitleTrack(track) },
+                )
+            }
+
+            if (subtitleTracks.isEmpty()) {
+                Text(
+                    text = "Aucun sous-titre détecté",
+                    modifier = Modifier.padding(top = 8.dp),
+                    color = ZyvioTextSecondary,
+                )
+            }
+
             Spacer(Modifier.height(18.dp))
             Text(
-                text = "La préférence de langue s’applique à tous les contenus.",
+                text = "Les pistes affichées proviennent du flux en cours.",
                 color = ZyvioTextSecondary,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+}
+
+@Composable
+private fun TrackChoice(
+    profile: DeviceProfile,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+            .tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
+        onClick = onClick,
+    ) {
+        Text(
+            text = if (selected) "✓  " + label else label,
+            modifier = Modifier.fillMaxWidth(),
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
