@@ -251,13 +251,15 @@ class ParentalControlsRepository(
     suspend fun heartbeatScreenTime(
         profileId: String,
         playing: Boolean,
+        contentKey: String,
     ): Result<ScreenTimeHeartbeat> = withContext(Dispatchers.IO) {
         runCatching {
             val response = rpc(
                 "player_parental_screen_time_heartbeat",
                 JSONObject()
                     .put("p_profile_id", profileId)
-                    .put("p_playing", playing),
+                    .put("p_playing", playing)
+                    .put("p_content_key", contentKey),
             )
             if (response.code !in 200..299) error("Impossible de synchroniser le temps d’écran.")
             val json = JSONObject(response.body)
