@@ -240,7 +240,7 @@ fun rememberLibrarySession(): LibrarySession {
         }
         val liveHistory = repository.listLiveHistory(
             profileId = activeProfileId,
-            limit = MAX_LIVE_HISTORY,
+            limit = 50,
         ).getOrElse {
             state.value = LibraryState.Error("Impossible de charger vos chaînes récentes.")
             return@LaunchedEffect
