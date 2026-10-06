@@ -16,6 +16,7 @@ data class ParentalSettings(
 )
 
 data class ParentalRuntimeState(
+    val serverNow: String?,
     val parentalEnabled: Boolean,
     val isChild: Boolean,
     val consumedSeconds: Int,
@@ -233,6 +234,9 @@ class ParentalControlsRepository(
             if (response.code !in 200..299) error("Impossible de charger l’état parental.")
             val json = JSONObject(response.body)
             ParentalRuntimeState(
+                serverNow = json.optString("server_now").takeIf {
+                    it.isNotBlank() && it != "null"
+                },
                 parentalEnabled = json.optBoolean("parental_enabled", false),
                 isChild = json.optBoolean("is_child", false),
                 consumedSeconds = json.optInt("consumed_seconds", 0),
