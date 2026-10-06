@@ -42,7 +42,7 @@ internal fun ProfileEditPanel(
     onChildChange: (Boolean) -> Unit,
     onMaxAgeChange: (Int) -> Unit,
     onAvatarIndexChange: (Int) -> Unit,
-    onSetDefault: () -> Unit,
+    onDefaultChange: (Boolean) -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -218,10 +218,8 @@ internal fun ProfileEditPanel(
                 }
                 Switch(
                     checked = isDefault,
-                    enabled = !busy && !isDefault,
-                    onCheckedChange = {
-                        if (it) onSetDefault()
-                    },
+                    enabled = !busy,
+                    onCheckedChange = onDefaultChange,
                 )
             }
 
