@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.settings.ParentalControlsRepository
+import fr.zyviotv.player.data.settings.ParentalRecoveryResult
 import fr.zyviotv.player.data.settings.ParentalSettings
 import fr.zyviotv.player.data.settings.ParentalWriteResult
 import fr.zyviotv.player.data.settings.ProfileParentalSettings
@@ -185,6 +186,24 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            Spacer(Modifier.height(4.dp))
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        message = when (val result = repository.requestPinRecoveryEmail()) {
+                            is ParentalRecoveryResult.Sent ->
+                                "Email de récupération envoyé à ${result.maskedEmail}."
+                            is ParentalRecoveryResult.Failure -> result.message
+                        }
+                        busy = false
+                    }
+                },
+            ) {
+                Text("Code PIN oublié ?")
+            }
         }
 
         Spacer(Modifier.height(8.dp))
