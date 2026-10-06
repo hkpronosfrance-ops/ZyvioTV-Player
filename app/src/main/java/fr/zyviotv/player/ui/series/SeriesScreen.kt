@@ -93,11 +93,7 @@ fun SeriesScreen(
             profile = profile,
             items = state.items,
             categories = state.categories,
-            lastSelectedId = lastSelectedId,
-                    onSeriesSelected = {
-                        lastSelectedId = it.id
-                        onSeriesSelected(it)
-                    },
+            onSeriesSelected = onSeriesSelected,
         )
     }
 }
