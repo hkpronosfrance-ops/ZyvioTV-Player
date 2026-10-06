@@ -24,7 +24,6 @@ import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.shared.playback.PlaybackState
 import android.os.SystemClock
 import java.security.MessageDigest
-import java.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -64,12 +63,14 @@ internal fun ParentalPlaybackGuard(
         if (onlineState != null) {
             runtimeCache.store(profileId, onlineState)
 
-            if (onlineState.exceptionUntil != null && onlineState.serverNow != null) {
-                val remainingMillis = runCatching {
-                    val expires = Instant.parse(onlineState.exceptionUntil).toEpochMilli()
-                    val serverNow = Instant.parse(onlineState.serverNow).toEpochMilli()
-                    (expires - serverNow).coerceAtLeast(0L)
-                }.getOrDefault(0L)
+            if (
+                onlineState.exceptionUntilEpochMillis != null &&
+                onlineState.serverNowEpochMillis != null
+            ) {
+                val remainingMillis = (
+                    onlineState.exceptionUntilEpochMillis -
+                        onlineState.serverNowEpochMillis
+                    ).coerceAtLeast(0L)
                 exceptionUntilElapsed = SystemClock.elapsedRealtime() + remainingMillis
             }
 
