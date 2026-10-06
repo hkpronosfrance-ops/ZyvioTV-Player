@@ -33,6 +33,7 @@ fun PlayerHost(
     onChannelNumberEntered: (String) -> Unit = {},
     onPositionChanged: (Long) -> Unit = {},
     onProgressChanged: (Long, Long?) -> Unit = { _, _ -> },
+    onPlaybackExit: (Long, Long?) -> Unit = { _, _ -> },
 ) {
     val effectiveRequest = remember(request) {
         request.copy(
@@ -117,7 +118,10 @@ fun PlayerHost(
         state = uiState,
         onBack = {
             when (panel) {
-                PlayerPanel.None -> onBack()
+                PlayerPanel.None -> {
+                    onPlaybackExit(positionMs, durationMs)
+                    onBack()
+                }
                 PlayerPanel.ChannelNumber -> {
                     channelDigits = ""
                     panel = PlayerPanel.None
