@@ -36,6 +36,7 @@ fun PlayerHost(
     onPositionChanged: (Long) -> Unit = {},
     onProgressChanged: (Long, Long?) -> Unit = { _, _ -> },
     onPlaybackExit: (Long, Long?) -> Unit = { _, _ -> },
+    onPlaybackEnded: (Long, Long?) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val playerPreferences = remember(context.applicationContext) {
@@ -76,6 +77,14 @@ fun PlayerHost(
     var command by remember { mutableStateOf(NativePlayerCommand.None) }
     var commandToken by remember { mutableLongStateOf(0L) }
     var channelDigits by remember(effectiveRequest.streamUrl) { mutableStateOf("") }
+    var endedHandled by remember(effectiveRequest.streamUrl) { mutableStateOf(false) }
+
+    LaunchedEffect(playbackState, effectiveRequest.streamUrl) {
+        if (playbackState == PlaybackState.Ended && !endedHandled) {
+            endedHandled = true
+            onPlaybackEnded(positionMs, durationMs)
+        }
+    }
 
     fun sendCommand(next: NativePlayerCommand) {
         command = next
