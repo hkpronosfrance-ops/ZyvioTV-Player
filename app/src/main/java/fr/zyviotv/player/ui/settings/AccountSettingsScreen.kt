@@ -32,6 +32,7 @@ fun AccountSettingsScreen(
     onSignedOut: () -> Unit,
     onOpenPlaylists: () -> Unit = {},
     onOpenDevices: () -> Unit = {},
+    onOpenPlaybackData: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember {
@@ -75,6 +76,15 @@ fun AccountSettingsScreen(
             onClick = onOpenDevices,
         ) {
             Text("Appareils")
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(0.6f),
+            onClick = onOpenPlaybackData,
+        ) {
+            Text("Lecture et données")
         }
 
         Spacer(Modifier.height(12.dp))
