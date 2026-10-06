@@ -79,6 +79,8 @@ import fr.zyviotv.player.ui.settings.ParentalPinRecoveryScreen
 import fr.zyviotv.player.ui.settings.PlaybackDataSettingsScreen
 import fr.zyviotv.player.ui.settings.PlaylistSettingsScreen
 import fr.zyviotv.player.ui.settings.ProfilesSettingsScreen
+import fr.zyviotv.player.ui.home.HomeNextEpisode
+import fr.zyviotv.player.ui.home.HomeNextEpisodeResolver
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.onboarding.AppUpdateGateScreen
 import fr.zyviotv.player.ui.onboarding.OnboardingGateScreen
@@ -184,6 +186,27 @@ fun ZyvioTVPlayerApp(
             }
             .orEmpty()
     }
+    var homeNextEpisodes by remember { mutableStateOf<List<HomeNextEpisode>>(emptyList()) }
+
+    LaunchedEffect(providerState, libraryState) {
+        val readyProvider = providerState as? ProviderCatalogState.Ready
+        val readyLibrary = libraryState as? LibraryState.Ready
+        if (readyProvider == null || readyLibrary == null) {
+            homeNextEpisodes = emptyList()
+        } else {
+            val resolver = HomeNextEpisodeResolver(
+                SupabaseCloudSyncRepository(
+                    sessionStore = SecureSessionStore(appContext),
+                ),
+            )
+            homeNextEpisodes = resolver.resolve(
+                playlistId = readyProvider.playlistId,
+                visibleSeries = readyProvider.snapshot.series,
+                progress = readyLibrary.snapshot.progress,
+            )
+        }
+    }
+
     var selectedMovie by remember { mutableStateOf<CatalogMovie?>(null) }
     var selectedSeries by remember { mutableStateOf<CatalogSeries?>(null) }
     var seriesDetailState by remember { mutableStateOf<SeriesDetailState>(SeriesDetailState.Loading) }
@@ -1282,6 +1305,28 @@ fun ZyvioTVPlayerApp(
                                 profile = profile,
                                 providerState = providerState,
                                 libraryState = libraryState,
+                                nextEpisodes = homeNextEpisodes,
+                                onPlayNextEpisode = { next ->
+                                    playbackRequest = PlaybackRequest(
+                                        title = next.seriesTitle + " — S" +
+                                            next.episode.season + " E" + next.episode.number +
+                                            " — " + next.episode.title,
+                                        streamUrl = next.episode.streamUrl,
+                                        kind = PlaybackKind.Episode,
+                                    )
+                                    playbackSyncContext = PlaybackSyncContext(
+                                        playlistId = next.playlistId,
+                                        contentType = ProgressContentType.Episode,
+                                        contentId = next.episode.id,
+                                        title = next.episode.title,
+                                        seriesId = next.seriesId,
+                                        seasonNumber = next.episode.season,
+                                        episodeNumber = next.episode.number,
+                                        artworkUrl = next.artworkUrl,
+                                    )
+                                    lastSyncedPositionMs = 0L
+                                    navController.navigate("player")
+                                },
                                 onOpenLive = { navController.navigate(AppDestination.Live.route) },
                                 onOpenMovies = { navController.navigate(AppDestination.Movies.route) },
                                 onOpenSeries = { navController.navigate(AppDestination.Series.route) },
