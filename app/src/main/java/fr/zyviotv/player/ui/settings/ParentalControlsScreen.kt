@@ -36,6 +36,8 @@ import fr.zyviotv.player.data.settings.ParentalSettings
 import fr.zyviotv.player.data.settings.ParentalWriteResult
 import fr.zyviotv.player.data.settings.ProfileParentalSettings
 import fr.zyviotv.player.data.settings.ProfileRepository
+import fr.zyviotv.player.ui.catalog.ProviderCatalogState
+import fr.zyviotv.player.ui.catalog.rememberProviderCatalogSession
 import fr.zyviotv.player.shared.sync.PlayerProfile
 import kotlinx.coroutines.launch
 
@@ -50,12 +52,16 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
         ProfileRepository(SecureSessionStore(appContext))
     }
     val scope = rememberCoroutineScope()
+    val catalogSession = rememberProviderCatalogSession()
+    val catalogState by catalogSession.state
 
     var loading by remember { mutableStateOf(true) }
     var settings by remember { mutableStateOf<ParentalSettings?>(null) }
     var profiles by remember { mutableStateOf<List<PlayerProfile>>(emptyList()) }
     var selectedProfile by remember { mutableStateOf<PlayerProfile?>(null) }
     var profileSettings by remember { mutableStateOf<ProfileParentalSettings?>(null) }
+    var lockedCategoryKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var lockedContentKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     var currentPin by remember { mutableStateOf("") }
@@ -102,6 +108,12 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
             return
         }
         profileSettings = loaded
+        val locks = repository.loadContentLocks(profile.id).getOrElse {
+            error = "Impossible de charger les verrouillages du profil."
+            return
+        }
+        lockedCategoryKeys = locks.lockedCategoryKeys
+        lockedContentKeys = locks.lockedContentKeys
         maxAge = loaded.maxAge
         hideLocked = loaded.hideLocked
         dailyLimit = loaded.dailyLimitMinutes?.toString().orEmpty()
@@ -365,6 +377,58 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                     enabled = scheduleEnabled,
                     onChange = { scheduleWindows = it },
                 )
+
+                if (profile.type.wireValue == "child") {
+                    val readyCatalog = catalogState as? ProviderCatalogState.Ready
+                    if (readyCatalog != null) {
+                        ParentalContentLockEditor(
+                            snapshot = readyCatalog.rawSnapshot,
+                            lockedCategoryKeys = lockedCategoryKeys,
+                            lockedContentKeys = lockedContentKeys,
+                            onCategoryLocksChange = { lockedCategoryKeys = it },
+                            onContentLocksChange = { lockedContentKeys = it },
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(
+                            enabled = !busy && actionPin.length == 4,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    when (
+                                        val result = repository.updateContentLocks(
+                                            profileId = profile.id,
+                                            pin = actionPin,
+                                            lockedCategoryKeys = lockedCategoryKeys,
+                                            lockedContentKeys = lockedContentKeys,
+                                        )
+                                    ) {
+                                        ParentalWriteResult.Success -> {
+                                            actionPin = ""
+                                            message = "Verrouillages de ${profile.name} mis à jour."
+                                            loadSelectedProfile()
+                                            catalogSession.reload()
+                                        }
+                                        is ParentalWriteResult.Failure -> {
+                                            message = result.message
+                                        }
+                                    }
+                                    busy = false
+                                }
+                            },
+                        ) {
+                            Text("Enregistrer les verrouillages")
+                        }
+                    } else {
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            text = "Catalogue indisponible pour modifier les verrouillages.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
 
                 Spacer(Modifier.height(10.dp))
                 Button(
