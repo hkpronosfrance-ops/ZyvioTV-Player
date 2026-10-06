@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.settings.ProfilePreferences
+import fr.zyviotv.player.data.settings.ProfileRepository
 import fr.zyviotv.player.data.sync.SupabaseLibrarySyncRepository
 import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.ProgressContentType
@@ -30,11 +32,15 @@ sealed interface LibraryState {
 
 class LibrarySession internal constructor(
     val state: State<LibraryState>,
+    val activeProfileId: State<String?>,
     private val repository: SupabaseLibrarySyncRepository,
     private val reloadAction: () -> Unit,
+    private val switchProfileAction: (String) -> Unit,
     private val updateState: (LibraryState) -> Unit,
 ) {
     fun reload() = reloadAction()
+
+    fun switchProfile(profileId: String) = switchProfileAction(profileId)
 
     suspend fun toggleFavorite(favorite: SyncedFavorite): SyncResult {
         val ready = state.value as? LibraryState.Ready
@@ -151,9 +157,20 @@ class LibrarySession internal constructor(
 @Composable
 fun rememberLibrarySession(): LibrarySession {
     val context = LocalContext.current
-    val repository = remember(context.applicationContext) {
+    val applicationContext = context.applicationContext
+    val activeProfileId = remember { mutableStateOf<String?>(null) }
+    val profilePreferences = remember(applicationContext) {
+        ProfilePreferences(applicationContext)
+    }
+    val profileRepository = remember(applicationContext) {
+        ProfileRepository(
+            sessionStore = SecureSessionStore(applicationContext),
+        )
+    }
+    val repository = remember(applicationContext) {
         SupabaseLibrarySyncRepository(
-            sessionStore = SecureSessionStore(context.applicationContext),
+            sessionStore = SecureSessionStore(applicationContext),
+            profileIdProvider = { activeProfileId.value },
         )
     }
     val state = remember { mutableStateOf<LibraryState>(LibraryState.Loading) }
@@ -161,6 +178,28 @@ fun rememberLibrarySession(): LibrarySession {
 
     LaunchedEffect(reloadToken) {
         state.value = LibraryState.Loading
+
+        val primaryProfileId = profileRepository.ensurePrimaryProfile().getOrElse {
+            state.value = LibraryState.Error("Impossible de préparer votre profil.")
+            return@LaunchedEffect
+        }
+        val profiles = profileRepository.listProfiles().getOrElse {
+            state.value = LibraryState.Error("Impossible de charger vos profils.")
+            return@LaunchedEffect
+        }
+
+        val validIds = profiles.mapTo(mutableSetOf()) { it.id }
+        val selected = profilePreferences.selectedProfileId()
+            ?.takeIf(validIds::contains)
+        val default = profilePreferences.defaultProfileId()
+            ?.takeIf(validIds::contains)
+        val resolvedProfileId = selected
+            ?: default
+            ?: profiles.firstOrNull { it.isPrimary }?.id
+            ?: primaryProfileId
+
+        activeProfileId.value = resolvedProfileId
+        profilePreferences.setSelectedProfileId(resolvedProfileId)
 
         val favorites = repository.listFavorites().getOrElse {
             state.value = LibraryState.Error("Impossible de charger vos favoris.")
@@ -179,11 +218,17 @@ fun rememberLibrarySession(): LibrarySession {
         )
     }
 
-    return remember(state, repository) {
+    return remember(state, repository, activeProfileId, profilePreferences) {
         LibrarySession(
             state = state,
+            activeProfileId = activeProfileId,
             repository = repository,
             reloadAction = { reloadToken += 1 },
+            switchProfileAction = { profileId ->
+                profilePreferences.setSelectedProfileId(profileId)
+                activeProfileId.value = profileId
+                reloadToken += 1
+            },
             updateState = { state.value = it },
         )
     }
