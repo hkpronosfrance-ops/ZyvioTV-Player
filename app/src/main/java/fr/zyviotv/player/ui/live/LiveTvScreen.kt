@@ -18,77 +18,141 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioRedTint
+import fr.zyviotv.player.ui.theme.ZyvioSurface1
+import fr.zyviotv.player.ui.theme.ZyvioSurface2
+import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
+import kotlinx.coroutines.delay
 
-private data class LiveChannelPreview(
+data class LiveChannelUi(
+    val id: String,
     val name: String,
     val category: String,
-    val currentProgram: String,
-    val nextProgram: String,
-    val progress: Float,
+    val channelNumber: String? = null,
+    val currentProgram: String? = null,
+    val nextProgram: String? = null,
+    val progress: Float? = null,
 )
 
-private val previewChannels = listOf(
-    LiveChannelPreview("Chaîne 1", "France", "Programme en direct", "Programme suivant", 0.42f),
-    LiveChannelPreview("Chaîne 2", "Sports", "Match en direct", "Magazine sportif", 0.68f),
-    LiveChannelPreview("Chaîne 3", "Information", "Journal", "Débat", 0.31f),
-    LiveChannelPreview("Chaîne 4", "Divertissement", "Émission", "Série", 0.55f),
-)
+sealed interface LiveScreenState {
+    data object Loading : LiveScreenState
+    data class Ready(val channels: List<LiveChannelUi>) : LiveScreenState
+    data class Error(val message: String) : LiveScreenState
+}
 
 @Composable
 fun LiveTvScreen(
     profile: DeviceProfile,
+    state: LiveScreenState = LiveScreenState.Ready(emptyList()),
+    onRetry: () -> Unit = {},
+    onPreviewChannel: (LiveChannelUi) -> Unit = {},
+    onTuneChannel: (LiveChannelUi) -> Unit = {},
 ) {
-    var selectedCategory by remember { mutableStateOf("Toutes") }
-    var selectedChannel by remember { mutableStateOf(previewChannels.first()) }
+    when (state) {
+        LiveScreenState.Loading -> LiveLoadingState()
+        is LiveScreenState.Error -> LiveErrorState(
+            message = state.message,
+            onRetry = onRetry,
+        )
+        is LiveScreenState.Ready -> LiveReadyState(
+            profile = profile,
+            channels = state.channels,
+            onPreviewChannel = onPreviewChannel,
+            onTuneChannel = onTuneChannel,
+        )
+    }
+}
 
-    val categories = listOf("Toutes", "France", "Sports", "Information", "Divertissement")
-    val filteredChannels = if (selectedCategory == "Toutes") {
-        previewChannels
-    } else {
-        previewChannels.filter { it.category == selectedCategory }
+@Composable
+private fun LiveReadyState(
+    profile: DeviceProfile,
+    channels: List<LiveChannelUi>,
+    onPreviewChannel: (LiveChannelUi) -> Unit,
+    onTuneChannel: (LiveChannelUi) -> Unit,
+) {
+    val categories = remember(channels) {
+        listOf("Toutes") + channels.map { it.category }.filter { it.isNotBlank() }.distinct()
+    }
+    var selectedCategory by remember { mutableStateOf("Toutes") }
+    var selectedChannelId by remember(channels) { mutableStateOf(channels.firstOrNull()?.id) }
+
+    val filteredChannels = remember(channels, selectedCategory) {
+        if (selectedCategory == "Toutes") channels else channels.filter { it.category == selectedCategory }
+    }
+
+    val selectedChannel = channels.firstOrNull { it.id == selectedChannelId }
+        ?: filteredChannels.firstOrNull()
+        ?: channels.firstOrNull()
+
+    LaunchedEffect(selectedChannel?.id, profile) {
+        val channel = selectedChannel ?: return@LaunchedEffect
+        if (profile == DeviceProfile.Television) {
+            delay(TV_PREVIEW_DELAY_MS)
+            onPreviewChannel(channel)
+        }
+    }
+
+    if (channels.isEmpty()) {
+        LiveEmptyState()
+        return
     }
 
     if (profile == DeviceProfile.Mobile) {
         MobileLiveLayout(
             categories = categories,
             selectedCategory = selectedCategory,
-            onCategorySelected = { selectedCategory = it },
+            onCategorySelected = {
+                selectedCategory = it
+                selectedChannelId = channels.firstOrNull { channel ->
+                    it == "Toutes" || channel.category == it
+                }?.id
+            },
             channels = filteredChannels,
             selectedChannel = selectedChannel,
-            onChannelSelected = { selectedChannel = it },
+            onChannelSelected = { selectedChannelId = it.id },
+            onTuneChannel = onTuneChannel,
         )
     } else {
-        LargeScreenLiveLayout(
+        LargeLiveLayout(
             isTelevision = profile == DeviceProfile.Television,
             categories = categories,
             selectedCategory = selectedCategory,
-            onCategorySelected = { selectedCategory = it },
+            onCategorySelected = {
+                selectedCategory = it
+                selectedChannelId = channels.firstOrNull { channel ->
+                    it == "Toutes" || channel.category == it
+                }?.id
+            },
             channels = filteredChannels,
             selectedChannel = selectedChannel,
-            onChannelSelected = { selectedChannel = it },
+            onChannelSelected = { selectedChannelId = it.id },
+            onTuneChannel = onTuneChannel,
         )
     }
 }
@@ -98,9 +162,10 @@ private fun MobileLiveLayout(
     categories: List<String>,
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
-    channels: List<LiveChannelPreview>,
-    selectedChannel: LiveChannelPreview,
-    onChannelSelected: (LiveChannelPreview) -> Unit,
+    channels: List<LiveChannelUi>,
+    selectedChannel: LiveChannelUi?,
+    onChannelSelected: (LiveChannelUi) -> Unit,
+    onTuneChannel: (LiveChannelUi) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -109,28 +174,29 @@ private fun MobileLiveLayout(
     ) {
         LiveHeader()
         Spacer(Modifier.height(16.dp))
-        CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision = false)
+        CategoryRow(categories, selectedCategory, onCategorySelected, false)
         Spacer(Modifier.height(16.dp))
-        PlayerPreview(selectedChannel)
+        PlayerPanel(selectedChannel, onTuneChannel)
         Spacer(Modifier.height(18.dp))
-        ChannelList(channels, selectedChannel, onChannelSelected, isTelevision = false)
+        ChannelList(channels, selectedChannel, onChannelSelected, false)
     }
 }
 
 @Composable
-private fun LargeScreenLiveLayout(
+private fun LargeLiveLayout(
     isTelevision: Boolean,
     categories: List<String>,
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
-    channels: List<LiveChannelPreview>,
-    selectedChannel: LiveChannelPreview,
-    onChannelSelected: (LiveChannelPreview) -> Unit,
+    channels: List<LiveChannelUi>,
+    selectedChannel: LiveChannelUi?,
+    onChannelSelected: (LiveChannelUi) -> Unit,
+    onTuneChannel: (LiveChannelUi) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         LiveHeader()
         Spacer(Modifier.height(14.dp))
-        CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision = isTelevision)
+        CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision)
         Spacer(Modifier.height(18.dp))
 
         Row(
@@ -139,11 +205,11 @@ private fun LargeScreenLiveLayout(
         ) {
             Column(
                 modifier = Modifier
-                    .width(320.dp)
+                    .width(if (isTelevision) 390.dp else 330.dp)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState()),
             ) {
-                ChannelList(channels, selectedChannel, onChannelSelected, isTelevision = isTelevision)
+                ChannelList(channels, selectedChannel, onChannelSelected, isTelevision)
             }
 
             Box(
@@ -151,7 +217,7 @@ private fun LargeScreenLiveLayout(
                     .fillMaxHeight()
                     .weight(1f),
             ) {
-                PlayerPreview(selectedChannel)
+                PlayerPanel(selectedChannel, onTuneChannel)
             }
         }
     }
@@ -159,11 +225,9 @@ private fun LargeScreenLiveLayout(
 
 @Composable
 private fun LiveHeader() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            imageVector = Icons.Default.RadioButtonChecked,
+            imageVector = Icons.Default.LiveTv,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
@@ -172,11 +236,11 @@ private fun LiveHeader() {
             Text(
                 text = "TV en direct",
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.ExtraBold,
             )
             Text(
-                text = "Vos chaînes et programmes en cours",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = "Chaînes et programmes en cours",
+                color = ZyvioTextSecondary,
             )
         }
     }
@@ -203,11 +267,7 @@ private fun CategoryRow(
                     .clickable { onCategorySelected(category) },
                 shape = RoundedCornerShape(999.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (selected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
+                    containerColor = if (selected) MaterialTheme.colorScheme.primary else ZyvioSurface1,
                 ),
             ) {
                 Text(
@@ -221,115 +281,115 @@ private fun CategoryRow(
 }
 
 @Composable
-private fun PlayerPreview(channel: LiveChannelPreview) {
-    Column {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color(0xFF1E1E1E),
-                            Color(0xFF080808),
-                        ),
-                    ),
-                    shape = RoundedCornerShape(22.dp),
-                )
-                .height(260.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(10.dp))
+private fun PlayerPanel(
+    channel: LiveChannelUi?,
+    onTuneChannel: (LiveChannelUi) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = ZyvioSurface1,
+        shape = RoundedCornerShape(20.dp),
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(280.dp)
+                    .background(ZyvioSurface2, RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Tv,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = channel?.name ?: "Aucune chaîne sélectionnée",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Sélectionnez Regarder pour lancer le flux.",
+                        color = ZyvioTextSecondary,
+                    )
+                }
+            }
+
+            channel?.let {
+                Spacer(Modifier.height(16.dp))
                 Text(
-                    text = channel.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    text = it.currentProgram ?: "Programme en cours indisponible",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    text = "Lecteur vidéo natif prêt",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+
+                it.progress?.let { progress ->
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = ZyvioSurface2,
+                    )
+                }
+
+                if (!it.nextProgram.isNullOrBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "À suivre : " + it.nextProgram,
+                        color = ZyvioTextSecondary,
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { onTuneChannel(it) }) {
+                    Text("Regarder")
+                }
             }
         }
-
-        Spacer(Modifier.height(14.dp))
-
-        Text(
-            text = "Maintenant",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = channel.currentProgram,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(10.dp))
-        LinearProgressIndicator(
-            progress = { channel.progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "À suivre : ${channel.nextProgram}",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
 @Composable
 private fun ChannelList(
-    channels: List<LiveChannelPreview>,
-    selectedChannel: LiveChannelPreview,
-    onChannelSelected: (LiveChannelPreview) -> Unit,
+    channels: List<LiveChannelUi>,
+    selectedChannel: LiveChannelUi?,
+    onChannelSelected: (LiveChannelUi) -> Unit,
     isTelevision: Boolean,
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         channels.forEach { channel ->
-            val selected = channel == selectedChannel
+            val selected = channel.id == selectedChannel?.id
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .tvFocusEffect(isTelevision)
+                    .tvFocusEffect(isTelevision, cornerRadiusDp = 14)
                     .clickable { onChannelSelected(channel) },
                 colors = CardDefaults.cardColors(
-                    containerColor = if (selected) {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    },
+                    containerColor = if (selected) ZyvioRedTint else ZyvioSurface1,
                 ),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
+                    Surface(
                         modifier = Modifier
                             .width(54.dp)
-                            .height(54.dp)
-                            .background(
-                                Color(0xFF1D1D1D),
-                                RoundedCornerShape(12.dp),
-                            ),
-                        contentAlignment = Alignment.Center,
+                            .height(54.dp),
+                        color = ZyvioSurface2,
+                        shape = RoundedCornerShape(10.dp),
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Tv,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = channel.channelNumber ?: "TV",
+                                fontWeight = FontWeight.Bold,
+                                color = if (selected) MaterialTheme.colorScheme.primary else ZyvioTextSecondary,
+                            )
+                        }
                     }
 
                     Spacer(Modifier.width(12.dp))
@@ -342,28 +402,103 @@ private fun ChannelList(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = channel.currentProgram,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = channel.currentProgram ?: "Guide indisponible",
+                            color = ZyvioTextSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        LinearProgressIndicator(
-                            progress = { channel.progress.coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         )
                     }
                 }
             }
         }
+    }
+}
 
-        if (channels.isEmpty()) {
-            Text(
-                text = "Aucune chaîne dans cette catégorie.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+@Composable
+private fun LiveLoadingState() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(14.dp))
+            Text("Chargement des chaînes…")
         }
     }
 }
+
+@Composable
+private fun LiveErrorState(
+    message: String,
+    onRetry: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            color = ZyvioSurface1,
+            shape = RoundedCornerShape(18.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "Impossible de charger la TV",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = message,
+                    modifier = Modifier.padding(top = 8.dp),
+                    color = ZyvioTextSecondary,
+                )
+                Spacer(Modifier.height(18.dp))
+                OutlinedButton(onClick = onRetry) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Réessayer")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveEmptyState() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            color = ZyvioSurface1,
+            shape = RoundedCornerShape(18.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LiveTv,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "Aucune chaîne disponible",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Connectez une playlist réelle pour afficher vos chaînes.",
+                    modifier = Modifier.padding(top = 6.dp),
+                    color = ZyvioTextSecondary,
+                )
+            }
+        }
+    }
+}
+
+private const val TV_PREVIEW_DELAY_MS = 600L
