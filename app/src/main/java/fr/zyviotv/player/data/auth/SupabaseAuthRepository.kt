@@ -8,6 +8,8 @@ import fr.zyviotv.player.shared.auth.RegistrationCredentials
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.net.URI
+import java.net.URLDecoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -69,6 +71,38 @@ class SupabaseAuthRepository(
             } else {
                 AuthResult.Failure(readErrorMessage(response.body))
             }
+        }
+
+    suspend fun consumeMagicLink(url: String): AuthResult =
+        withContext(Dispatchers.IO) {
+            val uri = runCatching { URI(url) }.getOrNull()
+                ?: return@withContext AuthResult.Failure("Lien de récupération invalide.")
+
+            if (uri.scheme != "zyviotv" || uri.host != "parental-pin-recovery") {
+                return@withContext AuthResult.Failure("Lien de récupération invalide.")
+            }
+
+            val params = parseParameters(
+                listOfNotNull(uri.rawQuery, uri.rawFragment).joinToString("&"),
+            )
+            val accessToken = params["access_token"].orEmpty()
+            val refreshToken = params["refresh_token"].orEmpty()
+            val expiresIn = params["expires_in"]?.toLongOrNull() ?: 3600L
+
+            if (accessToken.isBlank() || refreshToken.isBlank()) {
+                return@withContext AuthResult.Failure(
+                    "Le lien de récupération a expiré ou ne contient pas de session valide.",
+                )
+            }
+
+            sessionStore.save(
+                SecureSessionStore.StoredSession(
+                    accessToken = accessToken,
+                    refreshToken = refreshToken,
+                    expiresAtEpochSeconds = (System.currentTimeMillis() / 1000L) + expiresIn,
+                ),
+            )
+            AuthResult.Success
         }
 
     override suspend fun signOut(): AuthResult =
@@ -148,6 +182,23 @@ class SupabaseAuthRepository(
             connection.disconnect()
         }
     }
+
+    private fun parseParameters(raw: String): Map<String, String> =
+        raw.split("&")
+            .mapNotNull { pair ->
+                val separator = pair.indexOf('=')
+                if (separator <= 0) return@mapNotNull null
+                val key = URLDecoder.decode(
+                    pair.substring(0, separator),
+                    StandardCharsets.UTF_8.name(),
+                )
+                val value = URLDecoder.decode(
+                    pair.substring(separator + 1),
+                    StandardCharsets.UTF_8.name(),
+                )
+                key to value
+            }
+            .toMap()
 
     private fun readErrorMessage(body: String): String {
         val json = runCatching { JSONObject(body) }.getOrNull()

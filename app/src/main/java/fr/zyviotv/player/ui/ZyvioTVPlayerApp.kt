@@ -68,6 +68,7 @@ import fr.zyviotv.player.ui.settings.CacheSettingsScreen
 import fr.zyviotv.player.ui.settings.DevicesSettingsScreen
 import fr.zyviotv.player.ui.settings.AddPlaylistScreen
 import fr.zyviotv.player.ui.settings.ParentalControlsScreen
+import fr.zyviotv.player.ui.settings.ParentalPinRecoveryScreen
 import fr.zyviotv.player.ui.settings.PlaybackDataSettingsScreen
 import fr.zyviotv.player.ui.settings.PlaylistSettingsScreen
 import fr.zyviotv.player.ui.settings.ProfilesSettingsScreen
@@ -130,7 +131,10 @@ private enum class AppDestination(
 
 @UnstableApi
 @Composable
-fun ZyvioTVPlayerApp() {
+fun ZyvioTVPlayerApp(
+    deepLink: String? = null,
+    onDeepLinkConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val profile = rememberDeviceProfile()
     val providerCatalog = rememberProviderCatalogSession()
@@ -174,6 +178,14 @@ fun ZyvioTVPlayerApp() {
     var playbackSyncContext by remember { mutableStateOf<PlaybackSyncContext?>(null) }
     var lastSyncedPositionMs by remember { mutableStateOf(0L) }
 
+    LaunchedEffect(deepLink) {
+        if (deepLink?.startsWith("zyviotv://parental-pin-recovery") == true) {
+            navController.navigate("parental-pin-recovery") {
+                launchSingleTop = true
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = "splash",
@@ -183,6 +195,27 @@ fun ZyvioTVPlayerApp() {
                 navController.navigate("auth") {
                     popUpTo("splash") { inclusive = true }
                 }
+            }
+        }
+
+        composable("parental-pin-recovery") {
+            val link = deepLink
+            if (link == null) {
+                LaunchedEffect(Unit) {
+                    navController.navigate("auth") {
+                        popUpTo("parental-pin-recovery") { inclusive = true }
+                    }
+                }
+            } else {
+                ParentalPinRecoveryScreen(
+                    deepLink = link,
+                    onCompleted = {
+                        onDeepLinkConsumed()
+                        navController.navigate("settings-parental") {
+                            popUpTo("parental-pin-recovery") { inclusive = true }
+                        }
+                    },
+                )
             }
         }
 
