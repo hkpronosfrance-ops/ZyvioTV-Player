@@ -72,10 +72,24 @@ fun HomeScreen(
     val readyProvider = providerState as? ProviderCatalogState.Ready
     val readyLibrary = libraryState as? LibraryState.Ready
 
-    val continueItems = readyLibrary?.snapshot?.progress
+    val allowedMovieIds = readyProvider?.snapshot?.movies?.mapTo(hashSetOf()) { it.id }.orEmpty()
+    val allowedSeriesIds = readyProvider?.snapshot?.series?.mapTo(hashSetOf()) { it.id }.orEmpty()
+    val allowedLiveIds = readyProvider?.snapshot?.liveChannels?.mapTo(hashSetOf()) { it.id }.orEmpty()
+
+    val filteredProgress = readyLibrary?.snapshot?.progress
         .orEmpty()
+        .filter { progress ->
+            !progress.completed &&
+                progress.positionMs > 0L &&
+                when (progress.contentType) {
+                    ProgressContentType.Movie -> progress.contentId in allowedMovieIds
+                    ProgressContentType.Episode ->
+                        progress.seriesId != null && progress.seriesId in allowedSeriesIds
+                }
+        }
+
+    val continueItems = filteredProgress
         .asSequence()
-        .filter { !it.completed && it.positionMs > 0L }
         .take(MAX_HOME_ITEMS)
         .map {
             HomeCardUi(
@@ -86,8 +100,17 @@ fun HomeScreen(
         }
         .toList()
 
-    val favoriteItems = readyLibrary?.snapshot?.favorites
+    val filteredFavorites = readyLibrary?.snapshot?.favorites
         .orEmpty()
+        .filter { favorite ->
+            when (favorite.contentType) {
+                FavoriteContentType.Live -> favorite.contentId in allowedLiveIds
+                FavoriteContentType.Movie -> favorite.contentId in allowedMovieIds
+                FavoriteContentType.Series -> favorite.contentId in allowedSeriesIds
+            }
+        }
+
+    val favoriteItems = filteredFavorites
         .take(MAX_HOME_ITEMS)
         .map {
             HomeCardUi(
@@ -170,6 +193,7 @@ fun HomeScreen(
                     HomeSection(
                         title = "Continuer à regarder",
                         items = continueItems,
+                        showAll = filteredProgress.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenContinueWatching,
                     )
@@ -179,6 +203,7 @@ fun HomeScreen(
                     HomeSection(
                         title = "Favoris",
                         items = favoriteItems,
+                        showAll = filteredFavorites.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenFavorites,
                     )
@@ -188,6 +213,7 @@ fun HomeScreen(
                     HomeSection(
                         title = "Chaînes disponibles",
                         items = liveItems,
+                        showAll = readyProvider?.snapshot?.liveChannels.orEmpty().size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenLive,
                     )
@@ -197,6 +223,7 @@ fun HomeScreen(
                     HomeSection(
                         title = "Films disponibles",
                         items = movieItems,
+                        showAll = readyProvider?.snapshot?.movies.orEmpty().size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenMovies,
                     )
@@ -206,6 +233,7 @@ fun HomeScreen(
                     HomeSection(
                         title = "Séries disponibles",
                         items = seriesItems,
+                        showAll = readyProvider?.snapshot?.series.orEmpty().size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenSeries,
                     )
@@ -411,6 +439,7 @@ private fun QuickActionCard(
 private fun HomeSection(
     title: String,
     items: List<HomeCardUi>,
+    showAll: Boolean,
     isTelevision: Boolean,
     onOpenSection: () -> Unit,
 ) {
@@ -426,7 +455,7 @@ private fun HomeSection(
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )
-        if (items.size >= MAX_HOME_ITEMS) {
+        if (showAll) {
             Button(
                 onClick = onOpenSection,
                 modifier = Modifier.tvFocusEffect(isTelevision, cornerRadiusDp = 10),
