@@ -1,5 +1,7 @@
 package fr.zyviotv.player.ui.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -68,6 +70,9 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
     var weekendLimit by remember { mutableStateOf("") }
     var warningMinutes by remember { mutableStateOf("10") }
     var scheduleEnabled by remember { mutableStateOf(false) }
+    var scheduleWindows by remember {
+        mutableStateOf<List<ParentalScheduleWindowUi>>(emptyList())
+    }
 
     suspend fun loadAccount() {
         loading = true
@@ -103,6 +108,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
         weekendLimit = loaded.weekendLimitMinutes?.toString().orEmpty()
         warningMinutes = loaded.warningMinutes.toString()
         scheduleEnabled = loaded.scheduleEnabled
+        scheduleWindows = parseScheduleWindows(loaded.scheduleWindowsJson)
     }
 
     LaunchedEffect(Unit) { loadAccount() }
@@ -119,7 +125,11 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
         return
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -336,7 +346,24 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                     title = "Plages horaires",
                     subtitle = "Les règles en cache restent appliquées hors ligne.",
                     checked = scheduleEnabled,
-                    onCheckedChange = { scheduleEnabled = it },
+                    onCheckedChange = { requested ->
+                        scheduleEnabled = requested
+                        if (requested && scheduleWindows.isEmpty()) {
+                            scheduleWindows = listOf(
+                                ParentalScheduleWindowUi(
+                                    days = setOf(1, 2, 3, 4, 5),
+                                    start = "16:30",
+                                    end = "19:30",
+                                ),
+                            )
+                        }
+                    },
+                )
+
+                ParentalScheduleEditor(
+                    windows = scheduleWindows,
+                    enabled = scheduleEnabled,
+                    onChange = { scheduleWindows = it },
                 )
 
                 Spacer(Modifier.height(10.dp))
@@ -344,6 +371,16 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                     enabled = !busy && actionPin.length == 4,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
+                        val scheduleError = if (scheduleEnabled) {
+                            validateScheduleWindows(scheduleWindows)
+                        } else {
+                            null
+                        }
+                        if (scheduleError != null) {
+                            message = scheduleError
+                            return@Button
+                        }
+
                         scope.launch {
                             busy = true
                             when (val result = repository.updateProfileSettings(
@@ -355,6 +392,11 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                                 weekendLimitMinutes = weekendLimit.toIntOrNull(),
                                 warningMinutes = warningMinutes.toIntOrNull() ?: 10,
                                 scheduleEnabled = scheduleEnabled,
+                                scheduleWindowsJson = if (scheduleEnabled) {
+                                    encodeScheduleWindows(scheduleWindows)
+                                } else {
+                                    "[]"
+                                },
                             )) {
                                 ParentalWriteResult.Success -> {
                                     actionPin = ""
