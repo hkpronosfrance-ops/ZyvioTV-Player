@@ -2,7 +2,6 @@ package fr.zyviotv.player.data.settings
 
 import android.content.Context
 import android.os.SystemClock
-import java.time.Instant
 import java.util.Calendar
 import java.util.TimeZone
 import org.json.JSONArray
@@ -20,8 +19,7 @@ class ParentalRuntimeCache(context: Context) {
     private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun store(profileId: String, state: ParentalRuntimeState) {
-        val serverNow = state.serverNow ?: return
-        val epoch = runCatching { Instant.parse(serverNow).toEpochMilli() }.getOrNull() ?: return
+        val epoch = state.serverNowEpochMillis ?: return
 
         preferences.edit()
             .putBoolean(key(profileId, "enabled"), state.parentalEnabled)
