@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,6 +74,7 @@ fun LiveTvScreen(
     onRetry: () -> Unit = {},
     onPreviewChannel: (LiveChannelUi) -> Unit = {},
     onTuneChannel: (LiveChannelUi) -> Unit = {},
+    onOpenGuide: () -> Unit = {},
 ) {
     when (state) {
         LiveScreenState.Loading -> LiveLoadingState()
@@ -85,6 +87,7 @@ fun LiveTvScreen(
             channels = state.channels,
             onPreviewChannel = onPreviewChannel,
             onTuneChannel = onTuneChannel,
+            onOpenGuide = onOpenGuide,
         )
     }
 }
@@ -95,6 +98,7 @@ private fun LiveReadyState(
     channels: List<LiveChannelUi>,
     onPreviewChannel: (LiveChannelUi) -> Unit,
     onTuneChannel: (LiveChannelUi) -> Unit,
+    onOpenGuide: () -> Unit,
 ) {
     val categories = remember(channels) {
         listOf("Toutes") + channels.map { it.category }.filter { it.isNotBlank() }.distinct()
@@ -137,6 +141,7 @@ private fun LiveReadyState(
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
             onTuneChannel = onTuneChannel,
+            onOpenGuide = onOpenGuide,
         )
     } else {
         LargeLiveLayout(
@@ -153,6 +158,7 @@ private fun LiveReadyState(
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
             onTuneChannel = onTuneChannel,
+            onOpenGuide = onOpenGuide,
         )
     }
 }
@@ -166,13 +172,14 @@ private fun MobileLiveLayout(
     selectedChannel: LiveChannelUi?,
     onChannelSelected: (LiveChannelUi) -> Unit,
     onTuneChannel: (LiveChannelUi) -> Unit,
+    onOpenGuide: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        LiveHeader()
+        LiveHeader(onOpenGuide)
         Spacer(Modifier.height(16.dp))
         CategoryRow(categories, selectedCategory, onCategorySelected, false)
         Spacer(Modifier.height(16.dp))
@@ -192,9 +199,10 @@ private fun LargeLiveLayout(
     selectedChannel: LiveChannelUi?,
     onChannelSelected: (LiveChannelUi) -> Unit,
     onTuneChannel: (LiveChannelUi) -> Unit,
+    onOpenGuide: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
-        LiveHeader()
+        LiveHeader(onOpenGuide)
         Spacer(Modifier.height(14.dp))
         CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision)
         Spacer(Modifier.height(18.dp))
@@ -224,15 +232,18 @@ private fun LargeLiveLayout(
 }
 
 @Composable
-private fun LiveHeader() {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun LiveHeader(onOpenGuide: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Icon(
             imageVector = Icons.Default.LiveTv,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.width(10.dp))
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(
                 text = "TV en direct",
                 style = MaterialTheme.typography.headlineMedium,
@@ -242,6 +253,9 @@ private fun LiveHeader() {
                 text = "Chaînes et programmes en cours",
                 color = ZyvioTextSecondary,
             )
+        }
+        TextButton(onClick = onOpenGuide) {
+            Text("Guide TV")
         }
     }
 }

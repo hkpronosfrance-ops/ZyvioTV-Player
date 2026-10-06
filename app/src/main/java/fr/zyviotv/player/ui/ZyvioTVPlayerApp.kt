@@ -40,6 +40,7 @@ import fr.zyviotv.player.ui.auth.AuthScreen
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.live.LiveTvScreen
+import fr.zyviotv.player.ui.epg.GuideEpgScreen
 import fr.zyviotv.player.ui.movies.MoviesScreen
 import fr.zyviotv.player.ui.series.SeriesScreen
 import fr.zyviotv.player.ui.search.SearchScreen
@@ -85,6 +86,23 @@ fun ZyvioTVPlayerApp() {
                     }
                 },
             )
+        }
+
+        composable("guide") {
+            AdaptiveShell(
+                profile = profile,
+                destinations = AppDestination.entries,
+                selectedRoute = AppDestination.Live.route,
+                onDestinationSelected = { target ->
+                    navController.navigate(target.route) {
+                        launchSingleTop = true
+                    }
+                },
+            ) {
+                GuideEpgScreen(
+                    profile = profile,
+                )
+            }
         }
 
         composable("search") {
@@ -142,7 +160,10 @@ fun ZyvioTVPlayerApp() {
                         }
 
                         AppDestination.Live -> {
-                            LiveTvScreen(profile = profile)
+                            LiveTvScreen(
+                                profile = profile,
+                                onOpenGuide = { navController.navigate("guide") },
+                            )
                         }
 
                         AppDestination.Movies -> {
