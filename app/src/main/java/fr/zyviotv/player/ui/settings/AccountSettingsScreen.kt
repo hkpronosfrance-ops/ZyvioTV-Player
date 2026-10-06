@@ -33,6 +33,7 @@ fun AccountSettingsScreen(
     onOpenPlaylists: () -> Unit = {},
     onOpenDevices: () -> Unit = {},
     onOpenPlaybackData: () -> Unit = {},
+    onOpenCache: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val repository = remember {
@@ -85,6 +86,15 @@ fun AccountSettingsScreen(
             onClick = onOpenPlaybackData,
         ) {
             Text("Lecture et données")
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(0.6f),
+            onClick = onOpenCache,
+        ) {
+            Text("Données et cache")
         }
 
         Spacer(Modifier.height(12.dp))
