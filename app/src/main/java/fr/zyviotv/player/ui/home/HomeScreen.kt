@@ -619,10 +619,9 @@ private fun Hero(
         )
         Column(
             modifier = Modifier
-                .padding(24.dp)
-            modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.78f),
+                .fillMaxWidth(0.78f)
+                .padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
@@ -776,6 +775,16 @@ private fun HomeRecentChannelsSection(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                     )
+                    if (!channel.logoUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = channel.logoUrl,
+                            contentDescription = channel.name,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(22.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
                     Text(
                         text = channel.name,
                         modifier = Modifier
@@ -846,6 +855,14 @@ private fun HomeNextEpisodesSection(
                         modifier = Modifier.align(Alignment.Center),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                     )
+                    if (!item.artworkUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = item.artworkUrl,
+                            contentDescription = item.seriesTitle,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -1009,6 +1026,14 @@ private fun HomeSection(
                         modifier = Modifier.align(Alignment.Center),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                     )
+                    if (!item.artworkUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = item.artworkUrl,
+                            contentDescription = item.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = if (item.poster) ContentScale.Crop else ContentScale.Fit,
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
