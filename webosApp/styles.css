@@ -44,3 +44,6 @@
 .home-progress{display:block;width:100%;height:5px;margin-top:12px;overflow:hidden;border-radius:999px;background:#333}
 .home-progress>span{display:block;height:100%;background:#fff}
 .catalog-card.favorite::after{content:"★ FAVORI";margin-top:10px;color:#fff;font-size:13px;font-weight:800;letter-spacing:.8px}
+
+.pin-actions{display:flex;gap:14px;margin-top:22px}
+.pin-actions .card{width:auto;height:auto;min-height:0;padding:15px 24px;align-items:center}

@@ -25,6 +25,20 @@
     </div>
   </section>
 
+  <section id="pin-screen" class="profile-screen" hidden>
+    <div class="auth-card">
+      <p class="eyebrow">CONTRÔLE PARENTAL</p>
+      <h1 id="pin-title">Code PIN requis</h1>
+      <p id="pin-copy" class="auth-copy">Saisissez le code PIN parental à 4 chiffres.</p>
+      <input id="pin-input" data-focusable type="password" inputmode="numeric" maxlength="4" autocomplete="off">
+      <div class="pin-actions">
+        <button class="primary" data-focusable data-action="verify-pin">Valider</button>
+        <button class="card" data-focusable data-action="cancel-pin">Annuler</button>
+      </div>
+      <div id="pin-status" class="status" aria-live="polite"></div>
+    </div>
+  </section>
+
   <section id="profile-screen" class="profile-screen" hidden>
     <div class="profile-shell">
       <p class="eyebrow">ZYVIOTV PLAYER</p>

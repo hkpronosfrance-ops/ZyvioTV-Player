@@ -174,6 +174,27 @@
     );
   }
 
+  async function getParentalSettings(session) {
+    return request("/rest/v1/rpc/player_get_parental_settings", session, {
+      method: "POST",
+      body: {},
+    });
+  }
+
+  async function verifyParentalPin(session, pin) {
+    return request("/rest/v1/rpc/player_verify_parental_pin", session, {
+      method: "POST",
+      body: { p_pin: String(pin || "") },
+    });
+  }
+
+  async function getProfileContentLocks(session, profileId) {
+    return request("/rest/v1/rpc/player_get_profile_content_locks", session, {
+      method: "POST",
+      body: { p_profile_id: profileId },
+    });
+  }
+
   async function listPlaylists(session) {
     const rows = await request(
       "/rest/v1/player_playlists" +
@@ -246,6 +267,9 @@
     upsertWatchProgress,
     listLiveHistory,
     recordLiveHistory,
+    getParentalSettings,
+    verifyParentalPin,
+    getProfileContentLocks,
     listPlaylists,
     getPlaylistSecret,
     providerConfigFromSecret,
