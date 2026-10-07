@@ -170,8 +170,9 @@ private fun LiveReadyState(
             onChannelSelected = { selectedChannelId = it.id },
             restoreFocusChannelId = selectedChannelId,
             onTuneChannel = { channel ->
-                if (isOffline) return@MobileLiveLayout
-                if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
+                if (!isOffline) {
+                    if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
+                }
             },
             isOffline = isOffline,
             onOpenGuide = onOpenGuide,
@@ -197,8 +198,9 @@ private fun LiveReadyState(
             onChannelSelected = { selectedChannelId = it.id },
             restoreFocusChannelId = selectedChannelId,
             onTuneChannel = { channel ->
-                if (isOffline) return@LargeLiveLayout
-                if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
+                if (!isOffline) {
+                    if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
+                }
             },
             isOffline = isOffline,
             onOpenGuide = onOpenGuide,
