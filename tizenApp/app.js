@@ -9,6 +9,11 @@
     const profileScreen = document.getElementById("profile-screen");
     const profileGrid = document.getElementById("profile-grid");
     const profileStatus = document.getElementById("profile-status");
+    const pinScreen = document.getElementById("pin-screen");
+    const pinTitle = document.getElementById("pin-title");
+    const pinCopy = document.getElementById("pin-copy");
+    const pinInput = document.getElementById("pin-input");
+    const pinStatus = document.getElementById("pin-status");
     const continueShelf = document.getElementById("continue-shelf");
     const continueCards = document.getElementById("continue-cards");
     const favoritesShelf = document.getElementById("favorites-shelf");
@@ -34,6 +39,9 @@
     let currentPlaylist = null;
     let favorites = [];
     let watchProgress = [];
+    let parentalSettings = null;
+    let contentLocks = null;
+    let pendingPinAction = null;
     let activePlayback = null;
 
     const PROFILE_STORAGE_KEY = "zyviotv.tizen.profile.v1";
@@ -44,6 +52,105 @@
 
     function persistProfileId(profileId) {
         try { localStorage.setItem(PROFILE_STORAGE_KEY, profileId); } catch (_) {}
+    }
+
+    function setPinStatus(message) {
+        if (pinStatus) pinStatus.textContent = message || "";
+    }
+
+    function isChildProfile() {
+        return currentProfile?.profile_type === "child";
+    }
+
+    function normalizeAdultLabel(value) {
+        return String(value || "")
+            .toLowerCase()
+            .normalize?.("NFD")
+            .replace?.(/[\u0300-\u036f]/g, "") || String(value || "").toLowerCase();
+    }
+
+    function isAdultCategoryLabel(value) {
+        const normalized = normalizeAdultLabel(value);
+        return ["adult", "adulte", "xxx", "porn", "erotic", "erotique", "18+", "+18"]
+            .some((token) => normalized.includes(token));
+    }
+
+    function contentKey(kind, id) {
+        return String(kind) + ":" + String(id);
+    }
+
+    function categoryKey(kind, id) {
+        return String(kind) + ":" + String(id);
+    }
+
+    function isLockedItem(kind, item) {
+        if (!isChildProfile() || !contentLocks?.parental_enabled) return false;
+
+        const lockedContent = new Set(contentLocks.locked_content_keys || []);
+        const lockedCategories = new Set(contentLocks.locked_category_keys || []);
+        const itemContentKey = contentKey(kind, item.id);
+        const itemCategoryKey = categoryKey(kind, item.categoryId || "");
+
+        if (lockedContent.has(itemContentKey)) return true;
+        if (item.categoryId && lockedCategories.has(itemCategoryKey)) return true;
+        if (isAdultCategoryLabel(item.categoryName || "")) return true;
+        return false;
+    }
+
+    function filterForProfile(kind, items) {
+        if (!isChildProfile() || !contentLocks?.parental_enabled) return items;
+        return items.filter((item) => !isLockedItem(kind, item));
+    }
+
+    function showPinPrompt(title, copy, action) {
+        pendingPinAction = action;
+        if (pinTitle) pinTitle.textContent = title || "Code PIN requis";
+        if (pinCopy) pinCopy.textContent = copy || "Saisissez le code PIN parental à 4 chiffres.";
+        if (pinInput) pinInput.value = "";
+        setPinStatus("");
+        if (pinScreen) pinScreen.hidden = false;
+        setTimeout(() => pinInput?.focus(), 0);
+    }
+
+    function closePinPrompt() {
+        pendingPinAction = null;
+        if (pinInput) pinInput.value = "";
+        setPinStatus("");
+        if (pinScreen) pinScreen.hidden = true;
+    }
+
+    async function verifyPendingPin() {
+        const pin = String(pinInput?.value || "").replace(/\D/g, "").slice(0, 4);
+        if (pin.length !== 4) {
+            setPinStatus("Saisissez exactement 4 chiffres.");
+            return;
+        }
+
+        setPinStatus("Vérification…");
+        try {
+            const result = await window.ZyvioCloud.verifyParentalPin(currentSession, pin);
+            if (result?.verified) {
+                const action = pendingPinAction;
+                closePinPrompt();
+                if (typeof action === "function") await action();
+                return;
+            }
+
+            if (result?.reason === "blocked") {
+                setPinStatus("Trop de tentatives. Réessayez dans quelques minutes.");
+            } else if (result?.reason === "pin_not_configured") {
+                setPinStatus("Aucun code PIN parental n’est configuré.");
+            } else {
+                const remaining = result?.attempts_remaining;
+                setPinStatus(
+                    remaining == null
+                        ? "Code PIN incorrect."
+                        : "Code PIN incorrect. " + remaining + " tentative(s) restante(s)."
+                );
+            }
+        } catch (_) {
+            setPinStatus("Impossible de vérifier le code PIN.");
+        }
     }
 
     function setProfileStatus(message) {
@@ -89,9 +196,11 @@
         persistProfileId(profile.id);
         setProfileStatus("Chargement de " + profile.name + "…");
 
-        [favorites, watchProgress] = await Promise.all([
+        [favorites, watchProgress, parentalSettings, contentLocks] = await Promise.all([
             window.ZyvioCloud.listFavorites(currentSession, profile.id),
             window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
+            window.ZyvioCloud.getParentalSettings(currentSession),
+            window.ZyvioCloud.getProfileContentLocks(currentSession, profile.id),
         ]);
 
         if (profileScreen) profileScreen.hidden = true;
@@ -397,7 +506,12 @@
         if (!currentSession || !currentProfile) return;
         try {
             favorites = await window.ZyvioCloud.listFavorites(currentSession, currentProfile.id);
-            const items = favorites.map((item) => ({
+            const visibleFavorites = favorites.filter((item) => {
+                if (!isChildProfile() || !contentLocks?.parental_enabled) return true;
+                const key = contentKey(item.content_type, item.content_id);
+                return !(contentLocks.locked_content_keys || []).includes(key);
+            });
+            const items = visibleFavorites.map((item) => ({
                 id: item.content_id,
                 title: item.title,
                 categoryName: item.content_type === "movie" ? "Film" :
@@ -520,7 +634,10 @@
         }
         setStatus("Chargement des films…");
         try {
-            movies = await window.ZyvioProvider.loadMovies(providerConfig);
+            movies = filterForProfile(
+                "movie",
+                await window.ZyvioProvider.loadMovies(providerConfig)
+            );
             renderCatalog("Films", movies, "movie");
             setStatus(movies.length ? movies.length + " films chargés." : "Aucun film disponible.");
         } catch (error) {
@@ -536,7 +653,10 @@
         }
         setStatus("Chargement des séries…");
         try {
-            series = await window.ZyvioProvider.loadSeries(providerConfig);
+            series = filterForProfile(
+                "series",
+                await window.ZyvioProvider.loadSeries(providerConfig)
+            );
             renderCatalog("Séries", series, "series");
             setStatus(series.length ? series.length + " séries chargées." : "Aucune série disponible.");
         } catch (error) {
@@ -552,7 +672,10 @@
         }
         setStatus("Chargement des chaînes…");
         try {
-            liveChannels = await window.ZyvioProvider.loadLive(providerConfig);
+            liveChannels = filterForProfile(
+                "live",
+                await window.ZyvioProvider.loadLive(providerConfig)
+            );
             setStatus(liveChannels.length + " chaînes chargées.");
             return liveChannels;
         } catch (error) {
@@ -740,6 +863,12 @@
             return;
         }
 
+        if (pinScreen && !pinScreen.hidden && /^\d$/.test(event.key) && document.activeElement === pinInput) {
+            pinInput.value = (pinInput.value + event.key).replace(/\D/g, "").slice(0, 4);
+            event.preventDefault();
+            return;
+        }
+
         if (event.key === "Enter") {
             const current = document.activeElement;
             if (current?.click) {
@@ -810,6 +939,16 @@
             return;
         }
 
+        if (target.dataset.action === "verify-pin") {
+            verifyPendingPin();
+            return;
+        }
+
+        if (target.dataset.action === "cancel-pin") {
+            closePinPrompt();
+            return;
+        }
+
         if (target.dataset.action === "sign-in") {
             signIn();
             return;
@@ -823,7 +962,15 @@
         }
 
         if (target.dataset.action === "sign-out") {
-            signOut();
+            if (isChildProfile() && parentalSettings?.enabled) {
+                showPinPrompt(
+                    "Déconnexion protégée",
+                    "Le code PIN parental est requis pour quitter le profil Enfant.",
+                    async () => signOut()
+                );
+            } else {
+                signOut();
+            }
             return;
         }
 
@@ -904,15 +1051,36 @@
         }
 
         if (target.dataset.section === "profiles") {
-            showProfilePicker();
+            if (isChildProfile() && parentalSettings?.enabled) {
+                showPinPrompt(
+                    "Quitter le profil Enfant",
+                    "Le code PIN parental est requis pour changer de profil.",
+                    async () => showProfilePicker()
+                );
+            } else {
+                showProfilePicker();
+            }
             return;
         }
 
         if (target.dataset.section === "more") {
-            hideCatalog();
-            activateSection("more");
-            setStatus("Plus — appuyez de nouveau pour vous déconnecter.");
-            target.dataset.action = "sign-out";
+            if (isChildProfile() && parentalSettings?.enabled) {
+                showPinPrompt(
+                    "Zone protégée",
+                    "Le code PIN parental est requis pour ouvrir les réglages du compte.",
+                    async () => {
+                        hideCatalog();
+                        activateSection("more");
+                        setStatus("Plus — appuyez de nouveau pour vous déconnecter.");
+                        target.dataset.action = "sign-out";
+                    }
+                );
+            } else {
+                hideCatalog();
+                activateSection("more");
+                setStatus("Plus — appuyez de nouveau pour vous déconnecter.");
+                target.dataset.action = "sign-out";
+            }
             return;
         }
 
