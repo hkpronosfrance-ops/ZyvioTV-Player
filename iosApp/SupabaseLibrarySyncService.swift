@@ -480,6 +480,8 @@ struct ProviderCatalogDTO {
     let playlistName: String
     let liveChannels: [ProviderLiveChannelDTO]
     let liveCategories: [String: String]
+    let movieCategories: [String: String]
+    let seriesCategories: [String: String]
     let movies: [ProviderMovieDTO]
     let series: [ProviderSeriesDTO]
 }
@@ -1110,6 +1112,8 @@ actor SupabaseProviderCatalogService {
                 playlistName: playlist.name,
                 liveChannels: [],
                 liveCategories: [:],
+                movieCategories: [:],
+                seriesCategories: [:],
                 movies: [],
                 series: []
             )
@@ -1135,6 +1139,18 @@ actor SupabaseProviderCatalogService {
             password: password,
             action: "get_live_streams"
         )
+        async let movieCategoryPayload = providerArray(
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            action: "get_vod_categories"
+        )
+        async let seriesCategoryPayload = providerArray(
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            action: "get_series_categories"
+        )
         async let moviePayload = providerArray(
             serverURL: serverURL,
             username: username,
@@ -1156,6 +1172,26 @@ actor SupabaseProviderCatalogService {
                 else {
                     return nil
                 }
+                return (id, name)
+            }
+        )
+
+        let movieCategories = Dictionary(
+            uniqueKeysWithValues: try await movieCategoryPayload.compactMap { item -> (String, String)? in
+                guard
+                    let id = stringValue(item["category_id"]),
+                    let name = cleanString(item["category_name"])
+                else { return nil }
+                return (id, name)
+            }
+        )
+
+        let seriesCategories = Dictionary(
+            uniqueKeysWithValues: try await seriesCategoryPayload.compactMap { item -> (String, String)? in
+                guard
+                    let id = stringValue(item["category_id"]),
+                    let name = cleanString(item["category_name"])
+                else { return nil }
                 return (id, name)
             }
         )
@@ -1235,18 +1271,72 @@ actor SupabaseProviderCatalogService {
             )
         }
 
+        let locks: ProfileContentLocksDTO? = {
+            guard let profileId = PlayerProfileSelectionStore.shared.activeProfileId else {
+                return nil
+            }
+            return try? await SupabaseParentalService.shared.contentLocks(profileId: profileId)
+        }()
+
+        let blockedCategories = Set(locks?.lockedCategoryKeys ?? [])
+        let blockedContent = Set(locks?.lockedContentKeys ?? [])
+        let shouldFilter = locks?.parentalEnabled == true && locks?.isChild == true
+
+        let visibleLive = shouldFilter ? liveChannels.filter { channel in
+            let contentKey = "live:" + channel.id
+            let categoryKey = channel.categoryId.map { "live:" + $0 }
+            let adultCategory = channel.categoryId
+                .flatMap { liveCategories[$0] }
+                .map(isAdultCategoryName) ?? false
+            return !blockedContent.contains(contentKey)
+                && !(categoryKey.map(blockedCategories.contains) ?? false)
+                && !adultCategory
+        } : liveChannels
+
+        let visibleMovies = shouldFilter ? movies.filter { movie in
+            let contentKey = "movie:" + movie.id
+            let categoryKey = movie.categoryId.map { "movie:" + $0 }
+            let adultCategory = movie.categoryId
+                .flatMap { movieCategories[$0] }
+                .map(isAdultCategoryName) ?? false
+            return !blockedContent.contains(contentKey)
+                && !(categoryKey.map(blockedCategories.contains) ?? false)
+                && !adultCategory
+        } : movies
+
+        let visibleSeries = shouldFilter ? series.filter { item in
+            let contentKey = "series:" + item.id
+            let categoryKey = item.categoryId.map { "series:" + $0 }
+            let adultCategory = item.categoryId
+                .flatMap { seriesCategories[$0] }
+                .map(isAdultCategoryName) ?? false
+            return !blockedContent.contains(contentKey)
+                && !(categoryKey.map(blockedCategories.contains) ?? false)
+                && !adultCategory
+        } : series
+
         return ProviderCatalogDTO(
             playlistId: playlist.id,
             playlistName: playlist.name,
-            liveChannels: liveChannels,
+            liveChannels: visibleLive,
             liveCategories: liveCategories,
-            movies: movies.sorted {
+            movieCategories: movieCategories,
+            seriesCategories: seriesCategories,
+            movies: visibleMovies.sorted {
                 ($0.addedAtEpochSeconds ?? 0) > ($1.addedAtEpochSeconds ?? 0)
             },
-            series: series.sorted {
+            series: visibleSeries.sorted {
                 ($0.addedAtEpochSeconds ?? 0) > ($1.addedAtEpochSeconds ?? 0)
             }
         )
+    }
+
+    private func isAdultCategoryName(_ value: String) -> Bool {
+        let normalized = value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+        return ["adult", "adulte", "xxx", "porn", "erotic", "erotique", "18+", "+18"]
+            .contains { normalized.contains($0) }
     }
 
     private struct PlaylistSecretPayload {
