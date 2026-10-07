@@ -402,7 +402,7 @@ actor SupabaseProviderCatalogService {
         let from = now - 3 * 60 * 60
         let to = now + 6 * 60 * 60
 
-        return items.compactMap { item in
+        let mapped: [ProviderEpgProgrammeDTO] = items.compactMap { item -> ProviderEpgProgrammeDTO? in
             guard
                 let start = epochSeconds(item["start_timestamp"]),
                 let end = epochSeconds(item["stop_timestamp"]),
@@ -421,16 +421,20 @@ actor SupabaseProviderCatalogService {
                 endEpochSeconds: end
             )
         }
-        .reduce(into: [ProviderEpgProgrammeDTO]()) { acc, item in
-            if !acc.contains(where: {
+
+        var unique: [ProviderEpgProgrammeDTO] = []
+        for item in mapped {
+            let exists = unique.contains {
                 $0.startEpochSeconds == item.startEpochSeconds &&
                 $0.endEpochSeconds == item.endEpochSeconds &&
                 $0.title == item.title
-            }) {
-                acc.append(item)
+            }
+            if !exists {
+                unique.append(item)
             }
         }
-        .sorted { $0.startEpochSeconds < $1.startEpochSeconds }
+
+        return unique.sorted { $0.startEpochSeconds < $1.startEpochSeconds }
     }
 
     private func decodeMaybeBase64(_ value: String) -> String {
