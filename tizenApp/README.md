@@ -54,3 +54,17 @@ The Samsung client now also provides:
 - dynamic provider network access required for arbitrary IPTV hosts
 
 The remaining Samsung work is catalog/UI parity beyond Live TV, EPG, favorites/history/resume, system/account gates, packaging/signing and physical Samsung certification.
+
+
+## Catalog + EPG parity
+
+The Samsung client now also supports:
+- Xtream movie categories and VOD streams
+- Xtream series categories and series listings
+- series detail loading with seasons/episodes metadata
+- direct movie playback through the existing player adapter
+- Xtream short EPG lookup for live channels
+- current-program display when live playback starts
+- remote-focusable dynamic movie/series grids
+
+M3U remains Live-only. Series episode playback, favorites/history/resume and richer EPG UI remain follow-up work.
