@@ -50,6 +50,7 @@ object M3uCatalogMapper {
                     ?.let(categoryIds::get),
                 logoUrl = entry.logoUrl?.trim()?.takeIf(String::isNotBlank),
                 streamUrl = streamUrl,
+                epgId = entry.tvgId?.trim()?.takeIf(String::isNotBlank),
             )
         }
 
