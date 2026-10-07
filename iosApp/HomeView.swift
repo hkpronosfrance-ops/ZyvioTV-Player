@@ -1,50 +1,172 @@
 import SwiftUI
 
 struct HomeView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    @State private var progress: [SyncedWatchProgressDTO] = []
+    @State private var favorites: [SyncedFavoriteDTO] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    private var continueWatching: [SyncedWatchProgressDTO] {
+        progress
+            .filter { !$0.completed && $0.positionMs > 0 }
+            .prefix(20)
+            .map { $0 }
+    }
+
+    private var nextEpisodes: [SyncedWatchProgressDTO] {
+        progress
+            .filter {
+                $0.contentType == "episode" &&
+                !$0.completed &&
+                $0.seriesId != nil
+            }
+            .prefix(20)
+            .map { $0 }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                ZStack(alignment: .bottomLeading) {
-                    LinearGradient(
-                        colors: [Color.red.opacity(0.35), Color.black],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+            VStack(alignment: .leading, spacing: 26) {
+                HomeHero(
+                    item: continueWatching.first,
+                    isWide: horizontalSizeClass == .regular
+                )
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("ZYVIOTV")
-                            .font(.system(size: 28, weight: .black))
-                        Text("PLAYER")
-                            .font(.caption.bold())
-                            .tracking(6)
-                            .foregroundStyle(.red)
-                        Text("Tout votre univers au même endroit.")
-                            .font(.title2.bold())
-                        Text("Retrouvez vos chaînes, films, séries et votre progression sur vos appareils.")
-                            .foregroundStyle(.secondary)
-                        Button("Regarder la TV") {}
-                            .buttonStyle(.borderedProminent)
+                if isLoading {
+                    HStack {
+                        Spacer()
+                        ProgressView("Chargement de votre bibliothèque…")
                             .tint(.red)
+                        Spacer()
                     }
-                    .padding(24)
-                }
-                .frame(height: 250)
-                .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .padding(.vertical, 30)
+                } else if let errorMessage {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Impossible de charger l’Accueil")
+                            .font(.title3.bold())
+                        Text(errorMessage)
+                            .foregroundStyle(.secondary)
+                        Button("Réessayer") {
+                            Task { await reload() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                } else {
+                    if !continueWatching.isEmpty {
+                        ProgressShelf(
+                            title: "Continuer à regarder",
+                            items: continueWatching
+                        )
+                    }
 
-                HomeShelf(title: "Reprendre la lecture")
-                HomeShelf(title: "TV en direct")
-                HomeShelf(title: "Films")
-                HomeShelf(title: "Séries")
+                    if !nextEpisodes.isEmpty {
+                        ProgressShelf(
+                            title: "Prochains épisodes",
+                            items: nextEpisodes
+                        )
+                    }
+
+                    if !favorites.isEmpty {
+                        FavoriteShelf(
+                            title: "Favoris",
+                            items: Array(favorites.prefix(20))
+                        )
+                    }
+
+                    if continueWatching.isEmpty && favorites.isEmpty {
+                        EmptyHomeState()
+                    }
+                }
             }
-            .padding(20)
+            .padding(horizontalSizeClass == .regular ? 32 : 20)
+            .padding(.vertical, 20)
         }
         .background(Color.black)
         .preferredColorScheme(.dark)
+        .refreshable {
+            await reload()
+        }
+        .task {
+            await reload()
+        }
+    }
+
+    @MainActor
+    private func reload() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            async let progressTask = SupabaseLibrarySyncService.shared.listWatchProgress(limit: 100)
+            async let favoritesTask = SupabaseLibrarySyncService.shared.listFavorites()
+
+            progress = try await progressTask
+            favorites = try await favoritesTask
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
     }
 }
 
-private struct HomeShelf: View {
+private struct HomeHero: View {
+    let item: SyncedWatchProgressDTO?
+    let isWide: Bool
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(
+                colors: [Color.red.opacity(0.30), Color.black],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("ZYVIOTV")
+                    .font(.system(size: isWide ? 34 : 28, weight: .black))
+                Text("PLAYER")
+                    .font(.caption.bold())
+                    .tracking(6)
+                    .foregroundStyle(.red)
+
+                if let item {
+                    Text(item.title)
+                        .font(isWide ? .largeTitle.bold() : .title.bold())
+                        .lineLimit(2)
+
+                    if let fraction = progressFraction(item) {
+                        ProgressView(value: fraction)
+                            .tint(.red)
+                            .frame(maxWidth: isWide ? 480 : .infinity)
+                    }
+
+                    Text("Reprenez votre lecture là où vous l’avez arrêtée.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Tout votre univers au même endroit.")
+                        .font(isWide ? .largeTitle.bold() : .title2.bold())
+                    Text("Vos favoris et votre progression se synchronisent avec votre compte ZYVIOTV.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(isWide ? 32 : 24)
+        }
+        .frame(height: isWide ? 300 : 240)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+    }
+}
+
+private struct ProgressShelf: View {
     let title: String
+    let items: [SyncedWatchProgressDTO]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -52,20 +174,134 @@ private struct HomeShelf: View {
                 .font(.title3.bold())
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(0..<4, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.white.opacity(0.08))
+                LazyHStack(spacing: 12) {
+                    ForEach(items) { item in
+                        VStack(alignment: .leading, spacing: 8) {
+                            AsyncArtwork(
+                                urlString: item.artworkUrl,
+                                fallbackSystemImage: item.contentType == "episode" ? "rectangle.stack.fill" : "film.fill"
+                            )
                             .frame(width: 180, height: 105)
-                            .overlay {
-                                Image(systemName: index == 0 ? "play.fill" : "tv")
-                                    .foregroundStyle(.red)
+
+                            Text(item.title)
+                                .font(.headline)
+                                .lineLimit(1)
+                                .frame(width: 180, alignment: .leading)
+
+                            if let fraction = progressFraction(item) {
+                                ProgressView(value: fraction)
+                                    .tint(.red)
+                                    .frame(width: 180)
                             }
+
+                            if let season = item.seasonNumber,
+                               let episode = item.episodeNumber {
+                                Text("S\(season) E\(episode)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
         }
     }
+}
+
+private struct FavoriteShelf: View {
+    let title: String
+    let items: [SyncedFavoriteDTO]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.title3.bold())
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(items) { item in
+                        VStack(alignment: .leading, spacing: 8) {
+                            AsyncArtwork(
+                                urlString: item.artworkUrl,
+                                fallbackSystemImage: favoriteIcon(item.contentType)
+                            )
+                            .frame(width: 150, height: 220)
+
+                            Text(item.title)
+                                .font(.headline)
+                                .lineLimit(2)
+                                .frame(width: 150, alignment: .leading)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func favoriteIcon(_ type: String) -> String {
+        switch type {
+        case "series": return "rectangle.stack.fill"
+        case "live": return "tv.fill"
+        default: return "film.fill"
+        }
+    }
+}
+
+private struct AsyncArtwork: View {
+    let urlString: String?
+    let fallbackSystemImage: String
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.07))
+
+            if let urlString,
+               let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        Image(systemName: fallbackSystemImage)
+                            .foregroundStyle(.red)
+                    }
+                }
+            } else {
+                Image(systemName: fallbackSystemImage)
+                    .foregroundStyle(.red)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct EmptyHomeState: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Votre Accueil est prêt")
+                .font(.title3.bold())
+            Text("Commencez à regarder un contenu ou ajoutez-le aux favoris pour le retrouver ici.")
+                .foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+}
+
+private func progressFraction(_ item: SyncedWatchProgressDTO) -> Double? {
+    guard let duration = item.durationMs, duration > 0 else {
+        return nil
+    }
+
+    return min(
+        max(Double(item.positionMs) / Double(duration), 0),
+        1
+    )
 }
 
 #Preview {
