@@ -8,6 +8,7 @@ on:
     paths:
       - "app/**"
       - "shared/**"
+      - "iosApp/**"
       - ".github/workflows/android-smoke-apk.yml"
       - "docs/SMOKE_TEST.md"
   push:
