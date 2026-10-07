@@ -118,6 +118,8 @@ fun PlayerScreen(
     onSeekForward: () -> Unit = {},
     onRetry: () -> Unit = {},
     onNext: () -> Unit = {},
+    onResumePlayback: () -> Unit = {},
+    onRestartFromBeginning: () -> Unit = {},
     onOpenTracks: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
@@ -169,6 +171,26 @@ fun PlayerScreen(
                             onTogglePlayPause()
                             controlsVisible = true
                             true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                            if (state.metadata.kind != PlaybackKind.Live && state.panel == PlayerPanel.None) {
+                                onSeekBack()
+                                controlsVisible = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (state.metadata.kind != PlaybackKind.Live && state.panel == PlayerPanel.None) {
+                                onSeekForward()
+                                controlsVisible = true
+                                true
+                            } else {
+                                false
+                            }
                         }
 
                         AndroidKeyEvent.KEYCODE_CHANNEL_UP -> {
@@ -264,6 +286,8 @@ fun PlayerScreen(
                 profile = profile,
                 title = state.metadata.title,
                 timeline = state.timeline,
+                onRestartFromBeginning = onRestartFromBeginning,
+                onResumePlayback = onResumePlayback,
             )
             PlayerPanel.ChannelNumber -> ChannelNumberPanel(
                 profile = profile,
@@ -730,6 +754,8 @@ private fun ResumePanel(
     profile: DeviceProfile,
     title: String,
     timeline: PlayerTimelineUi,
+    onRestartFromBeginning: () -> Unit,
+    onResumePlayback: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -767,8 +793,24 @@ private fun ResumePanel(
                 }
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = {}) { Text("Depuis le début") }
-                    Button(onClick = {}) { Text("Reprendre") }
+                    OutlinedButton(
+                        modifier = Modifier.tvFocusEffect(
+                            profile == DeviceProfile.Television,
+                            cornerRadiusDp = 10,
+                        ),
+                        onClick = onRestartFromBeginning,
+                    ) {
+                        Text("Depuis le début")
+                    }
+                    Button(
+                        modifier = Modifier.tvFocusEffect(
+                            profile == DeviceProfile.Television,
+                            cornerRadiusDp = 10,
+                        ),
+                        onClick = onResumePlayback,
+                    ) {
+                        Text("Reprendre")
+                    }
                 }
             }
         }
