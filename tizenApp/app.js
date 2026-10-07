@@ -364,13 +364,18 @@
                 window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
                 window.ZyvioCloud.getParentalSettings(currentSession),
                 window.ZyvioCloud.getProfileContentLocks(currentSession, profile.id),
-                window.ZyvioCloud.getParentalRuntimeState(currentSession, profile.id, ""),
+                window.ZyvioCloud.getParentalRuntimeState(currentSession, profile.id, "")
+                    .catch(() => null),
             ]);
         favorites = loadedFavorites;
         watchProgress = loadedProgress;
         parentalSettings = loadedParental;
         contentLocks = loadedLocks;
-        saveRuntimeCache(profile.id, loadedRuntime);
+        if (loadedRuntime) {
+            saveRuntimeCache(profile.id, loadedRuntime);
+        } else {
+            parentalRuntime = loadRuntimeCache(profile.id);
+        }
         runtimeExceptionUntilMs = Number(loadedRuntime?.exception_until_epoch_ms || 0);
         runtimeBlocked = false;
 
@@ -671,34 +676,39 @@
         };
     }
 
-    function promptRuntimeException(reason, contentKeyValue, onGranted) {
-        player?.pause();
+    function promptRuntimeException(
+        reason,
+        contentKeyValue,
+        onGranted,
+        resumeExistingPlayback = true
+    ) {
+        if (resumeExistingPlayback) player?.pause();
         runtimeBlocked = true;
         showPinPrompt(
             reason || "Lecture bloquée",
             "Saisissez le PIN parental pour continuer ce contenu pendant 30 minutes.",
             async () => {
                 runtimeBlocked = false;
-                player?.resume();
+                if (resumeExistingPlayback) player?.resume();
                 if (typeof onGranted === "function") await onGranted();
             },
             runtimeExceptionVerifier(contentKeyValue)
         );
     }
 
-    async function canStartPlayback(metadata) {
+    async function canStartPlayback(metadata, onGranted) {
         if (!isChildProfile() || !parentalSettings?.enabled) return true;
 
         const key = activeContentKey(metadata);
         const state = await refreshParentalRuntime(key);
         if (state?.blocked_by_time && !runtimeExceptionActive()) {
-            promptRuntimeException("Temps d’écran atteint", key);
+            promptRuntimeException("Temps d’écran atteint", key, onGranted, false);
             return false;
         }
 
         const reason = localRuntimeBlockReason();
         if (reason) {
-            promptRuntimeException(reason, key);
+            promptRuntimeException(reason, key, onGranted, false);
             return false;
         }
         return true;
@@ -848,7 +858,10 @@
     async function startTrackedPlayback(url, metadata) {
         await syncActivePlayback();
         await finishParentalPlayback();
-        const allowed = await canStartPlayback(metadata);
+        const allowed = await canStartPlayback(
+            metadata,
+            async () => startTrackedPlayback(url, metadata)
+        );
         if (!allowed) return false;
         await player.play(url);
         activePlayback = { ...metadata, trackProgress: true };
@@ -1080,7 +1093,10 @@
                 artworkUrl: channel.logo || null,
                 trackProgress: false,
             };
-            const allowed = await canStartPlayback(metadata);
+            const allowed = await canStartPlayback(
+                metadata,
+                async () => playChannel(channel)
+            );
             if (!allowed) return;
             await player.play(channel.streamUrl);
             activePlayback = metadata;
