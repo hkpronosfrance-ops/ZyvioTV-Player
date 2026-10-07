@@ -25,6 +25,15 @@
     </div>
   </section>
 
+  <section id="profile-screen" class="profile-screen" hidden>
+    <div class="profile-shell">
+      <p class="eyebrow">ZYVIOTV PLAYER</p>
+      <h1>Qui regarde ?</h1>
+      <div id="profile-grid" class="profile-grid"></div>
+      <div id="profile-status" class="status" aria-live="polite"></div>
+    </div>
+  </section>
+
   <main id="app-shell" class="shell" hidden>
     <aside class="rail">
       <div class="brand">
@@ -36,6 +45,7 @@
         <button data-focusable data-section="live" class="nav">TV</button>
         <button data-focusable data-section="movies" class="nav">Films</button>
         <button data-focusable data-section="series" class="nav">Séries</button>
+        <button data-focusable data-section="profiles" class="nav">Profils</button>
         <button data-focusable data-section="more" class="nav">Plus</button>
       </nav>
     </aside>
@@ -57,6 +67,26 @@
           <button class="card" data-focusable data-section="series">Séries</button>
           <button class="card" data-focusable data-section="favorites">Favoris</button>
         </div>
+      </section>
+
+      <section id="continue-shelf" class="shelf" hidden>
+        <h2>Reprendre la lecture</h2>
+        <div id="continue-cards" class="cards"></div>
+      </section>
+
+      <section id="recent-channels-shelf" class="shelf" hidden>
+        <h2>Chaînes récentes</h2>
+        <div id="recent-channel-cards" class="cards"></div>
+      </section>
+
+      <section id="favorites-shelf" class="shelf" hidden>
+        <h2>Favoris</h2>
+        <div id="favorite-cards" class="cards"></div>
+      </section>
+
+      <section id="history-shelf" class="shelf" hidden>
+        <h2>Récemment regardé</h2>
+        <div id="history-cards" class="cards"></div>
       </section>
 
       <section id="live-panel" class="catalog-panel" hidden>
