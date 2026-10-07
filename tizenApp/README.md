@@ -68,3 +68,19 @@ The Samsung client now also supports:
 - remote-focusable dynamic movie/series grids
 
 M3U remains Live-only. Series episode playback, favorites/history/resume and richer EPG UI remain follow-up work.
+
+
+## Episodes + library sync
+
+The Samsung client now also supports:
+- resolving Xtream episode streams from series details
+- direct episode playback
+- primary-profile restoration for profile-scoped library data
+- synced movie/series favorites
+- TV remote favorite toggle with the red color key
+- profile-scoped watch progress for movies and episodes
+- resume playback from saved position
+- periodic progress sync while playing
+- completion detection near the end of content
+
+Provider credentials and stream URLs are never written to library rows.
