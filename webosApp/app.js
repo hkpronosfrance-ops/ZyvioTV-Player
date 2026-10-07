@@ -6,6 +6,17 @@
   const authStatus = document.getElementById("auth-status");
   const authScreen = document.getElementById("auth-screen");
   const appShell = document.getElementById("app-shell");
+  const profileScreen = document.getElementById("profile-screen");
+  const profileGrid = document.getElementById("profile-grid");
+  const profileStatus = document.getElementById("profile-status");
+  const continueShelf = document.getElementById("continue-shelf");
+  const continueCards = document.getElementById("continue-cards");
+  const recentChannelsShelf = document.getElementById("recent-channels-shelf");
+  const recentChannelCards = document.getElementById("recent-channel-cards");
+  const favoritesShelf = document.getElementById("favorites-shelf");
+  const favoriteCards = document.getElementById("favorite-cards");
+  const historyShelf = document.getElementById("history-shelf");
+  const historyCards = document.getElementById("history-cards");
   const emailInput = document.getElementById("auth-email");
   const passwordInput = document.getElementById("auth-password");
   const livePanel = document.getElementById("live-panel");
@@ -28,6 +39,48 @@
   let episodes = [];
   let activeSection = "home";
   let activePlayback = null;
+  let profiles = [];
+  let currentProfile = null;
+  let favorites = [];
+  let watchProgress = [];
+  let liveHistory = [];
+
+  const PROFILE_STORAGE_KEY = "zyviotv.webos.profile.v1";
+
+  function storedProfileId() {
+    try { return localStorage.getItem(PROFILE_STORAGE_KEY); } catch (_) { return null; }
+  }
+
+  function persistProfileId(profileId) {
+    try { localStorage.setItem(PROFILE_STORAGE_KEY, profileId); } catch (_) {}
+  }
+
+  function setProfileStatus(text) {
+    if (profileStatus) profileStatus.textContent = text || "";
+  }
+
+  function libraryKey(playlistId, type, id) {
+    return String(playlistId || "") + ":" + String(type || "") + ":" + String(id || "");
+  }
+
+  function favoriteKey(itemOrType, id = null, playlistId = null) {
+    if (typeof itemOrType === "object" && itemOrType) {
+      return libraryKey(itemOrType.playlist_id, itemOrType.content_type, itemOrType.content_id);
+    }
+    return libraryKey(playlistId || currentPlaylist?.id, itemOrType, id);
+  }
+
+  function isFavorite(type, id) {
+    const key = favoriteKey(type, id);
+    return favorites.some((item) => favoriteKey(item) === key);
+  }
+
+  function progressFor(type, id) {
+    const key = libraryKey(currentPlaylist?.id, type, id);
+    return watchProgress.find(
+      (item) => libraryKey(item.playlist_id, item.content_type, item.content_id) === key
+    ) || null;
+  }
 
   function items() {
     return Array.from(document.querySelectorAll(selector))
@@ -55,6 +108,7 @@
     if (catalogGrid) catalogGrid.replaceChildren();
     if (livePanel) livePanel.hidden = true;
     if (accountPanel) accountPanel.hidden = true;
+    if (profileScreen) profileScreen.hidden = true;
     if (appShell) appShell.hidden = true;
     if (authScreen) authScreen.hidden = false;
     setAuthStatus(message);
@@ -63,8 +117,62 @@
 
   function showApp() {
     if (authScreen) authScreen.hidden = true;
+    if (profileScreen) profileScreen.hidden = true;
     if (appShell) appShell.hidden = false;
     setTimeout(() => document.querySelector('[data-section="home"]')?.focus(), 0);
+  }
+
+  function showProfilePicker() {
+    if (!profileScreen || !profileGrid) return;
+    if (authScreen) authScreen.hidden = true;
+    if (appShell) appShell.hidden = true;
+    profileScreen.hidden = false;
+    profileGrid.replaceChildren();
+
+    profiles.forEach((profile) => {
+      const button = document.createElement("button");
+      button.className = "profile-card";
+      button.dataset.focusable = "";
+      button.dataset.profileId = profile.id;
+
+      const avatar = document.createElement("span");
+      avatar.className = "profile-avatar";
+      avatar.textContent = String(profile.name || "?").trim().slice(0, 1).toUpperCase();
+
+      const name = document.createElement("strong");
+      name.textContent = profile.name || "Profil";
+
+      const type = document.createElement("small");
+      type.textContent = profile.profile_type === "child" ? "Enfant" : "Standard";
+
+      button.append(avatar, name, type);
+      profileGrid.append(button);
+    });
+
+    setProfileStatus("");
+    setTimeout(() => profileGrid.querySelector("[data-focusable]")?.focus(), 0);
+  }
+
+  async function selectProfile(profileId) {
+    const profile = profiles.find((item) => item.id === profileId);
+    if (!profile || !currentSession) return;
+
+    currentProfile = profile;
+    persistProfileId(profile.id);
+    setProfileStatus("Chargement de " + profile.name + "…");
+
+    const [loadedFavorites, loadedProgress, loadedLiveHistory] = await Promise.all([
+      window.ZyvioCloud.listFavorites(currentSession, profile.id),
+      window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
+      window.ZyvioCloud.listLiveHistory(currentSession, profile.id, 50),
+    ]);
+
+    favorites = loadedFavorites;
+    watchProgress = loadedProgress;
+    liveHistory = loadedLiveHistory;
+    showApp();
+    renderHomeShelves();
+    setStatus("Profil : " + profile.name);
   }
 
   function nextFocus(current, direction) {
