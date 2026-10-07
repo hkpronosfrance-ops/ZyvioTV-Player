@@ -9,6 +9,8 @@ on:
       - "app/**"
       - "shared/**"
       - "iosApp/**"
+      - "tizenApp/**"
+      - "webosApp/**"
       - ".github/workflows/android-smoke-apk.yml"
       - "docs/SMOKE_TEST.md"
   push:

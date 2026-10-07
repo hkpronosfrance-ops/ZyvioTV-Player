@@ -38,3 +38,19 @@ Provider credentials must not be embedded in source, query logs or static assets
 ## Validation
 
 The repository CI validates JavaScript syntax and the Tizen XML manifest structure. A real Samsung TV or Tizen emulator is still required for runtime certification.
+
+
+## Account + secure provider restoration
+
+The Samsung client now also provides:
+- Supabase email/password sign-in
+- persistent app-local Supabase session with refresh
+- session validation on startup
+- sign-out
+- restoration of the highest-priority enabled configured playlist
+- provider-secret retrieval only through `player_get_playlist_secret`
+- Xtream/M3U provider configuration kept in memory only
+- no IPTV credentials written to the DOM, status messages, logs or static assets
+- dynamic provider network access required for arbitrary IPTV hosts
+
+The remaining Samsung work is catalog/UI parity beyond Live TV, EPG, favorites/history/resume, system/account gates, packaging/signing and physical Samsung certification.

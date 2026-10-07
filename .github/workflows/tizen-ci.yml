@@ -30,7 +30,10 @@ jobs:
           node-version: "22"
 
       - name: Validate JavaScript syntax
-        run: node --check tizenApp/app.js
+        run: |
+          node --check tizenApp/app.js
+          node --check tizenApp/auth.js
+          node --check tizenApp/cloud.js
 
       - name: Validate provider core
         run: node tizenApp/provider.test.cjs
@@ -68,6 +71,8 @@ jobs:
           test -s tizenApp/index.html
           test -s tizenApp/styles.css
           test -s tizenApp/app.js
+          test -s tizenApp/auth.js
+          test -s tizenApp/cloud.js
           test -s tizenApp/provider.js
           test -s tizenApp/player.js
           test -s tizenApp/config.xml

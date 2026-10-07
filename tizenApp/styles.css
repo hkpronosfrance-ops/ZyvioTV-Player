@@ -182,3 +182,69 @@ nav {
   background: #000;
   z-index: 50;
 }
+
+
+.auth-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 48px;
+    background:
+        radial-gradient(circle at 72% 26%, rgba(239,35,60,.20), transparent 30%),
+        #070707;
+}
+
+.auth-card {
+    width: min(720px, 72vw);
+    padding: 44px;
+    border: 1px solid #242424;
+    border-radius: 28px;
+    background: #101010;
+    box-shadow: 0 28px 80px rgba(0,0,0,.46);
+}
+
+.auth-card h1 {
+    margin: 8px 0 10px;
+    font-size: 46px;
+}
+
+.auth-copy {
+    margin: 0 0 28px;
+    color: #bdbdbd;
+    font-size: 19px;
+}
+
+.auth-card label {
+    display: grid;
+    gap: 8px;
+    margin-top: 16px;
+    color: #cfcfcf;
+    font-weight: 700;
+}
+
+.auth-card input {
+    width: 100%;
+    padding: 16px 18px;
+    border: 2px solid #292929;
+    border-radius: 14px;
+    outline: none;
+    background: #171717;
+    color: #fff;
+    font-size: 20px;
+}
+
+.auth-card input:focus {
+    border-color: #fff;
+}
+
+.auth-card .primary:focus,
+[data-focusable]:focus {
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(255,255,255,.2);
+}
+
+[hidden] {
+    display: none !important;
+}
