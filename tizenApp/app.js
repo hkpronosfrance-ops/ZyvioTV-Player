@@ -232,7 +232,9 @@
     }
 
     function isLockedItem(kind, item) {
-        if (!isChildProfile() || !contentLocks?.parental_enabled) return false;
+        if (!isChildProfile()) return false;
+        if (isAdultCategoryLabel(item.categoryName || "")) return true;
+        if (!contentLocks?.parental_enabled) return false;
 
         const lockedContent = new Set(contentLocks.locked_content_keys || []);
         const lockedCategories = new Set(contentLocks.locked_category_keys || []);
@@ -241,12 +243,11 @@
 
         if (lockedContent.has(itemContentKey)) return true;
         if (item.categoryId && lockedCategories.has(itemCategoryKey)) return true;
-        if (isAdultCategoryLabel(item.categoryName || "")) return true;
         return false;
     }
 
     function filterForProfile(kind, items) {
-        if (!isChildProfile() || !contentLocks?.parental_enabled) return items;
+        if (!isChildProfile()) return items;
         return items.filter((item) => !isLockedItem(kind, item));
     }
 
@@ -1369,7 +1370,7 @@
         }
 
         if (target.dataset.action === "sign-out") {
-            if (isChildProfile() && parentalSettings?.enabled) {
+            if (isChildProfile()) {
                 showPinPrompt(
                     "Déconnexion protégée",
                     "Le code PIN parental est requis pour quitter le profil Enfant.",
@@ -1458,7 +1459,7 @@
         }
 
         if (target.dataset.section === "profiles") {
-            if (isChildProfile() && parentalSettings?.enabled) {
+            if (isChildProfile()) {
                 showPinPrompt(
                     "Quitter le profil Enfant",
                     "Le code PIN parental est requis pour changer de profil.",
@@ -1471,7 +1472,7 @@
         }
 
         if (target.dataset.section === "more") {
-            if (isChildProfile() && parentalSettings?.enabled) {
+            if (isChildProfile()) {
                 showPinPrompt(
                     "Zone protégée",
                     "Le code PIN parental est requis pour ouvrir les réglages du compte.",
