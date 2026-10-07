@@ -125,6 +125,7 @@ import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
 import fr.zyviotv.player.ui.startup.StartupSplashScreen
 import fr.zyviotv.player.ui.system.SystemStateScreen
+import fr.zyviotv.player.ui.tv.tvFocusEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -1946,7 +1947,13 @@ private fun AdaptiveShell(
         Row(Modifier.fillMaxSize()) {
             NavigationRail(
                 modifier = if (profile == DeviceProfile.Television) {
-                    Modifier.width(132.dp)
+                    Modifier
+                        .width(144.dp)
+                        .padding(
+                            start = 16.dp,
+                            top = 32.dp,
+                            bottom = 32.dp,
+                        )
                 } else {
                     Modifier
                 },
@@ -1955,6 +1962,10 @@ private fun AdaptiveShell(
                     NavigationRailItem(
                         selected = selectedRoute == destination.route,
                         onClick = { onDestinationSelected(destination) },
+                        modifier = Modifier.tvFocusEffect(
+                            enabled = profile == DeviceProfile.Television,
+                            cornerRadiusDp = 14,
+                        ),
                         icon = {
                             Icon(
                                 destination.icon,
@@ -1981,7 +1992,10 @@ private fun AdaptiveShell(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(if (profile == DeviceProfile.Television) 32.dp else 24.dp),
+                    .padding(
+                        horizontal = if (profile == DeviceProfile.Television) 48.dp else 24.dp,
+                        vertical = if (profile == DeviceProfile.Television) 32.dp else 24.dp,
+                    ),
             ) {
                 content()
             }

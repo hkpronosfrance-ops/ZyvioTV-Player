@@ -28,6 +28,18 @@ class DeviceProfileTest {
     }
 
     @Test
+    fun leanbackFeatureUsesTelevisionProfileEvenWithNormalUiMode() {
+        assertEquals(
+            DeviceProfile.Television,
+            resolveDeviceProfile(
+                screenWidthDp = 600,
+                uiModeType = Configuration.UI_MODE_TYPE_NORMAL,
+                hasTelevisionFeature = true,
+            ),
+        )
+    }
+
+    @Test
     fun televisionModeWinsRegardlessOfWidth() {
         assertEquals(
             DeviceProfile.Television,

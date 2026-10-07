@@ -12,7 +12,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import fr.zyviotv.player.ui.theme.ZyvioBase
 import fr.zyviotv.player.ui.theme.ZyvioTextPrimary
 
 fun Modifier.tvFocusEffect(
@@ -31,12 +30,7 @@ fun Modifier.tvFocusEffect(
             shadowElevation = if (enabled && focused) 20f else 0f
         }
         .border(
-            width = if (enabled && focused) 4.dp else 0.dp,
-            color = if (enabled && focused) ZyvioBase else Color.Transparent,
-            shape = shape,
-        )
-        .border(
-            width = if (enabled && focused) 2.dp else 0.dp,
+            width = if (enabled && focused) 3.dp else 0.dp,
             color = if (enabled && focused) ZyvioTextPrimary else Color.Transparent,
             shape = shape,
         )
