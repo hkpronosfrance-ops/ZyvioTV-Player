@@ -676,6 +676,7 @@ struct ProviderLiveChannelDTO: Identifiable, Hashable {
     let categoryId: String?
     let logoUrl: String?
     let streamUrl: URL
+    let epgId: String?
 }
 
 struct ProviderSeriesDTO: Identifiable, Hashable {
@@ -1588,7 +1589,8 @@ actor SupabaseProviderCatalogService {
                 name: name,
                 categoryId: cleanString(item["category_id"]),
                 logoUrl: cleanString(item["stream_icon"]),
-                streamUrl: streamURL
+                streamUrl: streamURL,
+                epgId: id
             )
         }
 
@@ -1714,6 +1716,8 @@ actor SupabaseProviderCatalogService {
         let serverURL: URL?
         let username: String?
         let password: String?
+        let m3uURL: URL?
+        let xmlTvURL: URL?
     }
 
     private func loadPlaylistSecret(playlistId: String) async throws -> PlaylistSecretPayload {
@@ -1757,7 +1761,26 @@ actor SupabaseProviderCatalogService {
                 providerType: providerType,
                 serverURL: serverURL,
                 username: username,
-                password: password
+                password: password,
+                m3uURL: nil,
+                xmlTvURL: nil
+            )
+        }
+
+        if providerType == "m3u" {
+            guard
+                let rawURL = cleanString(json["url"]),
+                let m3uURL = URL(string: rawURL)
+            else {
+                throw ProviderCatalogError.invalidSecret
+            }
+            return PlaylistSecretPayload(
+                providerType: providerType,
+                serverURL: nil,
+                username: nil,
+                password: nil,
+                m3uURL: m3uURL,
+                xmlTvURL: cleanString(json["xmltv_url"]).flatMap(URL.init(string:))
             )
         }
 
@@ -1765,7 +1788,9 @@ actor SupabaseProviderCatalogService {
             providerType: providerType,
             serverURL: nil,
             username: nil,
-            password: nil
+            password: nil,
+            m3uURL: nil,
+            xmlTvURL: nil
         )
     }
 
