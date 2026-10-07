@@ -153,7 +153,7 @@ private struct PlaylistBootstrapView: View {
     }
 }
 
-private struct PlaylistOnboardingView: View {
+struct PlaylistOnboardingView: View {
     let errorMessage: String?
     let onSaved: () -> Void
     let onSignedOut: () -> Void
