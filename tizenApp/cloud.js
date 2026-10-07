@@ -151,6 +151,43 @@
   }
 
 
+
+  async function listLiveHistory(session, profileId, limit = 50) {
+    const safeLimit = Math.min(Math.max(Number(limit || 50), 1), 100);
+    const rows = await request(
+      "/rest/v1/player_live_history" +
+      "?profile_id=eq." + encodeURIComponent(profileId) +
+      "&select=playlist_id,channel_id,channel_name,logo_url,last_watched_at" +
+      "&order=last_watched_at.desc&limit=" + safeLimit,
+      session
+    );
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  async function recordLiveHistory(session, profileId, item) {
+    const user = await currentUser(session);
+    const now = new Date().toISOString();
+    await request(
+      "/rest/v1/player_live_history" +
+      "?on_conflict=user_id,profile_id,playlist_id,channel_id",
+      session,
+      {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: [{
+          user_id: user.id,
+          profile_id: profileId,
+          playlist_id: item.playlistId,
+          channel_id: item.channelId,
+          channel_name: item.channelName,
+          logo_url: item.logoUrl || null,
+          last_watched_at: now,
+          updated_at: now,
+        }],
+      }
+    );
+  }
+
   async function getParentalSettings(session) {
     return request("/rest/v1/rpc/player_get_parental_settings", session, {
       method: "POST",
@@ -294,6 +331,8 @@
     removeFavorite,
     listWatchProgress,
     upsertWatchProgress,
+    listLiveHistory,
+    recordLiveHistory,
     getParentalSettings,
     verifyParentalPin,
     getProfileContentLocks,

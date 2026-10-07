@@ -135,3 +135,18 @@ The Samsung client now also supports:
 - Child-profile exits always PIN protected
 
 No database migration is required; the existing hardened parental RPCs are reused.
+
+
+## Live library parity
+
+The Samsung client now also supports:
+- profile-scoped live favorites using the existing favorites table
+- adding/removing the currently playing live channel with the red remote key
+- profile-scoped recent-channel history
+- automatic history recording after successful live playback
+- a real Recent Channels shelf on Home
+- direct playback from Recent Channels
+- direct playback of live favorites
+- Child-profile live favorites/history remain hidden unless the channel resolves through the already filtered live catalog
+
+No database migration is required; the existing live history and favorites tables/RLS are reused.
