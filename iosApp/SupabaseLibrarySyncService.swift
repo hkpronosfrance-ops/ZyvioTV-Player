@@ -395,10 +395,12 @@ actor SupabaseLibrarySyncService {
 }
 
 
-struct ProviderPlaylistDTO: Decodable {
+struct ProviderPlaylistDTO: Decodable, Identifiable {
     let id: String
     let name: String
     let providerType: String
+    let serverHost: String?
+    let playlistUrlHint: String?
     let secretStatus: String
     let isEnabled: Bool
     let priority: Int
@@ -407,9 +409,253 @@ struct ProviderPlaylistDTO: Decodable {
         case id
         case name
         case providerType = "provider_type"
+        case serverHost = "server_host"
+        case playlistUrlHint = "playlist_url_hint"
         case secretStatus = "secret_status"
         case isEnabled = "is_enabled"
         case priority
+    }
+}
+
+
+enum ApplePlaylistSecret {
+    case xtream(serverURL: String, username: String, password: String)
+    case m3u(url: String, xmlTvURL: String?)
+}
+
+actor SupabasePlaylistService {
+    static let shared = SupabasePlaylistService()
+
+    private let baseURL = URL(string: "https://nvpuftuluguawdxonmlc.supabase.co")!
+    private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
+    private let sessionStore = AuthSessionStore()
+
+    func listPlaylists() async throws -> [ProviderPlaylistDTO] {
+        try await get(
+            path: "/rest/v1/player_playlists?select=id,name,provider_type,server_host,playlist_url_hint,secret_status,is_enabled,priority&order=priority.asc,updated_at.desc"
+        )
+    }
+
+    func testXtream(serverURL: String, username: String, password: String) async throws {
+        guard
+            var components = URLComponents(string: serverURL.trimmingCharacters(in: .whitespacesAndNewlines))
+        else { throw PlaylistError.invalidURL }
+
+        var path = components.path
+        if !path.hasSuffix("/") { path += "/" }
+        path += "player_api.php"
+        components.path = path
+        components.queryItems = [
+            URLQueryItem(name: "username", value: username.trimmingCharacters(in: .whitespacesAndNewlines)),
+            URLQueryItem(name: "password", value: password),
+        ]
+        guard let url = components.url else { throw PlaylistError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("ZYVIOTV-Player/0.1", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let http = response as? HTTPURLResponse,
+            (200...299).contains(http.statusCode),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let userInfo = object["user_info"] as? [String: Any]
+        else { throw PlaylistError.providerUnavailable }
+
+        let authValue = userInfo["auth"]
+        let authenticated =
+            (authValue as? Int) == 1 ||
+            (authValue as? NSNumber)?.intValue == 1 ||
+            (authValue as? String) == "1"
+
+        guard authenticated else { throw PlaylistError.invalidCredentials }
+    }
+
+    func testM3u(urlString: String) async throws {
+        guard
+            let url = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines)),
+            ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+        else { throw PlaylistError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue("bytes=0-262143", forHTTPHeaderField: "Range")
+        request.setValue("ZYVIOTV-Player/0.1", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let http = response as? HTTPURLResponse,
+            (200...299).contains(http.statusCode) || http.statusCode == 206,
+            let prefix = String(data: data.prefix(262_144), encoding: .utf8),
+            prefix.uppercased().contains("#EXTM3U")
+        else { throw PlaylistError.invalidM3u }
+    }
+
+    func createPlaylist(
+        name: String,
+        providerType: String,
+        serverHost: String?,
+        playlistUrlHint: String?
+    ) async throws -> String {
+        let playlists = try await listPlaylists()
+        guard playlists.count < 10 else { throw PlaylistError.limitReached }
+        let userId = try await currentUserId()
+        let priority = min((playlists.map(\.priority).max() ?? 0) + 1, 10)
+        let now = ISO8601DateFormatter().string(from: Date())
+
+        let body: [[String: Any]] = [[
+            "user_id": userId,
+            "name": name.trimmingCharacters(in: .whitespacesAndNewlines),
+            "provider_type": providerType,
+            "server_host": serverHost ?? NSNull(),
+            "playlist_url_hint": playlistUrlHint ?? NSNull(),
+            "secret_status": "not_configured",
+            "is_enabled": true,
+            "priority": priority,
+            "updated_at": now,
+        ]]
+
+        let data = try await request(
+            path: "/rest/v1/player_playlists",
+            method: "POST",
+            payload: body,
+            prefer: "return=representation"
+        )
+        struct Created: Decodable { let id: String }
+        guard let first = try JSONDecoder().decode([Created].self, from: data).first else {
+            throw PlaylistError.invalidResponse
+        }
+        return first.id
+    }
+
+    func setSecret(playlistId: String, secret: ApplePlaylistSecret) async throws {
+        let secretBody: [String: Any]
+        switch secret {
+        case let .xtream(serverURL, username, password):
+            secretBody = [
+                "provider_type": "xtream",
+                "server_url": serverURL,
+                "username": username,
+                "password": password,
+            ]
+        case let .m3u(url, xmlTvURL):
+            secretBody = [
+                "provider_type": "m3u",
+                "url": url,
+                "xmltv_url": xmlTvURL ?? NSNull(),
+            ]
+        }
+
+        _ = try await request(
+            path: "/rest/v1/rpc/player_set_playlist_secret",
+            method: "POST",
+            payload: [
+                "p_playlist_id": playlistId,
+                "p_secret": secretBody,
+            ]
+        )
+    }
+
+    func setEnabled(id: String, enabled: Bool) async throws {
+        try await patch(id: id, fields: ["is_enabled": enabled])
+    }
+
+    func setPriority(id: String, priority: Int) async throws {
+        try await patch(id: id, fields: ["priority": min(max(priority, 1), 10)])
+    }
+
+    func rename(id: String, name: String) async throws {
+        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { throw PlaylistError.emptyName }
+        try await patch(id: id, fields: ["name": clean])
+    }
+
+    func delete(id: String) async throws {
+        _ = try await request(
+            path: "/rest/v1/player_playlists?id=eq.\(encoded(id))",
+            method: "DELETE"
+        )
+    }
+
+    private func patch(id: String, fields: [String: Any]) async throws {
+        var payload = fields
+        payload["updated_at"] = ISO8601DateFormatter().string(from: Date())
+        _ = try await request(
+            path: "/rest/v1/player_playlists?id=eq.\(encoded(id))",
+            method: "PATCH",
+            payload: payload,
+            prefer: "return=minimal"
+        )
+    }
+
+    private func currentUserId() async throws -> String {
+        struct CurrentUser: Decodable { let id: String }
+        let user: CurrentUser = try await get(path: "/auth/v1/user")
+        return user.id
+    }
+
+    private func get<T: Decodable>(path: String) async throws -> T {
+        let data = try await request(path: path, method: "GET")
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func request(
+        path: String,
+        method: String,
+        payload: Any? = nil,
+        prefer: String? = nil
+    ) async throws -> Data {
+        guard let session = sessionStore.load() else { throw PlaylistError.noSession }
+        guard let url = URL(string: path, relativeTo: baseURL) else { throw PlaylistError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        if let prefer { request.setValue(prefer, forHTTPHeaderField: "Prefer") }
+        if let payload { request.httpBody = try JSONSerialization.data(withJSONObject: payload) }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw PlaylistError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else { throw PlaylistError.server }
+        return data
+    }
+
+    private func encoded(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=+?")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    enum PlaylistError: LocalizedError {
+        case noSession
+        case invalidURL
+        case invalidResponse
+        case providerUnavailable
+        case invalidCredentials
+        case invalidM3u
+        case limitReached
+        case emptyName
+        case server
+
+        var errorDescription: String? {
+            switch self {
+            case .noSession: return "Session absente."
+            case .invalidURL: return "Adresse invalide."
+            case .invalidResponse: return "Réponse serveur invalide."
+            case .providerUnavailable: return "Le fournisseur IPTV ne répond pas."
+            case .invalidCredentials: return "Identifiants Xtream invalides."
+            case .invalidM3u: return "Cette adresse ne contient pas une playlist M3U valide."
+            case .limitReached: return "La limite de 10 playlists est atteinte."
+            case .emptyName: return "Le nom de la playlist est vide."
+            case .server: return "Impossible de synchroniser la playlist."
+            }
+        }
     }
 }
 
