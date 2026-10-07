@@ -62,17 +62,21 @@ fun PlayerHost(
     }
     val initialAudioLanguage = when (profileMediaPreferences?.audioLanguage) {
         "Français" -> "fr"
-        "Original", "Auto", null -> preferenceSnapshot.preferredAudioLanguage
-        else -> preferenceSnapshot.preferredAudioLanguage
+        "Original", "Auto" -> null
+        null -> preferenceSnapshot.preferredAudioLanguage
+        else -> null
     }
     val initialSubtitleLanguage = when (profileMediaPreferences?.subtitleLanguage) {
         "Français" -> "fr"
-        "Auto", "Désactivés", null -> preferenceSnapshot.preferredSubtitleLanguage
-        else -> preferenceSnapshot.preferredSubtitleLanguage
+        "Auto", "Désactivés" -> null
+        null -> preferenceSnapshot.preferredSubtitleLanguage
+        else -> null
     }
     val initialSubtitlesEnabled = when (profileMediaPreferences?.subtitleLanguage) {
         "Désactivés" -> false
-        else -> preferenceSnapshot.subtitlesEnabled
+        "Auto", "Français" -> true
+        null -> preferenceSnapshot.subtitlesEnabled
+        else -> true
     }
 
     val effectiveRequest = remember(request) {
