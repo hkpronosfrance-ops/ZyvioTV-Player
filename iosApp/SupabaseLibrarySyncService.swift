@@ -590,6 +590,32 @@ struct ParentalWriteDTO: Decodable {
     let reason: String?
 }
 
+struct ProfileParentalSettingsDTO: Decodable {
+    let profileId: String
+    let profileName: String
+    let profileType: String
+    let isPrimary: Bool
+    let maxAge: Int?
+    let hideLocked: Bool
+    let dailyLimitMinutes: Int?
+    let weekendLimitMinutes: Int?
+    let warningMinutes: Int
+    let scheduleEnabled: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case profileId = "profile_id"
+        case profileName = "profile_name"
+        case profileType = "profile_type"
+        case isPrimary = "is_primary"
+        case maxAge = "max_age"
+        case hideLocked = "hide_locked"
+        case dailyLimitMinutes = "daily_limit_minutes"
+        case weekendLimitMinutes = "weekend_limit_minutes"
+        case warningMinutes = "warning_minutes"
+        case scheduleEnabled = "schedule_enabled"
+    }
+}
+
 actor SupabaseParentalService {
     static let shared = SupabaseParentalService()
 
