@@ -794,7 +794,11 @@ fun ZyvioTVPlayerApp(
                             ?.snapshot
                             ?.liveChannels
                             ?.firstOrNull { it.id == channel.id }
-                        if (source != null) {
+                        if (
+                            source != null &&
+                            readyProvider?.isOffline != true &&
+                            source.streamUrl.isNotBlank()
+                        ) {
                             playbackRequest = PlaybackRequest(
                                 title = source.name,
                                 streamUrl = source.streamUrl,
@@ -809,12 +813,17 @@ fun ZyvioTVPlayerApp(
                             ?.snapshot
                             ?.liveChannels
                             ?.firstOrNull { it.id == channel.id }
-                        if (source != null) {
+                        if (
+                            source != null &&
+                            readyProvider?.isOffline != true &&
+                            source.streamUrl.isNotBlank()
+                        ) {
                             playbackRequest = PlaybackRequest(
                                 title = source.name,
                                 streamUrl = source.streamUrl,
                                 kind = PlaybackKind.Live,
                             )
+                            playbackSyncContext = null
                             navController.navigate("player")
                         }
                     },
