@@ -9,6 +9,11 @@
   const profileScreen = document.getElementById("profile-screen");
   const profileGrid = document.getElementById("profile-grid");
   const profileStatus = document.getElementById("profile-status");
+  const pinScreen = document.getElementById("pin-screen");
+  const pinTitle = document.getElementById("pin-title");
+  const pinCopy = document.getElementById("pin-copy");
+  const pinInput = document.getElementById("pin-input");
+  const pinStatus = document.getElementById("pin-status");
   const continueShelf = document.getElementById("continue-shelf");
   const continueCards = document.getElementById("continue-cards");
   const recentChannelsShelf = document.getElementById("recent-channels-shelf");
@@ -44,6 +49,9 @@
   let favorites = [];
   let watchProgress = [];
   let liveHistory = [];
+  let parentalSettings = null;
+  let contentLocks = null;
+  let pendingPinAction = null;
 
   const PROFILE_STORAGE_KEY = "zyviotv.webos.profile.v1";
 
@@ -82,6 +90,93 @@
     ) || null;
   }
 
+  function isChildProfile() {
+    return currentProfile?.profile_type === "child";
+  }
+
+  function contentKey(type, id) {
+    return String(type || "") + ":" + String(id || "");
+  }
+
+  function normalizedText(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
+  function isAdultLabel(value) {
+    const text = normalizedText(value);
+    return [
+      "adult", "adulte", "xxx", "porn", "porno", "18+", "+18", "erotic", "erotique"
+    ].some((token) => text.includes(token));
+  }
+
+  function isLockedForChild(type, item) {
+    if (!isChildProfile() || !parentalSettings?.enabled) return false;
+
+    const category = item?.categoryName || item?.category_name || "";
+    const title = item?.title || item?.name || "";
+    if (isAdultLabel(category) || isAdultLabel(title)) return true;
+
+    const lockedKeys = Array.isArray(contentLocks?.locked_content_keys)
+      ? contentLocks.locked_content_keys
+      : [];
+    return lockedKeys.includes(contentKey(type, item?.id));
+  }
+
+  function filterForProfile(type, entries) {
+    return (Array.isArray(entries) ? entries : []).filter((item) => !isLockedForChild(type, item));
+  }
+
+  function showPinPrompt(title, copy, action) {
+    pendingPinAction = typeof action === "function" ? action : null;
+    if (pinTitle) pinTitle.textContent = title || "Code PIN requis";
+    if (pinCopy) pinCopy.textContent = copy || "Saisissez le code PIN parental à 4 chiffres.";
+    if (pinStatus) pinStatus.textContent = "";
+    if (pinInput) pinInput.value = "";
+    if (pinScreen) pinScreen.hidden = false;
+    setTimeout(() => pinInput?.focus(), 0);
+  }
+
+  function closePinPrompt() {
+    pendingPinAction = null;
+    if (pinInput) pinInput.value = "";
+    if (pinStatus) pinStatus.textContent = "";
+    if (pinScreen) pinScreen.hidden = true;
+  }
+
+  async function verifyPendingPin() {
+    const pin = String(pinInput?.value || "").replace(/\D/g, "").slice(0, 4);
+    if (pin.length !== 4) {
+      if (pinStatus) pinStatus.textContent = "Saisissez les 4 chiffres du code PIN.";
+      return;
+    }
+
+    if (pinStatus) pinStatus.textContent = "Vérification…";
+    try {
+      const result = await window.ZyvioCloud.verifyParentalPin(currentSession, pin);
+      if (!result?.success) {
+        const reason = result?.reason;
+        if (pinStatus) {
+          pinStatus.textContent = reason === "blocked"
+            ? "Trop de tentatives. Réessayez dans quelques minutes."
+            : reason === "pin_not_configured"
+              ? "Aucun code PIN parental n’est configuré."
+              : "Code PIN incorrect.";
+        }
+        if (pinInput) {
+          pinInput.value = "";
+          pinInput.focus();
+        }
+        return;
+      }
+
+      const action = pendingPinAction;
+      closePinPrompt();
+      if (action) await action();
+    } catch (_) {
+      if (pinStatus) pinStatus.textContent = "Impossible de vérifier le code PIN.";
+    }
+  }
+
   function items() {
     return Array.from(document.querySelectorAll(selector))
       .filter((el) => !el.disabled && el.offsetParent !== null);
@@ -105,6 +200,9 @@
     favorites = [];
     watchProgress = [];
     liveHistory = [];
+    parentalSettings = null;
+    contentLocks = null;
+    pendingPinAction = null;
     liveChannels = [];
     movies = [];
     series = [];
@@ -114,6 +212,7 @@
     if (livePanel) livePanel.hidden = true;
     if (accountPanel) accountPanel.hidden = true;
     if (profileScreen) profileScreen.hidden = true;
+    if (pinScreen) pinScreen.hidden = true;
     if (appShell) appShell.hidden = true;
     if (authScreen) authScreen.hidden = false;
     setAuthStatus(message);
@@ -123,6 +222,7 @@
   function showApp() {
     if (authScreen) authScreen.hidden = true;
     if (profileScreen) profileScreen.hidden = true;
+    if (pinScreen) pinScreen.hidden = true;
     if (appShell) appShell.hidden = false;
     setTimeout(() => document.querySelector('[data-section="home"]')?.focus(), 0);
   }
@@ -166,15 +266,28 @@
     persistProfileId(profile.id);
     setProfileStatus("Chargement de " + profile.name + "…");
 
-    const [loadedFavorites, loadedProgress, loadedLiveHistory] = await Promise.all([
+    const [
+      loadedFavorites,
+      loadedProgress,
+      loadedLiveHistory,
+      loadedParental,
+      loadedLocks,
+    ] = await Promise.all([
       window.ZyvioCloud.listFavorites(currentSession, profile.id),
       window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
       window.ZyvioCloud.listLiveHistory(currentSession, profile.id, 50),
+      window.ZyvioCloud.getParentalSettings(currentSession),
+      window.ZyvioCloud.getProfileContentLocks(currentSession, profile.id),
     ]);
 
     favorites = loadedFavorites;
     watchProgress = loadedProgress;
     liveHistory = loadedLiveHistory;
+    parentalSettings = loadedParental;
+    contentLocks = loadedLocks;
+    liveChannels = filterForProfile("live", liveChannels);
+    movies = filterForProfile("movie", movies);
+    series = filterForProfile("series", series);
     showApp();
     renderHomeShelves();
     setStatus("Profil : " + profile.name);
@@ -262,11 +375,31 @@
     }
 
     if (section === "profiles") {
-      showProfilePicker();
+      if (isChildProfile()) {
+        showPinPrompt(
+          "Changer de profil",
+          "Le code PIN parental est requis pour quitter le profil Enfant.",
+          async () => showProfilePicker()
+        );
+      } else {
+        showProfilePicker();
+      }
       return;
     }
 
     if (section === "more") {
+      if (isChildProfile()) {
+        showPinPrompt(
+          "Accès protégé",
+          "Le code PIN parental est requis pour accéder à cette section.",
+          async () => {
+            if (accountPanel) accountPanel.hidden = false;
+            setStatus("Plus");
+            setTimeout(() => accountPanel?.querySelector("[data-focusable]")?.focus(), 0);
+          }
+        );
+        return;
+      }
       if (accountPanel) accountPanel.hidden = false;
       setStatus("Plus");
       setTimeout(() => accountPanel?.querySelector("[data-focusable]")?.focus(), 0);
@@ -412,7 +545,7 @@
 
     setStatus("Chargement des chaînes…");
     try {
-      liveChannels = await window.ZyvioProvider.loadLive(providerConfig);
+      liveChannels = filterForProfile("live", await window.ZyvioProvider.loadLive(providerConfig));
       renderLive();
       setStatus(liveChannels.length + " chaînes chargées.");
       return liveChannels;
@@ -479,7 +612,7 @@
 
     setStatus("Chargement des films…");
     try {
-      movies = await window.ZyvioProvider.loadMovies(providerConfig);
+      movies = filterForProfile("movie", await window.ZyvioProvider.loadMovies(providerConfig));
       renderCatalog("Films", movies, "movie");
       setStatus(movies.length + " films chargés.");
       return movies;
@@ -508,7 +641,7 @@
 
     setStatus("Chargement des séries…");
     try {
-      series = await window.ZyvioProvider.loadSeries(providerConfig);
+      series = filterForProfile("series", await window.ZyvioProvider.loadSeries(providerConfig));
       renderCatalog("Séries", series, "series");
       setStatus(series.length + " séries chargées.");
       return series;
@@ -539,7 +672,18 @@
     if (!currentSession || !currentProfile) return;
     try {
       favorites = await window.ZyvioCloud.listFavorites(currentSession, currentProfile.id);
-      const entries = favorites.slice(0, 80).map((item) => ({
+      const visibleFavorites = favorites.filter((item) => {
+        if (!isChildProfile() || !parentalSettings?.enabled) return true;
+        const lockedKeys = Array.isArray(contentLocks?.locked_content_keys)
+          ? contentLocks.locked_content_keys
+          : [];
+        if (lockedKeys.includes(contentKey(item.content_type, item.content_id))) return false;
+        if (item.content_type === "live") {
+          return liveChannels.some((channel) => String(channel.id) === String(item.content_id));
+        }
+        return true;
+      });
+      const entries = visibleFavorites.slice(0, 80).map((item) => ({
         id: item.content_id,
         title: item.title,
         categoryName: item.content_type === "movie" ? "Film" :
@@ -602,7 +746,11 @@
     });
     if (continueShelf) continueShelf.hidden = resumable.length === 0;
 
-    const recentChannels = liveHistory.slice(0, 20);
+    const recentChannels = liveHistory
+      .filter((item) => !isChildProfile() || liveChannels.some(
+        (channel) => String(channel.id) === String(item.channel_id)
+      ))
+      .slice(0, 20);
     clearHomeContainer(recentChannelCards);
     recentChannels.forEach((item) => {
       recentChannelCards?.append(createHomeCard(
@@ -618,7 +766,19 @@
     });
     if (recentChannelsShelf) recentChannelsShelf.hidden = recentChannels.length === 0;
 
-    const favoriteItems = favorites.slice(0, 20);
+    const favoriteItems = favorites
+      .filter((item) => {
+        if (!isChildProfile() || !parentalSettings?.enabled) return true;
+        const lockedKeys = Array.isArray(contentLocks?.locked_content_keys)
+          ? contentLocks.locked_content_keys
+          : [];
+        if (lockedKeys.includes(contentKey(item.content_type, item.content_id))) return false;
+        if (item.content_type === "live") {
+          return liveChannels.some((channel) => String(channel.id) === String(item.content_id));
+        }
+        return true;
+      })
+      .slice(0, 20);
     clearHomeContainer(favoriteCards);
     favoriteItems.forEach((item) => {
       favoriteCards?.append(createHomeCard(
@@ -893,6 +1053,12 @@
       return;
     }
 
+    if (pinScreen && !pinScreen.hidden && /^\d$/.test(event.key) && document.activeElement === pinInput) {
+      pinInput.value = (pinInput.value + event.key).replace(/\D/g, "").slice(0, 4);
+      event.preventDefault();
+      return;
+    }
+
     if (event.key === "MediaPlayPause") {
       event.preventDefault();
       if (player?.video?.paused) player.resume(); else player?.pause();
@@ -932,6 +1098,11 @@
     if (event.keyCode === 461 || event.key === "Escape" || event.key === "Backspace") {
       event.preventDefault();
 
+      if (pinScreen && !pinScreen.hidden) {
+        closePinPrompt();
+        return;
+      }
+
       if (await stopPlayback()) return;
 
       if (livePanel && !livePanel.hidden) {
@@ -956,7 +1127,17 @@
       }
 
       if (profileScreen && !profileScreen.hidden) {
-        if (currentProfile) {
+        if (currentProfile && isChildProfile()) {
+          showPinPrompt(
+            "Retour au profil Enfant",
+            "Le code PIN parental est requis pour quitter le profil Enfant.",
+            async () => {
+              profileScreen.hidden = true;
+              showApp();
+              renderHomeShelves();
+            }
+          );
+        } else if (currentProfile) {
           profileScreen.hidden = true;
           showApp();
           renderHomeShelves();
@@ -1145,13 +1326,31 @@
       return;
     }
 
+    if (target.dataset.action === "verify-pin") {
+      await verifyPendingPin();
+      return;
+    }
+
+    if (target.dataset.action === "cancel-pin") {
+      closePinPrompt();
+      return;
+    }
+
     if (target.dataset.action === "sign-in") {
       await signIn();
       return;
     }
 
     if (target.dataset.action === "sign-out") {
-      await signOut();
+      if (isChildProfile()) {
+        showPinPrompt(
+          "Déconnexion protégée",
+          "Le code PIN parental est requis pour quitter le profil Enfant.",
+          async () => signOut()
+        );
+      } else {
+        await signOut();
+      }
       return;
     }
 
