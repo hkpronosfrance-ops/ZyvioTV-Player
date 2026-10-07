@@ -31,7 +31,9 @@ private enum AppSection: String, CaseIterable, Identifiable {
 }
 
 struct MainTabView: View {
+    let profile: PlayerProfileDTO
     let onSignedOut: () -> Void
+    let onSwitchProfile: () -> Void
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedSection: AppSection = .home
@@ -114,13 +116,19 @@ struct MainTabView: View {
         case .series:
             SeriesView()
         case .account:
-            AccountView(onSignedOut: onSignedOut)
+            AccountView(
+                profile: profile,
+                onSignedOut: onSignedOut,
+                onSwitchProfile: onSwitchProfile
+            )
         }
     }
 }
 
 private struct AccountView: View {
+    let profile: PlayerProfileDTO
     let onSignedOut: () -> Void
+    let onSwitchProfile: () -> Void
     @State private var isSigningOut = false
 
     var body: some View {
@@ -134,6 +142,38 @@ private struct AccountView: View {
 
                     Text("Votre compte ZYVIOTV Player synchronise vos appareils, favoris et progressions.")
                         .foregroundStyle(.secondary)
+
+                    HStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.white.opacity(0.08))
+                            Image(systemName: profile.isChild ? "figure.and.child.holdinghands" : "person.crop.circle.fill")
+                                .font(.title)
+                                .foregroundStyle(.white)
+                        }
+                        .frame(width: 58, height: 58)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(profile.name)
+                                .font(.headline)
+                            Text(profile.isChild ? "Profil enfant" : (profile.isPrimary ? "Profil principal" : "Profil standard"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(14)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+
+                    Button {
+                        onSwitchProfile()
+                    } label: {
+                        Label("Changer de profil", systemImage: "person.2.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
 
                     Button(role: .destructive) {
                         Task { await signOut() }
@@ -165,5 +205,16 @@ private struct AccountView: View {
 }
 
 #Preview {
-    MainTabView(onSignedOut: {})
+    MainTabView(
+        profile: PlayerProfileDTO(
+            id: "preview",
+            name: "Profil principal",
+            avatarKey: "avatar_01",
+            profileType: "standard",
+            maxAge: nil,
+            isPrimary: true
+        ),
+        onSignedOut: {},
+        onSwitchProfile: {}
+    )
 }
