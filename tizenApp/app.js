@@ -576,7 +576,7 @@
         }
     });
 
-    document.addEventListener("click", (event) => {
+    document.addEventListener("click", async (event) => {
         const target = event.target.closest("[data-section], [data-action]");
         if (!target) return;
 
