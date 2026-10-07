@@ -372,6 +372,7 @@ actor SupabaseLibrarySyncService {
 
     enum LibrarySyncError: LocalizedError {
         case noSession
+        case noProfile
         case invalidURL
         case invalidResponse
         case server
@@ -380,6 +381,8 @@ actor SupabaseLibrarySyncService {
             switch self {
             case .noSession:
                 return "Session absente."
+            case .noProfile:
+                return "Aucun profil actif."
             case .invalidURL:
                 return "Configuration serveur invalide."
             case .invalidResponse:
