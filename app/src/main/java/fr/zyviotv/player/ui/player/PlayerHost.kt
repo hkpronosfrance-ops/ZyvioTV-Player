@@ -96,7 +96,14 @@ fun PlayerHost(
     }
     var durationMs by remember(effectiveRequest.streamUrl) { mutableStateOf<Long?>(null) }
     var errorMessage by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
-    var panel by remember(effectiveRequest.streamUrl) { mutableStateOf(PlayerPanel.None) }
+    val shouldPromptResume = request.kind != fr.zyviotv.player.shared.playback.PlaybackKind.Live &&
+        request.resumePositionMs >= RESUME_PROMPT_MIN_MS
+    var resumePromptPending by remember(effectiveRequest.streamUrl) {
+        mutableStateOf(shouldPromptResume)
+    }
+    var panel by remember(effectiveRequest.streamUrl) {
+        mutableStateOf(if (shouldPromptResume) PlayerPanel.Resume else PlayerPanel.None)
+    }
     var tracks by remember(effectiveRequest.streamUrl) { mutableStateOf(NativeTrackCatalog()) }
     var selectedAudioLanguage by remember(effectiveRequest.streamUrl) {
         mutableStateOf(initialAudioLanguage)
@@ -208,7 +215,24 @@ fun PlayerHost(
             playbackState = PlaybackState.Idle
             sendCommand(NativePlayerCommand.Retry)
         },
-        onNext = onNext,
+        onNext = {
+            if (request.kind == fr.zyviotv.player.shared.playback.PlaybackKind.Live) {
+                onNextChannel()
+            } else {
+                onNext()
+            }
+        },
+        onResumePlayback = {
+            resumePromptPending = false
+            panel = PlayerPanel.None
+            sendCommand(NativePlayerCommand.Play)
+        },
+        onRestartFromBeginning = {
+            resumePromptPending = false
+            positionMs = 0L
+            panel = PlayerPanel.None
+            sendCommand(NativePlayerCommand.RestartFromBeginning)
+        },
         onOpenTracks = { panel = PlayerPanel.Tracks },
         onOpenGuide = onOpenGuide,
         onToggleFavorite = onToggleFavorite,
@@ -260,6 +284,7 @@ fun PlayerHost(
                 subtitlesEnabled = subtitlesEnabled,
                 playbackQuality = devicePreferences.playbackQuality,
                 showNativeControls = false,
+                autoPlay = !resumePromptPending,
                 command = command,
                 commandToken = commandToken,
             )
@@ -270,5 +295,6 @@ fun PlayerHost(
 private fun effectiveKey(streamUrl: String): String = streamUrl
 
 private const val RESUME_BACKOFF_MS = 5_000L
+private const val RESUME_PROMPT_MIN_MS = 30_000L
 private const val CHANNEL_NUMBER_CONFIRM_DELAY_MS = 1_500L
 private const val MAX_CHANNEL_DIGITS = 4
