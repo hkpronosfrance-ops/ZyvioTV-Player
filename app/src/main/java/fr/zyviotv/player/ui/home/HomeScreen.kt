@@ -234,12 +234,22 @@ fun HomeScreen(
             readyProvider?.snapshot?.series.orEmpty().isNotEmpty() ||
             recentChannels.isNotEmpty()
 
+    val offlineMode = readyProvider?.isOffline == true ||
+        readyLibrary?.snapshot?.isOffline == true
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = contentPadding)
             .verticalScroll(rememberScrollState()),
     ) {
+        if (offlineMode) {
+            LocalStatusBanner(
+                title = "Mode hors connexion",
+                message = "Les contenus enregistrés localement restent consultables. La lecture, le guide et les actions nécessitant Internet sont temporairement indisponibles.",
+            )
+            Spacer(Modifier.height(16.dp))
+        }
         if (heroTitle != null) {
             Hero(
                 profile = profile,
@@ -377,6 +387,33 @@ fun HomeScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LocalStatusBanner(
+    title: String,
+    message: String,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
