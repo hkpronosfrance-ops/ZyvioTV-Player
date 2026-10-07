@@ -46,6 +46,31 @@
       }
     }
 
+    getPositionMs() {
+      if (this.usingAvPlay) {
+        try { return Number(window.webapis.avplay.getCurrentTime() || 0); } catch (_) { return 0; }
+      }
+      return this.video ? Math.max(0, Math.floor((this.video.currentTime || 0) * 1000)) : 0;
+    }
+
+    getDurationMs() {
+      if (this.usingAvPlay) {
+        try { return Number(window.webapis.avplay.getDuration() || 0); } catch (_) { return 0; }
+      }
+      return this.video && Number.isFinite(this.video.duration)
+        ? Math.max(0, Math.floor(this.video.duration * 1000))
+        : 0;
+    }
+
+    seekToMs(positionMs) {
+      const safe = Math.max(0, Number(positionMs || 0));
+      if (this.usingAvPlay) {
+        try { window.webapis.avplay.seekTo(safe); } catch (_) {}
+      } else if (this.video) {
+        try { this.video.currentTime = safe / 1000; } catch (_) {}
+      }
+    }
+
     stop() {
       if (this.usingAvPlay) {
         try { window.webapis.avplay.stop(); } catch (_) {}

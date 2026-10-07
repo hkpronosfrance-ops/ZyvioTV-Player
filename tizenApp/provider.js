@@ -55,6 +55,14 @@
       "/" + encode(streamId) + "." + safeExtension;
   }
 
+  function xtreamSeriesStreamUrl(config, streamId, extension = "mp4") {
+    const base = trimSlash(config.serverUrl);
+    assertHttpsOrHttp(base);
+    const safeExtension = /^[a-z0-9]{2,5}$/i.test(extension) ? extension : "mp4";
+    return base + "/series/" + encode(config.username) + "/" + encode(config.password) +
+      "/" + encode(streamId) + "." + safeExtension;
+  }
+
   function xtreamSeriesInfoUrl(config, seriesId) {
     return xtreamApiUrl(config, "get_series_info") + "&series_id=" + encode(seriesId);
   }
@@ -165,13 +173,29 @@
       ? raw.episodes
       : {};
 
+    const normalizedEpisodes = {};
+    Object.entries(episodesBySeason).forEach(([seasonKey, values]) => {
+      normalizedEpisodes[seasonKey] = (Array.isArray(values) ? values : []).map((item, index) => {
+        const id = String(item?.id || item?.stream_id || "");
+        const extension = String(item?.container_extension || "mp4");
+        return {
+          id,
+          season: Number(seasonKey || 0),
+          number: Number(item?.episode_num || index + 1),
+          title: String(item?.title || ("Épisode " + (index + 1))),
+          synopsis: String(item?.info?.plot || ""),
+          streamUrl: id ? xtreamSeriesStreamUrl(config, id, extension) : null,
+        };
+      }).filter((item) => item.id && item.streamUrl);
+    });
+
     return {
       info: raw?.info || {},
       seasons: seasons.map((season) => ({
         seasonNumber: Number(season.season_number || season.season || 0),
         name: String(season.name || ("Saison " + (season.season_number || season.season || ""))),
       })),
-      episodesBySeason,
+      episodesBySeason: normalizedEpisodes,
     };
   }
 
@@ -271,6 +295,7 @@
     xtreamApiUrl,
     xtreamLiveStreamUrl,
     xtreamMovieStreamUrl,
+    xtreamSeriesStreamUrl,
     xtreamSeriesInfoUrl,
   };
 

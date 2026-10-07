@@ -40,3 +40,14 @@ assert.ok(seriesInfoUrl.includes("series_id=7"));
 const redactedMovie = provider.redactUrl(movieUrl);
 assert.ok(!redactedMovie.includes("alice"));
 assert.ok(!redactedMovie.includes("secret"));
+
+
+const episodeUrl = provider.xtreamSeriesStreamUrl(
+  { serverUrl: "https://provider.example", username: "alice", password: "secret" },
+  123,
+  "mkv"
+);
+assert.equal(episodeUrl, "https://provider.example/series/alice/secret/123.mkv");
+const redactedEpisode = provider.redactUrl(episodeUrl);
+assert.ok(!redactedEpisode.includes("alice"));
+assert.ok(!redactedEpisode.includes("secret"));
