@@ -190,6 +190,13 @@ private struct AccountView: View {
                     .buttonStyle(.bordered)
 
                     NavigationLink {
+                        DevicesSettingsView()
+                    } label: {
+                        Label("Appareils", systemImage: "laptopcomputer.and.iphone")
+                    }
+                    .buttonStyle(.bordered)
+
+                    NavigationLink {
                         GlobalSearchView()
                     } label: {
                         Label("Recherche", systemImage: "magnifyingglass")
@@ -774,6 +781,165 @@ private struct LibraryRow: View {
                 }
             }
         }
+    }
+}
+
+
+private struct DevicesSettingsView: View {
+    @State private var devices: [AppleSyncedDeviceDTO] = []
+    @State private var loading = true
+    @State private var errorMessage: String?
+    @State private var editingId: String?
+    @State private var editingName = ""
+    @State private var busyId: String?
+
+    private var currentDeviceUid: String {
+        AppleDeviceIdentity.shared.deviceUid
+    }
+
+    var body: some View {
+        List {
+            if loading {
+                HStack {
+                    Spacer()
+                    ProgressView("Chargement…")
+                    Spacer()
+                }
+            } else if let errorMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                    Button("Réessayer") {
+                        Task { await reload() }
+                    }
+                }
+            } else if devices.isEmpty {
+                Text("Aucun appareil enregistré.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(devices) { device in
+                    VStack(alignment: .leading, spacing: 10) {
+                        if editingId == device.id {
+                            TextField("Nom de l’appareil", text: $editingName)
+                                .textFieldStyle(.roundedBorder)
+
+                            HStack {
+                                Button("Annuler") {
+                                    editingId = nil
+                                    editingName = ""
+                                }
+                                Button("Enregistrer") {
+                                    Task { await saveRename(device) }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.red)
+                                .disabled(editingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        } else {
+                            HStack(alignment: .center, spacing: 12) {
+                                Image(systemName: deviceIcon(device.platform))
+                                    .font(.title2)
+                                    .foregroundStyle(.red)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(device.displayName)
+                                        .font(.headline)
+
+                                    Text(deviceSubtitle(device))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    editingId = device.id
+                                    editingName = device.displayName
+                                } label: {
+                                    Image(systemName: "pencil")
+                                }
+                                .buttonStyle(.plain)
+
+                                Button(role: .destructive) {
+                                    Task { await delete(device) }
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(
+                                    device.deviceUid == currentDeviceUid ||
+                                    busyId != nil
+                                )
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.black)
+        .navigationTitle("Appareils")
+        .refreshable { await reload() }
+        .task { await reload() }
+    }
+
+    @MainActor
+    private func reload() async {
+        loading = true
+        errorMessage = nil
+        do {
+            try await SupabaseDeviceService.shared.registerCurrentDevice()
+            devices = try await SupabaseDeviceService.shared.listDevices()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        loading = false
+    }
+
+    @MainActor
+    private func saveRename(_ device: AppleSyncedDeviceDTO) async {
+        busyId = device.id
+        defer { busyId = nil }
+        do {
+            try await SupabaseDeviceService.shared.renameDevice(
+                id: device.id,
+                displayName: editingName
+            )
+            editingId = nil
+            editingName = ""
+            await reload()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func delete(_ device: AppleSyncedDeviceDTO) async {
+        guard device.deviceUid != currentDeviceUid else { return }
+        busyId = device.id
+        defer { busyId = nil }
+        do {
+            try await SupabaseDeviceService.shared.deleteDevice(id: device.id)
+            await reload()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deviceIcon(_ platform: String) -> String {
+        platform.contains("tablet") ? "ipad" : "iphone"
+    }
+
+    private func deviceSubtitle(_ device: AppleSyncedDeviceDTO) -> String {
+        var parts = [device.platform.replacingOccurrences(of: "_", with: " ")]
+        if let appVersion = device.appVersion, !appVersion.isEmpty {
+            parts.append("v\(appVersion)")
+        }
+        if device.deviceUid == currentDeviceUid {
+            parts.append("Cet appareil")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
