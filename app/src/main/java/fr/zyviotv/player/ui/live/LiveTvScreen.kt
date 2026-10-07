@@ -82,6 +82,7 @@ fun LiveTvScreen(
     profile: DeviceProfile,
     state: LiveScreenState = LiveScreenState.Ready(emptyList()),
     onRetry: () -> Unit = {},
+    isOffline: Boolean = false,
     onPreviewChannel: (LiveChannelUi) -> Unit = {},
     onTuneChannel: (LiveChannelUi) -> Unit = {},
     onOpenGuide: () -> Unit = {},
@@ -96,6 +97,7 @@ fun LiveTvScreen(
             profile = profile,
             channels = state.channels,
             lockedCategories = state.lockedCategories,
+            isOffline = isOffline,
             onPreviewChannel = onPreviewChannel,
             onTuneChannel = onTuneChannel,
             onOpenGuide = onOpenGuide,
@@ -108,6 +110,7 @@ private fun LiveReadyState(
     profile: DeviceProfile,
     channels: List<LiveChannelUi>,
     lockedCategories: Set<String>,
+    isOffline: Boolean,
     onPreviewChannel: (LiveChannelUi) -> Unit,
     onTuneChannel: (LiveChannelUi) -> Unit,
     onOpenGuide: () -> Unit,
@@ -136,7 +139,7 @@ private fun LiveReadyState(
 
     LaunchedEffect(selectedChannel?.id, profile) {
         val channel = selectedChannel ?: return@LaunchedEffect
-        if (profile == DeviceProfile.Television && !channel.isLocked) {
+        if (profile == DeviceProfile.Television && !channel.isLocked && !isOffline) {
             delay(TV_PREVIEW_DELAY_MS)
             onPreviewChannel(channel)
         }
@@ -167,8 +170,10 @@ private fun LiveReadyState(
             onChannelSelected = { selectedChannelId = it.id },
             restoreFocusChannelId = selectedChannelId,
             onTuneChannel = { channel ->
+                if (isOffline) return@MobileLiveLayout
                 if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
             },
+            isOffline = isOffline,
             onOpenGuide = onOpenGuide,
         )
     } else {
@@ -192,8 +197,10 @@ private fun LiveReadyState(
             onChannelSelected = { selectedChannelId = it.id },
             restoreFocusChannelId = selectedChannelId,
             onTuneChannel = { channel ->
+                if (isOffline) return@LargeLiveLayout
                 if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
             },
+            isOffline = isOffline,
             onOpenGuide = onOpenGuide,
         )
     }
@@ -237,6 +244,7 @@ private fun MobileLiveLayout(
     onChannelSelected: (LiveChannelUi) -> Unit,
     restoreFocusChannelId: String?,
     onTuneChannel: (LiveChannelUi) -> Unit,
+    isOffline: Boolean,
     onOpenGuide: () -> Unit,
 ) {
     Column(
@@ -248,7 +256,7 @@ private fun MobileLiveLayout(
         Spacer(Modifier.height(16.dp))
         CategoryRow(categories, selectedCategory, onCategorySelected, false, lockedCategories)
         Spacer(Modifier.height(16.dp))
-        PlayerPanel(selectedChannel, onTuneChannel)
+        PlayerPanel(selectedChannel, onTuneChannel, isOffline)
         Spacer(Modifier.height(18.dp))
         ChannelList(
             channels = channels,
@@ -272,6 +280,7 @@ private fun LargeLiveLayout(
     onChannelSelected: (LiveChannelUi) -> Unit,
     restoreFocusChannelId: String?,
     onTuneChannel: (LiveChannelUi) -> Unit,
+    isOffline: Boolean,
     onOpenGuide: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
@@ -304,7 +313,7 @@ private fun LargeLiveLayout(
                     .fillMaxHeight()
                     .weight(1f),
             ) {
-                PlayerPanel(selectedChannel, onTuneChannel)
+                PlayerPanel(selectedChannel, onTuneChannel, isOffline)
             }
         }
     }
@@ -387,6 +396,7 @@ private fun CategoryRow(
 private fun PlayerPanel(
     channel: LiveChannelUi?,
     onTuneChannel: (LiveChannelUi) -> Unit,
+    isOffline: Boolean,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -414,7 +424,11 @@ private fun PlayerPanel(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "Sélectionnez Regarder pour lancer le flux.",
+                        text = if (isOffline) {
+                            "Hors connexion : la liste des chaînes reste consultable."
+                        } else {
+                            "Sélectionnez Regarder pour lancer le flux."
+                        },
                         color = ZyvioTextSecondary,
                     )
                 }
@@ -447,8 +461,11 @@ private fun PlayerPanel(
                 }
 
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { onTuneChannel(it) }) {
-                    Text("Regarder")
+                Button(
+                    enabled = !isOffline,
+                    onClick = { onTuneChannel(it) },
+                ) {
+                    Text(if (isOffline) "Hors connexion" else "Regarder")
                 }
             }
         }
