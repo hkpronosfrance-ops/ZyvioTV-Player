@@ -178,10 +178,11 @@ private struct MoviePlayerScreen: View {
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
 
-            NativeVideoPlayerView(
+            ParentalProtectedPlayerView(
                 title: movie.title,
                 streamURL: movie.streamUrl,
                 resumePositionSeconds: resumeSeconds,
+                playbackKind: "movie",
                 onPositionChanged: { position, duration in
                     saveProgress(
                         positionSeconds: position,
