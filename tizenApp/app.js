@@ -42,9 +42,157 @@
     let parentalSettings = null;
     let contentLocks = null;
     let pendingPinAction = null;
+    let pendingPinVerifier = null;
+    let parentalRuntime = null;
+    let runtimeBlocked = false;
+    let runtimeExceptionUntilMs = 0;
     let activePlayback = null;
 
     const PROFILE_STORAGE_KEY = "zyviotv.tizen.profile.v1";
+    const DEVICE_UID_STORAGE_KEY = "zyviotv.tizen.device_uid.v1";
+    const RUNTIME_CACHE_PREFIX = "zyviotv.tizen.parental_runtime.v1.";
+
+    function stableDeviceUid() {
+        try {
+            const existing = localStorage.getItem(DEVICE_UID_STORAGE_KEY);
+            if (existing) return existing;
+            const random = window.crypto?.getRandomValues
+                ? Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
+                    .map((value) => value.toString(16).padStart(2, "0"))
+                    .join("")
+                : Math.random().toString(36).slice(2) + Date.now().toString(36);
+            const uid = "tizen-" + random.slice(0, 48);
+            localStorage.setItem(DEVICE_UID_STORAGE_KEY, uid);
+            return uid;
+        } catch (_) {
+            return "tizen-session";
+        }
+    }
+
+    const deviceUid = stableDeviceUid();
+
+    function runtimeCacheKey(profileId) {
+        return RUNTIME_CACHE_PREFIX + String(profileId || "");
+    }
+
+    function utcDayKey(epochMs) {
+        const date = new Date(Number(epochMs || 0));
+        return [
+            date.getUTCFullYear(),
+            String(date.getUTCMonth() + 1).padStart(2, "0"),
+            String(date.getUTCDate()).padStart(2, "0"),
+        ].join("-");
+    }
+
+    function saveRuntimeCache(profileId, state) {
+        if (!profileId || !state?.server_now_epoch_ms) return;
+        const previous = loadRuntimeCache(profileId);
+        const serverNow = Number(state.server_now_epoch_ms);
+        const day = utcDayKey(serverNow);
+        const consumed = previous?.usageDayUtc === day
+            ? Math.max(Number(previous.consumedSeconds || 0), Number(state.consumed_seconds || 0))
+            : Math.max(0, Number(state.consumed_seconds || 0));
+        const payload = {
+            parentalEnabled: Boolean(state.parental_enabled),
+            isChild: Boolean(state.is_child),
+            scheduleEnabled: Boolean(state.schedule_enabled),
+            scheduleWindows: Array.isArray(state.schedule_windows) ? state.schedule_windows : [],
+            trustedEpochMs: serverNow,
+            trustedPerformanceMs: Number(performance.now() || 0),
+            consumedSeconds: consumed,
+            usageDayUtc: day,
+            dailyLimitMinutes: state.daily_limit_minutes == null ? null : Number(state.daily_limit_minutes),
+            weekendLimitMinutes: state.weekend_limit_minutes == null ? null : Number(state.weekend_limit_minutes),
+            warningMinutes: Number(state.warning_minutes || 10),
+        };
+        try { localStorage.setItem(runtimeCacheKey(profileId), JSON.stringify(payload)); } catch (_) {}
+        parentalRuntime = payload;
+    }
+
+    function loadRuntimeCache(profileId) {
+        if (!profileId) return null;
+        try {
+            const raw = localStorage.getItem(runtimeCacheKey(profileId));
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === "object" ? parsed : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function trustedRuntimeNowMs(cache = parentalRuntime) {
+        if (!cache) return 0;
+        const currentPerf = Number(performance.now() || 0);
+        const anchorPerf = Number(cache.trustedPerformanceMs || 0);
+        const delta = currentPerf >= anchorPerf ? currentPerf - anchorPerf : 0;
+        return Number(cache.trustedEpochMs || 0) + delta;
+    }
+
+    function effectiveRuntimeLimitMinutes(cache = parentalRuntime) {
+        if (!cache) return null;
+        const now = new Date(trustedRuntimeNowMs(cache));
+        const day = now.getUTCDay();
+        const weekend = day === 0 || day === 6;
+        return weekend
+            ? (cache.weekendLimitMinutes ?? cache.dailyLimitMinutes)
+            : cache.dailyLimitMinutes;
+    }
+
+    function scheduleAllowsNow(cache = parentalRuntime) {
+        if (!cache?.parentalEnabled || !cache?.isChild || !cache?.scheduleEnabled) return true;
+        const windows = Array.isArray(cache.scheduleWindows) ? cache.scheduleWindows : [];
+        if (!windows.length) return false;
+
+        const now = new Date(trustedRuntimeNowMs(cache));
+        const jsDay = now.getDay();
+        const isoDay = jsDay === 0 ? 7 : jsDay;
+        const previousIsoDay = isoDay === 1 ? 7 : isoDay - 1;
+        const minuteOfDay = now.getHours() * 60 + now.getMinutes();
+
+        const minute = (value) => {
+            const parts = String(value || "").split(":");
+            if (parts.length !== 2) return null;
+            const hour = Number(parts[0]);
+            const min = Number(parts[1]);
+            if (!Number.isInteger(hour) || !Number.isInteger(min) ||
+                hour < 0 || hour > 23 || min < 0 || min > 59) return null;
+            return hour * 60 + min;
+        };
+
+        for (const window of windows) {
+            const days = Array.isArray(window?.days) ? window.days.map(Number) : [];
+            const start = minute(window?.start);
+            const end = minute(window?.end);
+            if (start == null || end == null) continue;
+            if (start === end && days.includes(isoDay)) return true;
+            if (start < end && days.includes(isoDay) && minuteOfDay >= start && minuteOfDay < end) {
+                return true;
+            }
+            if (start > end) {
+                if (days.includes(isoDay) && minuteOfDay >= start) return true;
+                if (days.includes(previousIsoDay) && minuteOfDay < end) return true;
+            }
+        }
+        return false;
+    }
+
+    function updateLocalRuntimeConsumed(seconds) {
+        if (!currentProfile || !parentalRuntime) return;
+        const now = trustedRuntimeNowMs(parentalRuntime);
+        const day = utcDayKey(now);
+        if (parentalRuntime.usageDayUtc !== day) {
+            parentalRuntime.consumedSeconds = 0;
+            parentalRuntime.usageDayUtc = day;
+        }
+        parentalRuntime.consumedSeconds = Math.max(
+            0,
+            Number(parentalRuntime.consumedSeconds || 0) + Math.max(0, Number(seconds || 0))
+        );
+        try {
+            localStorage.setItem(runtimeCacheKey(currentProfile.id), JSON.stringify(parentalRuntime));
+        } catch (_) {}
+    }
 
     function storedProfileId() {
         try { return localStorage.getItem(PROFILE_STORAGE_KEY); } catch (_) { return null; }
@@ -102,8 +250,9 @@
         return items.filter((item) => !isLockedItem(kind, item));
     }
 
-    function showPinPrompt(title, copy, action) {
+    function showPinPrompt(title, copy, action, verifier = null) {
         pendingPinAction = action;
+        pendingPinVerifier = verifier;
         if (pinTitle) pinTitle.textContent = title || "Code PIN requis";
         if (pinCopy) pinCopy.textContent = copy || "Saisissez le code PIN parental à 4 chiffres.";
         if (pinInput) pinInput.value = "";
@@ -114,6 +263,7 @@
 
     function closePinPrompt() {
         pendingPinAction = null;
+        pendingPinVerifier = null;
         if (pinInput) pinInput.value = "";
         setPinStatus("");
         if (pinScreen) pinScreen.hidden = true;
@@ -128,6 +278,18 @@
 
         setPinStatus("Vérification…");
         try {
+            if (typeof pendingPinVerifier === "function") {
+                const verification = await pendingPinVerifier(pin);
+                if (verification?.ok) {
+                    const action = pendingPinAction;
+                    closePinPrompt();
+                    if (typeof action === "function") await action();
+                    return;
+                }
+                setPinStatus(verification?.message || "Code PIN non vérifié.");
+                return;
+            }
+
             const result = await window.ZyvioCloud.verifyParentalPin(currentSession, pin);
             if (result?.verified) {
                 const action = pendingPinAction;
