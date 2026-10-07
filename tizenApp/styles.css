@@ -315,3 +315,17 @@ nav {
         grid-template-columns: repeat(4, minmax(140px, 1fr));
     }
 }
+
+
+.catalog-card.favorite::after {
+    content: "★ FAVORI";
+    margin-top: 10px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .8px;
+}
+
+.catalog-card.favorite {
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.22);
+}
