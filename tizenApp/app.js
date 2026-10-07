@@ -6,6 +6,15 @@
     const authStatus = document.getElementById("auth-status");
     const authScreen = document.getElementById("auth-screen");
     const appShell = document.getElementById("app-shell");
+    const profileScreen = document.getElementById("profile-screen");
+    const profileGrid = document.getElementById("profile-grid");
+    const profileStatus = document.getElementById("profile-status");
+    const continueShelf = document.getElementById("continue-shelf");
+    const continueCards = document.getElementById("continue-cards");
+    const favoritesShelf = document.getElementById("favorites-shelf");
+    const favoriteCards = document.getElementById("favorite-cards");
+    const historyShelf = document.getElementById("history-shelf");
+    const historyCards = document.getElementById("history-cards");
     const catalogPanel = document.getElementById("catalog-panel");
     const catalogTitle = document.getElementById("catalog-title");
     const catalogCount = document.getElementById("catalog-count");
@@ -21,10 +30,75 @@
     let episodes = [];
     let currentSession = null;
     let currentProfile = null;
+    let profiles = [];
     let currentPlaylist = null;
     let favorites = [];
     let watchProgress = [];
     let activePlayback = null;
+
+    const PROFILE_STORAGE_KEY = "zyviotv.tizen.profile.v1";
+
+    function storedProfileId() {
+        try { return localStorage.getItem(PROFILE_STORAGE_KEY); } catch (_) { return null; }
+    }
+
+    function persistProfileId(profileId) {
+        try { localStorage.setItem(PROFILE_STORAGE_KEY, profileId); } catch (_) {}
+    }
+
+    function setProfileStatus(message) {
+        if (profileStatus) profileStatus.textContent = message || "";
+    }
+
+    function showProfilePicker() {
+        if (!profileScreen || !profileGrid) return;
+        if (appShell) appShell.hidden = true;
+        if (authScreen) authScreen.hidden = true;
+        profileScreen.hidden = false;
+        profileGrid.replaceChildren();
+
+        profiles.forEach((profile) => {
+            const button = document.createElement("button");
+            button.className = "profile-card";
+            button.dataset.focusable = "";
+            button.dataset.profileId = profile.id;
+
+            const avatar = document.createElement("span");
+            avatar.className = "profile-avatar";
+            avatar.textContent = String(profile.name || "P").trim().charAt(0).toUpperCase() || "P";
+
+            const name = document.createElement("strong");
+            name.textContent = profile.name || "Profil";
+
+            const type = document.createElement("small");
+            type.textContent = profile.profile_type === "child" ? "Enfant" : "Standard";
+
+            button.append(avatar, name, type);
+            profileGrid.append(button);
+        });
+
+        setProfileStatus(profiles.length ? "Choisissez votre profil." : "Aucun profil disponible.");
+        setTimeout(() => profileGrid.querySelector("[data-focusable]")?.focus(), 0);
+    }
+
+    async function selectProfile(profileId) {
+        const profile = profiles.find((item) => item.id === profileId);
+        if (!profile || !currentSession) return;
+
+        currentProfile = profile;
+        persistProfileId(profile.id);
+        setProfileStatus("Chargement de " + profile.name + "…");
+
+        [favorites, watchProgress] = await Promise.all([
+            window.ZyvioCloud.listFavorites(currentSession, profile.id),
+            window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
+        ]);
+
+        if (profileScreen) profileScreen.hidden = true;
+        showApp();
+        renderHomeShelves();
+        setStatus("Profil : " + profile.name);
+    }
 
     function setAuthStatus(message) {
         if (authStatus) authStatus.textContent = message || "";
@@ -32,6 +106,7 @@
 
     function showAuth() {
         if (authScreen) authScreen.hidden = false;
+        if (profileScreen) profileScreen.hidden = true;
         if (appShell) appShell.hidden = true;
         providerConfig = null;
         liveChannels = [];
@@ -41,32 +116,37 @@
 
     function showApp() {
         if (authScreen) authScreen.hidden = true;
+        if (profileScreen) profileScreen.hidden = true;
         if (appShell) appShell.hidden = false;
         setTimeout(() => focusables()[0]?.focus(), 0);
     }
 
     async function restoreProviderFromAccount(session) {
         setStatus("Synchronisation du compte…");
-        const [restored, profile] = await Promise.all([
+        await window.ZyvioCloud.ensurePrimaryProfile(session);
+        const [restored, accountProfiles] = await Promise.all([
             window.ZyvioCloud.restorePrimaryProvider(session),
-            window.ZyvioCloud.restorePrimaryProfile(session),
+            window.ZyvioCloud.listProfiles(session),
         ]);
         providerConfig = restored.providerConfig;
         currentPlaylist = restored.playlist;
-        currentProfile = profile;
+        profiles = accountProfiles;
+        currentProfile = null;
         liveChannels = [];
         movies = [];
         series = [];
         episodes = [];
+        favorites = [];
+        watchProgress = [];
 
-        if (currentProfile) {
-            [favorites, watchProgress] = await Promise.all([
-                window.ZyvioCloud.listFavorites(session, currentProfile.id),
-                window.ZyvioCloud.listWatchProgress(session, currentProfile.id, 100),
-            ]);
+        const preferredId = storedProfileId();
+        const preferred = profiles.find((item) => item.id === preferredId);
+        if (preferred) {
+            await selectProfile(preferred.id);
+        } else if (profiles.length === 1) {
+            await selectProfile(profiles[0].id);
         } else {
-            favorites = [];
-            watchProgress = [];
+            showProfilePicker();
         }
 
         if (!providerConfig) {
@@ -90,7 +170,6 @@
                 showAuth();
                 return;
             }
-            showApp();
             await restoreProviderFromAccount(currentSession);
         } catch (_) {
             currentSession = null;
@@ -113,7 +192,6 @@
         try {
             currentSession = await window.ZyvioAuth.signIn(email, password);
             if (passwordInput) passwordInput.value = "";
-            showApp();
             await restoreProviderFromAccount(currentSession);
             setAuthStatus("");
         } catch (error) {
@@ -282,6 +360,7 @@
                 completed,
                 last_watched_at: new Date().toISOString(),
             });
+            renderHomeShelves();
         } catch (_) {}
     }
 
@@ -330,6 +409,108 @@
         } catch (_) {
             setStatus("Impossible de charger les favoris.");
         }
+    }
+
+    function clearHomeContainer(container) {
+        if (container) container.replaceChildren();
+    }
+
+    function createHomeCard(item, kind, subtitle, progressFraction = null) {
+        const button = document.createElement("button");
+        button.className = "card landscape home-item";
+        button.dataset.focusable = "";
+        button.dataset.homeKind = kind;
+        button.dataset.homeId = String(item.id || item.content_id || "");
+
+        const title = document.createElement("span");
+        title.textContent = item.title || "Contenu";
+        button.append(title);
+
+        if (subtitle) {
+            const small = document.createElement("small");
+            small.textContent = subtitle;
+            button.append(small);
+        }
+
+        if (progressFraction !== null) {
+            const bar = document.createElement("span");
+            bar.className = "home-progress";
+            const fill = document.createElement("span");
+            fill.style.width = Math.round(Math.max(0, Math.min(1, progressFraction)) * 100) + "%";
+            bar.append(fill);
+            button.append(bar);
+        }
+        return button;
+    }
+
+    function renderHomeShelves() {
+        const resumable = watchProgress
+            .filter((item) => !item.completed && Number(item.position_ms || 0) >= 10_000)
+            .slice(0, 20);
+        clearHomeContainer(continueCards);
+        resumable.forEach((item) => {
+            const duration = Number(item.duration_ms || 0);
+            const fraction = duration > 0 ? Number(item.position_ms || 0) / duration : 0;
+            const label = item.content_type === "episode" && item.season_number != null
+                ? "S" + item.season_number + " · E" + item.episode_number
+                : "Film";
+            continueCards.append(createHomeCard(item, "continue", label, fraction));
+        });
+        if (continueShelf) continueShelf.hidden = resumable.length === 0;
+
+        const favoriteItems = favorites.slice(0, 20);
+        clearHomeContainer(favoriteCards);
+        favoriteItems.forEach((item) => {
+            const label = item.content_type === "movie" ? "Film" :
+                item.content_type === "series" ? "Série" : "TV";
+            favoriteCards.append(createHomeCard(item, "favorite", label));
+        });
+        if (favoritesShelf) favoritesShelf.hidden = favoriteItems.length === 0;
+
+        const recent = watchProgress.slice(0, 20);
+        clearHomeContainer(historyCards);
+        recent.forEach((item) => {
+            const label = item.content_type === "episode" && item.season_number != null
+                ? "S" + item.season_number + " · E" + item.episode_number
+                : "Film";
+            historyCards.append(createHomeCard(item, "history", label));
+        });
+        if (historyShelf) historyShelf.hidden = recent.length === 0;
+    }
+
+    async function resolveProgressPlayback(progress) {
+        if (progress.content_type === "movie") {
+            if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
+            const movie = movies.find((item) => item.id === String(progress.content_id));
+            if (!movie) throw new Error("Film introuvable.");
+            return startTrackedPlayback(movie.streamUrl, {
+                contentType: "movie",
+                contentId: movie.id,
+                title: movie.title,
+                artworkUrl: movie.poster || null,
+            });
+        }
+
+        if (progress.content_type === "episode" && progress.series_id) {
+            const detail = await window.ZyvioProvider.loadXtreamSeriesInfo(
+                providerConfig,
+                String(progress.series_id)
+            );
+            const all = Object.values(detail.episodesBySeason || {}).flat();
+            const episode = all.find((item) => item.id === String(progress.content_id));
+            if (!episode) throw new Error("Épisode introuvable.");
+            return startTrackedPlayback(episode.streamUrl, {
+                contentType: "episode",
+                contentId: episode.id,
+                title: progress.title,
+                seriesId: String(progress.series_id),
+                seasonNumber: progress.season_number,
+                episodeNumber: progress.episode_number,
+                artworkUrl: progress.artwork_url || null,
+            });
+        }
+
+        throw new Error("Contenu indisponible.");
     }
 
     async function loadMovies() {
@@ -511,6 +692,7 @@
             movies: "Films",
             series: "Séries",
             favorites: "Favoris",
+            profiles: "Profils",
             more: "Plus",
         };
 
@@ -577,8 +759,56 @@
     });
 
     document.addEventListener("click", async (event) => {
-        const target = event.target.closest("[data-section], [data-action]");
+        const target = event.target.closest(
+            "[data-section], [data-action], [data-catalog-kind], [data-profile-id], [data-home-kind]"
+        );
         if (!target) return;
+
+        if (target.dataset.profileId) {
+            selectProfile(target.dataset.profileId).catch(() => {
+                setProfileStatus("Impossible de charger ce profil.");
+            });
+            return;
+        }
+
+        if (target.dataset.homeKind === "continue" || target.dataset.homeKind === "history") {
+            const item = watchProgress.find(
+                (entry) => String(entry.content_id) === String(target.dataset.homeId)
+            );
+            if (item) {
+                resolveProgressPlayback(item).catch(() => setStatus("Contenu indisponible."));
+            }
+            return;
+        }
+
+        if (target.dataset.homeKind === "favorite") {
+            const item = favorites.find(
+                (entry) => String(entry.content_id) === String(target.dataset.homeId)
+            );
+            if (item) {
+                if (item.content_type === "movie") {
+                    if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
+                    const movie = movies.find((entry) => entry.id === String(item.content_id));
+                    if (movie) {
+                        startTrackedPlayback(movie.streamUrl, {
+                            contentType: "movie",
+                            contentId: movie.id,
+                            title: movie.title,
+                            artworkUrl: movie.poster || null,
+                        }).catch(() => setStatus("Film indisponible."));
+                    }
+                } else if (item.content_type === "series") {
+                    if (!series.length) series = await window.ZyvioProvider.loadSeries(providerConfig);
+                    const seriesItem = series.find((entry) => entry.id === String(item.content_id));
+                    if (seriesItem) {
+                        window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id)
+                            .then((info) => renderEpisodes(seriesItem, info))
+                            .catch(() => setStatus("Détails de série indisponibles."));
+                    }
+                }
+            }
+            return;
+        }
 
         if (target.dataset.action === "sign-in") {
             signIn();
@@ -663,6 +893,18 @@
                         .catch(() => setStatus("Détails de série indisponibles."));
                 }
             }
+            return;
+        }
+
+        if (target.dataset.section === "home") {
+            hideCatalog();
+            activateSection("home");
+            renderHomeShelves();
+            return;
+        }
+
+        if (target.dataset.section === "profiles") {
+            showProfilePicker();
             return;
         }
 
