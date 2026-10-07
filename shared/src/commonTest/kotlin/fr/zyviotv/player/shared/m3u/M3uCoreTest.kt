@@ -33,6 +33,32 @@ class M3uCoreTest {
     }
 
     @Test
+    fun parserAcceptsUtf8BomAndCaseInsensitiveHeader() {
+        val entries = M3uParser.parse(
+            "\uFEFF#extm3u\n#EXTINF:-1 tvg-id='tf1.fr' group-title=' France  Généralistes ',TF1\nhttps://stream.example/live/1.ts",
+        )
+
+        assertEquals(1, entries.size)
+        assertEquals("tf1.fr", entries.single().tvgId)
+        assertEquals(" France  Généralistes ", entries.single().groupTitle)
+    }
+
+    @Test
+    fun parserFallsBackToTvgNameWhenDisplayNameIsMissing() {
+        val entries = M3uParser.parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 tvg-name="France 2" group-title=France,
+            https://stream.example/live/2.ts
+            """.trimIndent(),
+        )
+
+        assertEquals(1, entries.size)
+        assertEquals("France 2", entries.single().name)
+        assertEquals("France", entries.single().groupTitle)
+    }
+
+    @Test
     fun malformedPlaylistReturnsNoEntries() {
         assertTrue(M3uParser.parse("not a playlist").isEmpty())
     }
