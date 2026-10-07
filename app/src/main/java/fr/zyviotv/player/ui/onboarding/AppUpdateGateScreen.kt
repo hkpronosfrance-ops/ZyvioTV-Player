@@ -29,6 +29,8 @@ fun AppUpdateGateScreen(
     policy: AppUpdatePolicy,
     onUpdate: () -> Unit,
     onLater: () -> Unit,
+    onSupport: () -> Unit = {},
+    onSignOut: () -> Unit = {},
 ) {
     val isTv = deviceProfile == DeviceProfile.Television
     val mandatory = policy.kind == AppUpdateKind.Mandatory
@@ -96,6 +98,25 @@ fun AppUpdateGateScreen(
                     color = ZyvioTextSecondary,
                     style = MaterialTheme.typography.bodySmall,
                 )
+            } else {
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onSupport,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .tvFocusEffect(isTv, cornerRadiusDp = 12),
+                ) {
+                    Text("Contacter le support")
+                }
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onSignOut,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .tvFocusEffect(isTv, cornerRadiusDp = 12),
+                ) {
+                    Text("Se déconnecter")
+                }
             }
         }
     }
