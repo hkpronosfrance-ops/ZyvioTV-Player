@@ -17,18 +17,18 @@ class EpgTimeParsingTest {
     fun xmlTvUtcZIsParsed() {
         val value = EpgTimeParsing.xmlTvEpochSeconds("20261007100000Z")
 
-        assertEquals(1_781_085_600L, value)
+        assertEquals(1_791_367_200L, value)
     }
 
     @Test
     fun xtreamMillisecondsAreNormalizedToSeconds() {
         assertEquals(
-            1_781_085_600L,
-            EpgTimeParsing.epochSeconds(1_781_085_600_000L),
+            1_791_367_200L,
+            EpgTimeParsing.epochSeconds(1_791_367_200_000L),
         )
         assertEquals(
-            1_781_085_600L,
-            EpgTimeParsing.epochSeconds(1_781_085_600L),
+            1_791_367_200L,
+            EpgTimeParsing.epochSeconds(1_791_367_200L),
         )
     }
 
