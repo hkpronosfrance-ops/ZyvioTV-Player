@@ -317,7 +317,7 @@ private struct PlaylistSettingsView: View {
                 }
                 .disabled(
                     busyId != nil ||
-                    playlist.priority <= playlists.map(\.priority).min() ?? playlist.priority
+                    playlist.priority <= (playlists.map(\.priority).min() ?? playlist.priority)
                 )
 
                 Button {
@@ -327,7 +327,7 @@ private struct PlaylistSettingsView: View {
                 }
                 .disabled(
                     busyId != nil ||
-                    playlist.priority >= playlists.map(\.priority).max() ?? playlist.priority
+                    playlist.priority >= (playlists.map(\.priority).max() ?? playlist.priority)
                 )
 
                 Spacer()
