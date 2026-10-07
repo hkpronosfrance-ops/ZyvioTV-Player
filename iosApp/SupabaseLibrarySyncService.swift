@@ -417,6 +417,7 @@ actor SupabaseProfileService {
         case invalidURL
         case invalidResponse
         case server
+        case reauthRequired
 
         var errorDescription: String? {
             switch self {
@@ -1268,6 +1269,26 @@ actor SupabaseParentalService {
         return try await rpc(name: "player_set_parental_pin", body: body)
     }
 
+
+    func resetPinAfterRecentAuth(newPin: String) async throws {
+        struct ResetResult: Decodable {
+            let success: Bool
+            let reason: String?
+        }
+
+        let result: ResetResult = try await rpc(
+            name: "player_reset_parental_pin_after_recent_auth",
+            body: ["p_new_pin": newPin]
+        )
+
+        guard result.success else {
+            if result.reason == "reauth_required" {
+                throw ParentalError.reauthRequired
+            }
+            throw ParentalError.server
+        }
+    }
+
     func setEnabled(pin: String, enabled: Bool) async throws -> ParentalWriteDTO {
         try await rpc(
             name: "player_set_parental_enabled",
@@ -1441,6 +1462,7 @@ actor SupabaseParentalService {
             case .invalidURL: return "Configuration serveur invalide."
             case .invalidResponse: return "Réponse serveur invalide."
             case .server: return "Impossible de vérifier le contrôle parental."
+            case .reauthRequired: return "Le lien de récupération a expiré. Demandez un nouveau lien."
             }
         }
     }
