@@ -811,6 +811,21 @@ actor SupabasePlaylistService {
         try await patch(id: id, fields: ["name": clean])
     }
 
+    func updateSourceMetadata(
+        id: String,
+        serverHost: String?,
+        playlistUrlHint: String?
+    ) async throws {
+        try await patch(
+            id: id,
+            fields: [
+                "server_host": serverHost ?? NSNull(),
+                "playlist_url_hint": playlistUrlHint ?? NSNull(),
+                "secret_status": "configured",
+            ]
+        )
+    }
+
     func delete(id: String) async throws {
         _ = try await request(
             path: "/rest/v1/player_playlists?id=eq.\(encoded(id))",
