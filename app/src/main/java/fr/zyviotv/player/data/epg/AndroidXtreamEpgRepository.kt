@@ -56,9 +56,13 @@ class AndroidXtreamEpgRepository(
                 val programmes = buildList(array.length()) {
                     for (index in 0 until array.length()) {
                         val item = array.optJSONObject(index) ?: continue
-                        val start = item.optLong("start_timestamp", Long.MIN_VALUE)
-                        val end = item.optLong("stop_timestamp", Long.MIN_VALUE)
-                        if (start == Long.MIN_VALUE || end == Long.MIN_VALUE || end <= start) continue
+                        val start = EpgTimeParsing.epochSeconds(
+                            item.optLong("start_timestamp", Long.MIN_VALUE),
+                        )
+                        val end = EpgTimeParsing.epochSeconds(
+                            item.optLong("stop_timestamp", Long.MIN_VALUE),
+                        )
+                        if (start == null || end == null || end <= start) continue
 
                         val programme = EpgProgramme(
                             channelId = channelId,
@@ -72,7 +76,11 @@ class AndroidXtreamEpgRepository(
 
                         if (window.contains(programme)) add(programme)
                     }
-                }.sortedBy { it.startEpochSeconds }
+                }
+                    .distinctBy {
+                        Triple(it.startEpochSeconds, it.endEpochSeconds, it.title)
+                    }
+                    .sortedBy { it.startEpochSeconds }
 
                 EpgLoadResult.Success(programmes)
             } finally {

@@ -3,8 +3,6 @@ package fr.zyviotv.player.data.epg
 import fr.zyviotv.player.shared.epg.EpgProgramme
 import fr.zyviotv.player.shared.epg.EpgWindow
 import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.Locale
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
@@ -15,6 +13,9 @@ object XmlTvParser {
         window: EpgWindow,
         maxProgrammes: Int = 500,
     ): List<EpgProgramme> {
+        if (maxProgrammes <= 0 || channelId.isBlank()) return emptyList()
+
+        val normalizedChannelId = channelId.trim()
         val parser = XmlPullParserFactory.newInstance().newPullParser()
         parser.setInput(input, "UTF-8")
 
@@ -27,9 +28,9 @@ object XmlTvParser {
                 val startRaw = parser.getAttributeValue(null, "start")
                 val stopRaw = parser.getAttributeValue(null, "stop")
 
-                if (programmeChannel == channelId && startRaw != null && stopRaw != null) {
-                    val start = parseXmlTvTime(startRaw)
-                    val stop = parseXmlTvTime(stopRaw)
+                if (programmeChannel?.trim() == normalizedChannelId && startRaw != null && stopRaw != null) {
+                    val start = EpgTimeParsing.xmlTvEpochSeconds(startRaw)
+                    val stop = EpgTimeParsing.xmlTvEpochSeconds(stopRaw)
 
                     var title = ""
                     var description: String? = null
@@ -38,8 +39,8 @@ object XmlTvParser {
                     while (!(inner == XmlPullParser.END_TAG && parser.name == "programme")) {
                         if (inner == XmlPullParser.START_TAG) {
                             when (parser.name) {
-                                "title" -> title = parser.nextText()
-                                "desc" -> description = parser.nextText()
+                                "title" -> title = parser.nextText().trim()
+                                "desc" -> description = parser.nextText().trim()
                             }
                         }
                         inner = parser.next()
@@ -47,7 +48,7 @@ object XmlTvParser {
 
                     if (start != null && stop != null && stop > start) {
                         val programme = EpgProgramme(
-                            channelId = channelId,
+                            channelId = normalizedChannelId,
                             title = title.ifBlank { "Programme TV" },
                             description = description?.takeIf(String::isNotBlank),
                             startEpochSeconds = start,
@@ -60,26 +61,12 @@ object XmlTvParser {
             event = parser.next()
         }
 
-        return programmes.sortedBy { it.startEpochSeconds }
-    }
-
-    private fun parseXmlTvTime(raw: String): Long? {
-        val normalized = raw.trim()
-        val candidates = listOf(
-            "yyyyMMddHHmmss Z",
-            "yyyyMMddHHmm Z",
-        )
-
-        for (pattern in candidates) {
-            try {
-                val formatter = SimpleDateFormat(pattern, Locale.US).apply {
-                    isLenient = false
-                }
-                return formatter.parse(normalized)?.time?.div(1000L)
-            } catch (_: Exception) {
-                Unit
+        return programmes
+            .distinctBy {
+                Triple(it.startEpochSeconds, it.endEpochSeconds, it.title)
             }
-        }
-        return null
+            .sortedBy { it.startEpochSeconds }
     }
+
+
 }
