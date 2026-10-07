@@ -96,7 +96,8 @@ class OfflineContentCache(context: Context) {
                         .put("id", channel.id)
                         .put("name", channel.name)
                         .putNullable("category_id", channel.categoryId)
-                        .putNullable("logo_url", channel.logoUrl),
+                        .putNullable("logo_url", channel.logoUrl)
+                        .putNullable("epg_id", channel.epgId),
                 )
             }
         })
@@ -137,6 +138,7 @@ class OfflineContentCache(context: Context) {
                 categoryId = it.optNullableString("category_id"),
                 logoUrl = it.optNullableString("logo_url"),
                 streamUrl = "",
+                epgId = it.optNullableString("epg_id"),
             )
         },
         movieCategories = getJSONArray("movie_categories").mapObjects { it.toCategory() },

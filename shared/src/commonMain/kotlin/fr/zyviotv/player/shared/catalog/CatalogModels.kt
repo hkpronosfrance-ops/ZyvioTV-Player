@@ -11,6 +11,7 @@ data class CatalogLiveChannel(
     val categoryId: String?,
     val logoUrl: String?,
     val streamUrl: String,
+    val epgId: String? = null,
 )
 
 data class CatalogMovie(

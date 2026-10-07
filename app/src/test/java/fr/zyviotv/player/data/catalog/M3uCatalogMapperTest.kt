@@ -32,6 +32,28 @@ class M3uCatalogMapperTest {
     }
 
     @Test
+    fun duplicateTvgIdsKeepOriginalEpgIdForXmlTvMatching() {
+        val snapshot = M3uCatalogMapper.map(
+            listOf(
+                M3uEntry(
+                    name = "One",
+                    streamUrl = "https://stream.example/1.ts",
+                    tvgId = "france2.fr",
+                ),
+                M3uEntry(
+                    name = "Two",
+                    streamUrl = "https://stream.example/2.ts",
+                    tvgId = "france2.fr",
+                ),
+            ),
+        )
+
+        assertEquals("france2.fr", snapshot.liveChannels[0].epgId)
+        assertEquals("france2.fr", snapshot.liveChannels[1].epgId)
+        assertNotEquals(snapshot.liveChannels[0].id, snapshot.liveChannels[1].id)
+    }
+
+    @Test
     fun groupWhitespaceAndCaseVariantsCollapseIntoOneCategory() {
         val snapshot = M3uCatalogMapper.map(
             listOf(
