@@ -597,6 +597,59 @@ actor SupabaseParentalService {
     private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
     private let sessionStore = AuthSessionStore()
 
+    func accountSettings() async throws -> ParentalAccountSettingsDTO {
+        try await rpc(name: "player_get_parental_settings", body: [:])
+    }
+
+    func setPin(newPin: String, currentPin: String?) async throws -> ParentalWriteDTO {
+        var body: [String: Any] = ["p_new_pin": newPin]
+        body["p_current_pin"] = currentPin ?? NSNull()
+        return try await rpc(name: "player_set_parental_pin", body: body)
+    }
+
+    func setEnabled(pin: String, enabled: Bool) async throws -> ParentalWriteDTO {
+        try await rpc(
+            name: "player_set_parental_enabled",
+            body: [
+                "p_pin": pin,
+                "p_enabled": enabled,
+            ]
+        )
+    }
+
+    func profileSettings(profileId: String) async throws -> ProfileParentalSettingsDTO {
+        try await rpc(
+            name: "player_get_profile_parental_settings",
+            body: ["p_profile_id": profileId]
+        )
+    }
+
+    func updateProfileSettings(
+        profileId: String,
+        pin: String,
+        maxAge: Int?,
+        hideLocked: Bool,
+        dailyLimitMinutes: Int?,
+        weekendLimitMinutes: Int?,
+        warningMinutes: Int,
+        scheduleEnabled: Bool
+    ) async throws -> ParentalWriteDTO {
+        try await rpc(
+            name: "player_update_profile_parental_settings",
+            body: [
+                "p_profile_id": profileId,
+                "p_pin": pin,
+                "p_max_age": maxAge ?? NSNull(),
+                "p_hide_locked": hideLocked,
+                "p_daily_limit_minutes": dailyLimitMinutes ?? NSNull(),
+                "p_weekend_limit_minutes": weekendLimitMinutes ?? NSNull(),
+                "p_warning_minutes": warningMinutes,
+                "p_schedule_enabled": scheduleEnabled,
+                "p_schedule_windows": [],
+            ]
+        )
+    }
+
     func runtimeState(profileId: String, contentKey: String) async throws -> ParentalRuntimeStateDTO {
         try await rpc(
             name: "player_parental_runtime_state",
