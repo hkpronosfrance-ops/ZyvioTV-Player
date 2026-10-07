@@ -40,9 +40,22 @@ struct MainTabView: View {
         Group {
             if horizontalSizeClass == .regular {
                 NavigationSplitView {
-                    List(AppSection.allCases, selection: $selectedSection) { section in
-                        Label(section.title, systemImage: section.systemImage)
-                            .tag(section)
+                    List {
+                        ForEach(AppSection.allCases) { section in
+                            Button {
+                                selectedSection = section
+                            } label: {
+                                Label(section.title, systemImage: section.systemImage)
+                                    .foregroundStyle(
+                                        selectedSection == section ? Color.white : Color.secondary
+                                    )
+                            }
+                            .listRowBackground(
+                                selectedSection == section
+                                    ? Color.red.opacity(0.22)
+                                    : Color.clear
+                            )
+                        }
                     }
                     .navigationTitle("ZYVIOTV")
                     .scrollContentBackground(.hidden)
