@@ -193,6 +193,32 @@ fun PlayerScreen(
                             }
                         }
 
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                            if (
+                                state.metadata.kind == PlaybackKind.Live &&
+                                !controlsVisible &&
+                                state.panel == PlayerPanel.None
+                            ) {
+                                onChannelUp()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (
+                                state.metadata.kind == PlaybackKind.Live &&
+                                !controlsVisible &&
+                                state.panel == PlayerPanel.None
+                            ) {
+                                onChannelDown()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
                         AndroidKeyEvent.KEYCODE_CHANNEL_UP -> {
                             if (state.metadata.kind == PlaybackKind.Live) {
                                 onChannelUp()
