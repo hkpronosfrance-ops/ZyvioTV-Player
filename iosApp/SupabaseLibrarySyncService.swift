@@ -54,9 +54,9 @@ final class AppleDeviceIdentity {
 
     var platform: String {
         #if os(iOS)
-        return UIDevice.current.userInterfaceIdiom == .pad ? "ios_tablet" : "ios_phone"
+        return UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
         #else
-        return "ios_phone"
+        return "iphone"
         #endif
     }
 
