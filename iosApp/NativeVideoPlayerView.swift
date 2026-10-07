@@ -7,7 +7,8 @@ struct NativeVideoPlayerView: View {
     let streamURL: URL
     let resumePositionSeconds: Double
 
-    var onPositionChanged: (Double) -> Void = { _ in }
+    var onPositionChanged: (Double, Double?) -> Void = { _, _ in }
+    var onEnded: (Double, Double?) -> Void = { _, _ in }
     var onError: (String) -> Void = { _ in }
 
     @State private var player: AVPlayer?
@@ -44,7 +45,9 @@ struct NativeVideoPlayerView: View {
                     object: item,
                     queue: .main
                 ) { _ in
-                    reportPosition(newPlayer)
+                    let position = safeSeconds(newPlayer.currentTime())
+                    let duration = safeDuration(newPlayer.currentItem?.duration)
+                    onEnded(position, duration)
                 }
 
                 timeObserver = newPlayer.addPeriodicTimeObserver(
@@ -53,7 +56,10 @@ struct NativeVideoPlayerView: View {
                 ) { time in
                     let seconds = time.seconds
                     if seconds.isFinite && seconds >= 0 {
-                        onPositionChanged(seconds)
+                        onPositionChanged(
+                            seconds,
+                            safeDuration(newPlayer.currentItem?.duration)
+                        )
                     }
                 }
 
@@ -87,8 +93,22 @@ struct NativeVideoPlayerView: View {
     private func reportPosition(_ player: AVPlayer) {
         let seconds = player.currentTime().seconds
         if seconds.isFinite && seconds >= 0 {
-            onPositionChanged(seconds)
+            onPositionChanged(
+                seconds,
+                safeDuration(player.currentItem?.duration)
+            )
         }
+    }
+
+    private func safeSeconds(_ time: CMTime) -> Double {
+        let seconds = time.seconds
+        return seconds.isFinite && seconds >= 0 ? seconds : 0
+    }
+
+    private func safeDuration(_ time: CMTime?) -> Double? {
+        guard let time else { return nil }
+        let seconds = time.seconds
+        return seconds.isFinite && seconds > 0 ? seconds : nil
     }
 
     private func configureAudioSession() {
