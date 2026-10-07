@@ -48,6 +48,19 @@
         </div>
     </section>
 
+    <section id="system-screen" class="system-screen" hidden>
+        <div class="system-card">
+            <p class="eyebrow">ZYVIOTV PLAYER</p>
+            <h1 id="system-title">Information</h1>
+            <p id="system-copy"></p>
+            <div class="system-actions">
+                <button id="system-continue" class="primary" data-focusable data-action="system-continue" hidden>Continuer</button>
+                <button id="system-devices" class="secondary" data-focusable data-action="system-devices" hidden>Appareils</button>
+                <button id="system-signout" class="secondary" data-focusable data-action="sign-out" hidden>Se déconnecter</button>
+            </div>
+        </div>
+    </section>
+
     <main id="app-shell" class="app-shell" hidden>
         <aside class="rail" aria-label="Navigation principale">
             <div class="brand">
@@ -104,6 +117,25 @@
             <section id="history-shelf" class="shelf" hidden>
                 <h2>Récemment regardé</h2>
                 <div id="history-cards" class="cards wide"></div>
+            </section>
+
+            <section id="more-panel" class="catalog-panel" hidden>
+                <div class="catalog-header">
+                    <h2>Plus</h2>
+                </div>
+                <div class="cards">
+                    <button class="card" data-focusable data-action="open-devices"><span>Appareils</span></button>
+                    <button class="card" data-focusable data-section="profiles"><span>Profils</span></button>
+                    <button class="card" data-focusable data-action="sign-out"><span>Se déconnecter</span></button>
+                </div>
+            </section>
+
+            <section id="devices-panel" class="catalog-panel" hidden>
+                <div class="catalog-header">
+                    <h2>Appareils</h2>
+                    <span id="devices-count"></span>
+                </div>
+                <div id="devices-grid" class="catalog-grid"></div>
             </section>
 
             <section id="catalog-panel" class="catalog-panel" hidden>
