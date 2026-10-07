@@ -1,4 +1,5 @@
 import Foundation
+import FoundationXML
 
 struct SyncedFavoriteDTO: Codable, Identifiable {
     var id: String { playlistId + ":" + contentType + ":" + contentId }
@@ -1208,6 +1209,156 @@ actor SupabaseParentalService {
     }
 }
 
+
+private final class AppleXmlTvParserDelegate: NSObject, XMLParserDelegate {
+    private let acceptedChannelIds: Set<String>
+    private let fromEpochSeconds: Int64
+    private let toEpochSeconds: Int64
+    private let maxProgrammes: Int
+
+    private var activeChannel: String?
+    private var activeStart: Int64?
+    private var activeEnd: Int64?
+    private var activeTitle = ""
+    private var activeDescription = ""
+    private var activeElement: String?
+    private var textBuffer = ""
+    private var acceptedCount = 0
+
+    var programmesByChannel: [String: [ProviderEpgProgrammeDTO]] = [:]
+
+    init(
+        acceptedChannelIds: Set<String>,
+        fromEpochSeconds: Int64,
+        toEpochSeconds: Int64,
+        maxProgrammes: Int
+    ) {
+        self.acceptedChannelIds = acceptedChannelIds
+        self.fromEpochSeconds = fromEpochSeconds
+        self.toEpochSeconds = toEpochSeconds
+        self.maxProgrammes = maxProgrammes
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?,
+        attributes attributeDict: [String: String] = [:]
+    ) {
+        if elementName == "programme" {
+            guard acceptedCount < maxProgrammes else {
+                parser.abortParsing()
+                return
+            }
+
+            let channel = attributeDict["channel"]?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let channel, acceptedChannelIds.contains(channel) else {
+                activeChannel = nil
+                return
+            }
+
+            activeChannel = channel
+            activeStart = attributeDict["start"].flatMap(Self.xmlTvEpochSeconds)
+            activeEnd = attributeDict["stop"].flatMap(Self.xmlTvEpochSeconds)
+            activeTitle = ""
+            activeDescription = ""
+        } else if activeChannel != nil && (elementName == "title" || elementName == "desc") {
+            activeElement = elementName
+            textBuffer = ""
+        }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        guard activeElement != nil else { return }
+        textBuffer += string
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        didEndElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?
+    ) {
+        if activeChannel != nil && elementName == activeElement {
+            let value = textBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if elementName == "title" {
+                activeTitle = value
+            } else if elementName == "desc" {
+                activeDescription = value
+            }
+            activeElement = nil
+            textBuffer = ""
+            return
+        }
+
+        guard elementName == "programme" else { return }
+        defer {
+            activeChannel = nil
+            activeStart = nil
+            activeEnd = nil
+            activeTitle = ""
+            activeDescription = ""
+            activeElement = nil
+            textBuffer = ""
+        }
+
+        guard
+            let channel = activeChannel,
+            let start = activeStart,
+            let end = activeEnd,
+            end > start,
+            end > fromEpochSeconds,
+            start < toEpochSeconds
+        else { return }
+
+        let item = ProviderEpgProgrammeDTO(
+            channelId: channel,
+            title: activeTitle.isEmpty ? "Programme TV" : activeTitle,
+            description: activeDescription.isEmpty ? nil : activeDescription,
+            startEpochSeconds: start,
+            endEpochSeconds: end
+        )
+
+        var existing = programmesByChannel[channel] ?? []
+        if !existing.contains(where: {
+            $0.startEpochSeconds == item.startEpochSeconds &&
+            $0.endEpochSeconds == item.endEpochSeconds &&
+            $0.title == item.title
+        }) {
+            existing.append(item)
+            existing.sort { $0.startEpochSeconds < $1.startEpochSeconds }
+            programmesByChannel[channel] = existing
+            acceptedCount += 1
+        }
+    }
+
+    private static func xmlTvEpochSeconds(_ raw: String) -> Int64? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let patterns = [
+            "yyyyMMddHHmmss Z",
+            "yyyyMMddHHmm Z",
+            "yyyyMMddHHmmss",
+            "yyyyMMddHHmm",
+        ]
+
+        for pattern in patterns {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = pattern
+            if !pattern.contains("Z") {
+                formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            }
+            if let date = formatter.date(from: value) {
+                return Int64(date.timeIntervalSince1970)
+            }
+        }
+        return nil
+    }
+}
+
 actor SupabaseProviderCatalogService {
     static let shared = SupabaseProviderCatalogService()
 
@@ -1221,6 +1372,17 @@ actor SupabaseProviderCatalogService {
         maxChannels: Int = 50
     ) async throws -> [ProviderGuideChannelDTO] {
         let secret = try await loadPlaylistSecret(playlistId: playlistId)
+        let bounded = Array(channels.prefix(max(1, min(maxChannels, 50))))
+
+        if secret.providerType == "m3u" {
+            guard let xmlTvURL = secret.xmlTvURL else {
+                return bounded.map {
+                    ProviderGuideChannelDTO(channel: $0, programmes: [])
+                }
+            }
+            return try await loadXmlTvGuide(url: xmlTvURL, channels: bounded)
+        }
+
         guard
             secret.providerType == "xtream",
             let serverURL = secret.serverURL,
@@ -1231,7 +1393,7 @@ actor SupabaseProviderCatalogService {
         }
 
         var result: [ProviderGuideChannelDTO] = []
-        for channel in channels.prefix(max(1, min(maxChannels, 50))) {
+        for channel in bounded {
             let programmes = (try? await loadShortEpg(
                 serverURL: serverURL,
                 username: username,
@@ -1246,6 +1408,63 @@ actor SupabaseProviderCatalogService {
             )
         }
         return result
+    }
+
+
+    private func loadXmlTvGuide(
+        url: URL,
+        channels: [ProviderLiveChannelDTO]
+    ) async throws -> [ProviderGuideChannelDTO] {
+        let ids = Set(
+            channels.compactMap {
+                $0.epgId?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .nilIfBlank
+            }
+        )
+        guard !ids.isEmpty else {
+            return channels.map {
+                ProviderGuideChannelDTO(channel: $0, programmes: [])
+            }
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        request.setValue("application/xml, text/xml, application/gzip, */*", forHTTPHeaderField: "Accept")
+        request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
+        request.setValue("ZYVIOTV-Player/0.1", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let http = response as? HTTPURLResponse,
+            (200...299).contains(http.statusCode)
+        else {
+            throw ProviderCatalogError.providerUnavailable
+        }
+
+        let now = Int64(Date().timeIntervalSince1970)
+        let parserDelegate = AppleXmlTvParserDelegate(
+            acceptedChannelIds: ids,
+            fromEpochSeconds: now - 3 * 60 * 60,
+            toEpochSeconds: now + 6 * 60 * 60,
+            maxProgrammes: 5_000
+        )
+        let parser = XMLParser(data: data)
+        parser.delegate = parserDelegate
+
+        guard parser.parse() else {
+            throw ProviderCatalogError.providerUnavailable
+        }
+
+        return channels.map { channel in
+            let programmes = channel.epgId
+                .flatMap { parserDelegate.programmesByChannel[$0] } ?? []
+            return ProviderGuideChannelDTO(
+                channel: channel,
+                programmes: programmes
+            )
+        }
     }
 
     private func loadShortEpg(
