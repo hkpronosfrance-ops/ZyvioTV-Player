@@ -11,6 +11,7 @@
     <name>ZYVIOTV Player</name>
     <description>ZYVIOTV Player for Samsung Smart TV</description>
     <feature name="http://tizen.org/feature/screen.size.all"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
     <tizen:profile name="tv-samsung"/>
     <tizen:setting screen-orientation="landscape"
                    context-menu="disable"
@@ -18,5 +19,5 @@
                    encryption="disable"
                    install-location="auto"
                    hwkey-event="enable"/>
-    <access origin="https://nvpuftuluguawdxonmlc.supabase.co" subdomains="false"/>
+    <access origin="*" subdomains="true"/>
 </widget>
