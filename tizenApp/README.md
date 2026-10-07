@@ -150,3 +150,20 @@ The Samsung client now also supports:
 - Child-profile live favorites/history remain hidden unless the channel resolves through the already filtered live catalog
 
 No database migration is required; the existing live history and favorites tables/RLS are reused.
+
+
+## Devices + system state parity
+
+The Samsung client now also supports:
+- Tizen device registration/upsert with stable device UID, model name and app version
+- profile-independent device list in Plus
+- rename any registered device
+- disconnect another device with the red remote key
+- prevent disconnecting the current TV from itself
+- account suspension gate
+- blocking maintenance gate
+- planned maintenance notice with Continue
+- the same system-state checks after restored sessions and manual sign-in
+- blocking states remain isolated from the application shell
+
+No database migration is required; existing player_devices, player_account_status and player_service_state RLS-backed tables are reused.
