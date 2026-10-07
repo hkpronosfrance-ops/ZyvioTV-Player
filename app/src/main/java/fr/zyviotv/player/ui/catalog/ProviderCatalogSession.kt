@@ -36,6 +36,7 @@ sealed interface ProviderCatalogState {
         val snapshot: CatalogSnapshot,
         val rawSnapshot: CatalogSnapshot = snapshot,
         val contentLocks: ProfileContentLocks? = null,
+        val isOffline: Boolean = false,
     ) : ProviderCatalogState
 
     data class Empty(val message: String) : ProviderCatalogState
@@ -90,6 +91,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     playlistName = cached.playlistName,
                     snapshot = cached.snapshot,
                     rawSnapshot = cached.snapshot,
+                    isOffline = true,
                 )
             } else {
                 state.value = ProviderCatalogState.Error(
@@ -166,6 +168,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                         playlistName = cached.playlistName,
                         snapshot = cached.snapshot,
                         rawSnapshot = cached.snapshot,
+                        isOffline = true,
                     )
                 } else {
                     loaded
