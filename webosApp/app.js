@@ -110,16 +110,34 @@
   }
 
   function isLockedForChild(type, item) {
-    if (!isChildProfile() || !parentalSettings?.enabled) return false;
+    if (!isChildProfile()) return false;
 
     const category = item?.categoryName || item?.category_name || "";
     const title = item?.title || item?.name || "";
     if (isAdultLabel(category) || isAdultLabel(title)) return true;
+    if (!contentLocks?.parental_enabled) return false;
 
-    const lockedKeys = Array.isArray(contentLocks?.locked_content_keys)
-      ? contentLocks.locked_content_keys
-      : [];
-    return lockedKeys.includes(contentKey(type, item?.id));
+    const lockedContent = new Set(contentLocks.locked_content_keys || []);
+    const lockedCategories = new Set(contentLocks.locked_category_keys || []);
+    const itemContentKey = contentKey(type, item?.id);
+    const itemCategoryKey = contentKey(type, item?.categoryId || item?.category_id || "");
+
+    if (lockedContent.has(itemContentKey)) return true;
+    if ((item?.categoryId || item?.category_id) && lockedCategories.has(itemCategoryKey)) return true;
+    return false;
+  }
+
+  function isLibraryItemLocked(item) {
+    if (!isChildProfile()) return false;
+    if (isAdultLabel(item?.title || "")) return true;
+    if (!contentLocks?.parental_enabled) return false;
+
+    const lockedContent = new Set(contentLocks.locked_content_keys || []);
+    if (lockedContent.has(contentKey(item?.content_type, item?.content_id))) return true;
+    if (item?.content_type === "episode" && item?.series_id) {
+      if (lockedContent.has(contentKey("series", item.series_id))) return true;
+    }
+    return false;
   }
 
   function filterForProfile(type, entries) {
@@ -153,7 +171,7 @@
     if (pinStatus) pinStatus.textContent = "Vérification…";
     try {
       const result = await window.ZyvioCloud.verifyParentalPin(currentSession, pin);
-      if (!result?.success) {
+      if (!result?.verified) {
         const reason = result?.reason;
         if (pinStatus) {
           pinStatus.textContent = reason === "blocked"
@@ -673,12 +691,8 @@
     try {
       favorites = await window.ZyvioCloud.listFavorites(currentSession, currentProfile.id);
       const visibleFavorites = favorites.filter((item) => {
-        if (!isChildProfile() || !parentalSettings?.enabled) return true;
-        const lockedKeys = Array.isArray(contentLocks?.locked_content_keys)
-          ? contentLocks.locked_content_keys
-          : [];
-        if (lockedKeys.includes(contentKey(item.content_type, item.content_id))) return false;
-        if (item.content_type === "live") {
+        if (isLibraryItemLocked(item)) return false;
+        if (isChildProfile() && item.content_type === "live") {
           return liveChannels.some((channel) => String(channel.id) === String(item.content_id));
         }
         return true;
@@ -733,7 +747,11 @@
 
   function renderHomeShelves() {
     const resumable = watchProgress
-      .filter((item) => !item.completed && Number(item.position_ms || 0) >= 10_000)
+      .filter((item) =>
+        !item.completed &&
+        Number(item.position_ms || 0) >= 10_000 &&
+        !isLibraryItemLocked(item)
+      )
       .slice(0, 20);
     clearHomeContainer(continueCards);
     resumable.forEach((item) => {
@@ -768,12 +786,8 @@
 
     const favoriteItems = favorites
       .filter((item) => {
-        if (!isChildProfile() || !parentalSettings?.enabled) return true;
-        const lockedKeys = Array.isArray(contentLocks?.locked_content_keys)
-          ? contentLocks.locked_content_keys
-          : [];
-        if (lockedKeys.includes(contentKey(item.content_type, item.content_id))) return false;
-        if (item.content_type === "live") {
+        if (isLibraryItemLocked(item)) return false;
+        if (isChildProfile() && item.content_type === "live") {
           return liveChannels.some((channel) => String(channel.id) === String(item.content_id));
         }
         return true;
@@ -790,7 +804,9 @@
     });
     if (favoritesShelf) favoritesShelf.hidden = favoriteItems.length === 0;
 
-    const recent = watchProgress.slice(0, 20);
+    const recent = watchProgress
+      .filter((item) => !isLibraryItemLocked(item))
+      .slice(0, 20);
     clearHomeContainer(historyCards);
     recent.forEach((item) => {
       historyCards?.append(createHomeCard(
