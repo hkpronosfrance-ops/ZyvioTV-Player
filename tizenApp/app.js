@@ -925,9 +925,20 @@
         try {
             favorites = await window.ZyvioCloud.listFavorites(currentSession, currentProfile.id);
             const visibleFavorites = favorites.filter((item) => {
-                if (!isChildProfile() || !contentLocks?.parental_enabled) return true;
+                if (!isChildProfile()) return true;
                 const key = contentKey(item.content_type, item.content_id);
-                return !(contentLocks.locked_content_keys || []).includes(key);
+                if (
+                    contentLocks?.parental_enabled &&
+                    (contentLocks.locked_content_keys || []).includes(key)
+                ) {
+                    return false;
+                }
+                if (item.content_type === "live") {
+                    return liveChannels.some(
+                        (channel) => channel.id === String(item.content_id)
+                    );
+                }
+                return true;
             });
             const items = visibleFavorites.map((item) => ({
                 id: item.content_id,
