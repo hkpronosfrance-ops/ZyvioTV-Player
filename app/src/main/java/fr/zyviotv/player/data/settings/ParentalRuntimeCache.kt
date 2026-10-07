@@ -13,6 +13,10 @@ data class CachedParentalRuntime(
     val scheduleWindowsJson: String,
     val trustedEpochMillis: Long,
     val trustedElapsedRealtime: Long,
+    val consumedSeconds: Int,
+    val usageDayUtc: String,
+    val dailyLimitMinutes: Int?,
+    val weekendLimitMinutes: Int?,
 )
 
 class ParentalRuntimeCache(context: Context) {
@@ -20,6 +24,13 @@ class ParentalRuntimeCache(context: Context) {
 
     fun store(profileId: String, state: ParentalRuntimeState) {
         val epoch = state.serverNowEpochMillis ?: return
+        val day = utcDayKey(epoch)
+        val existing = load(profileId)
+        val consumed = if (existing != null && existing.usageDayUtc == day) {
+            maxOf(existing.consumedSeconds, state.consumedSeconds.coerceAtLeast(0))
+        } else {
+            state.consumedSeconds.coerceAtLeast(0)
+        }
 
         preferences.edit()
             .putBoolean(key(profileId, "enabled"), state.parentalEnabled)
@@ -28,6 +39,10 @@ class ParentalRuntimeCache(context: Context) {
             .putString(key(profileId, "schedule_windows"), state.scheduleWindowsJson)
             .putLong(key(profileId, "trusted_epoch"), epoch)
             .putLong(key(profileId, "trusted_elapsed"), SystemClock.elapsedRealtime())
+            .putInt(key(profileId, "consumed_seconds"), consumed)
+            .putString(key(profileId, "usage_day_utc"), day)
+            .putNullableInt(key(profileId, "daily_limit_minutes"), state.dailyLimitMinutes)
+            .putNullableInt(key(profileId, "weekend_limit_minutes"), state.weekendLimitMinutes)
             .apply()
     }
 
@@ -43,7 +58,50 @@ class ParentalRuntimeCache(context: Context) {
             ) ?: "[]",
             trustedEpochMillis = preferences.getLong(key(profileId, "trusted_epoch"), 0L),
             trustedElapsedRealtime = preferences.getLong(key(profileId, "trusted_elapsed"), 0L),
+            consumedSeconds = preferences.getInt(key(profileId, "consumed_seconds"), 0),
+            usageDayUtc = preferences.getString(
+                key(profileId, "usage_day_utc"),
+                "",
+            ).orEmpty(),
+            dailyLimitMinutes = preferences.getNullableInt(
+                key(profileId, "daily_limit_minutes"),
+            ),
+            weekendLimitMinutes = preferences.getNullableInt(
+                key(profileId, "weekend_limit_minutes"),
+            ),
         )
+    }
+
+    fun updateConsumedSeconds(profileId: String, consumedSeconds: Int) {
+        val cached = load(profileId) ?: return
+        val currentDay = utcDayKey(ParentalScheduleEvaluator.trustedNowMillis(cached))
+        val value = if (cached.usageDayUtc == currentDay) {
+            maxOf(cached.consumedSeconds, consumedSeconds.coerceAtLeast(0))
+        } else {
+            consumedSeconds.coerceAtLeast(0)
+        }
+        preferences.edit()
+            .putInt(key(profileId, "consumed_seconds"), value)
+            .putString(key(profileId, "usage_day_utc"), currentDay)
+            .apply()
+    }
+
+    fun addOfflineSeconds(profileId: String, seconds: Int): Int {
+        val cached = load(profileId) ?: return 0
+        val currentDay = utcDayKey(ParentalScheduleEvaluator.trustedNowMillis(cached))
+        val base = if (cached.usageDayUtc == currentDay) cached.consumedSeconds else 0
+        val next = (base + seconds.coerceAtLeast(0)).coerceAtMost(Int.MAX_VALUE)
+        preferences.edit()
+            .putInt(key(profileId, "consumed_seconds"), next)
+            .putString(key(profileId, "usage_day_utc"), currentDay)
+            .apply()
+        return next
+    }
+
+    fun consumedSeconds(profileId: String): Int {
+        val cached = load(profileId) ?: return 0
+        val currentDay = utcDayKey(ParentalScheduleEvaluator.trustedNowMillis(cached))
+        return if (cached.usageDayUtc == currentDay) cached.consumedSeconds else 0
     }
 
     fun clear(profileId: String) {
@@ -54,14 +112,53 @@ class ParentalRuntimeCache(context: Context) {
             .remove(key(profileId, "schedule_windows"))
             .remove(key(profileId, "trusted_epoch"))
             .remove(key(profileId, "trusted_elapsed"))
+            .remove(key(profileId, "consumed_seconds"))
+            .remove(key(profileId, "usage_day_utc"))
+            .remove(key(profileId, "daily_limit_minutes"))
+            .remove(key(profileId, "weekend_limit_minutes"))
             .apply()
     }
+
+    fun effectiveLimitMinutes(profileId: String): Int? {
+        val cached = load(profileId) ?: return null
+        val now = ParentalScheduleEvaluator.trustedNowMillis(cached)
+        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            timeInMillis = now
+        }
+        val weekend = calendar.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY ||
+            calendar.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY
+        return if (weekend) {
+            cached.weekendLimitMinutes ?: cached.dailyLimitMinutes
+        } else {
+            cached.dailyLimitMinutes
+        }
+    }
+
+    private fun android.content.SharedPreferences.Editor.putNullableInt(
+        key: String,
+        value: Int?,
+    ): android.content.SharedPreferences.Editor =
+        if (value == null) remove(key) else putInt(key, value)
+
+    private fun android.content.SharedPreferences.getNullableInt(key: String): Int? =
+        if (contains(key)) getInt(key, 0) else null
 
     private fun key(profileId: String, suffix: String): String = profileId + "_" + suffix
 
     private companion object {
         const val PREFS_NAME = "zyviotv_parental_runtime_cache"
     }
+}
+
+private fun utcDayKey(epochMillis: Long): String {
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        timeInMillis = epochMillis
+    }
+    return "%04d-%02d-%02d".format(
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH) + 1,
+        calendar.get(Calendar.DAY_OF_MONTH),
+    )
 }
 
 object ParentalScheduleEvaluator {
