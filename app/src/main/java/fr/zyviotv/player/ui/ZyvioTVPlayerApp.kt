@@ -297,6 +297,11 @@ fun ZyvioTVPlayerApp(
                         popUpTo("splash") { inclusive = true }
                     }
                 },
+                onOfflineReady = {
+                    navController.navigate(AppDestination.Home.route) {
+                        popUpTo("splash") { inclusive = true }
+                    }
+                },
                 onAuthRequired = {
                     navController.navigate("auth") {
                         popUpTo("splash") { inclusive = true }

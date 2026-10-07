@@ -1,17 +1,18 @@
 package fr.zyviotv.player.ui.startup
 
-import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.auth.SupabaseAuthRepository
 import kotlinx.coroutines.delay
 
 sealed interface StartupSessionResult {
     data object AuthRequired : StartupSessionResult
     data object SessionReady : StartupSessionResult
+    data object OfflineReady : StartupSessionResult
     data object ConnectionRequired : StartupSessionResult
 }
 
 class StartupSessionCoordinator(
     private val repository: SupabaseAuthRepository,
+    private val canUseOffline: () -> Boolean = { false },
 ) {
     suspend fun restore(): StartupSessionResult {
         var last = repository.restoreSession()
@@ -38,7 +39,11 @@ class StartupSessionCoordinator(
             }
         }
 
-        return StartupSessionResult.ConnectionRequired
+        return if (canUseOffline()) {
+            StartupSessionResult.OfflineReady
+        } else {
+            StartupSessionResult.ConnectionRequired
+        }
     }
 
     companion object {
