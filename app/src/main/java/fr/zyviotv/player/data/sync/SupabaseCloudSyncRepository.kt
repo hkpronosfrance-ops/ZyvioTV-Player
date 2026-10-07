@@ -303,6 +303,7 @@ class SupabaseCloudSyncRepository(
             is PlaylistSecret.M3u -> JSONObject()
                 .put("provider_type", secret.providerType)
                 .put("url", secret.url)
+                .put("xmltv_url", secret.xmlTvUrl ?: JSONObject.NULL)
         }
 
         val response = request(
@@ -344,6 +345,8 @@ class SupabaseCloudSyncRepository(
                     )
                     "m3u" -> PlaylistSecret.M3u(
                         url = json.getString("url"),
+                        xmlTvUrl = json.optString("xmltv_url")
+                            .takeIf { it.isNotBlank() && it != "null" },
                     )
                     else -> error("Type de fournisseur non reconnu.")
                 }
