@@ -277,9 +277,9 @@ struct PlaylistOnboardingView: View {
                 let url = m3uURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 try await SupabasePlaylistService.shared.testM3u(urlString: url)
 
-                let xml = xmlTvURL
+                let cleanXml = xmlTvURL
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .nilIfBlank
+                let xml = cleanXml.isEmpty ? nil : cleanXml
                 if let xml,
                    let parsed = URL(string: xml),
                    !["http", "https"].contains(parsed.scheme?.lowercased() ?? "") {
