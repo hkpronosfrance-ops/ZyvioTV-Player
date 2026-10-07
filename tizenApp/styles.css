@@ -248,3 +248,70 @@ nav {
 [hidden] {
     display: none !important;
 }
+
+
+.catalog-panel {
+    margin-top: 34px;
+}
+
+.catalog-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.catalog-header h2 {
+    margin: 0 0 18px;
+    font-size: 25px;
+}
+
+.catalog-header span {
+    color: #9f9f9f;
+    font-size: 16px;
+}
+
+.catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+    gap: 18px;
+}
+
+.catalog-card {
+    min-height: 210px;
+    padding: 16px;
+    border: 2px solid transparent;
+    border-radius: 18px;
+    outline: none;
+    background:
+        linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.72)),
+        #1a1a1a;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.catalog-card strong {
+    font-size: 19px;
+    line-height: 1.25;
+}
+
+.catalog-card small {
+    margin-top: 6px;
+    color: #b9b9b9;
+}
+
+.catalog-card:focus {
+    border-color: #fff;
+    transform: scale(1.035);
+    box-shadow: 0 0 0 3px rgba(255,255,255,.2);
+}
+
+@media (max-width: 1280px) {
+    .catalog-grid {
+        grid-template-columns: repeat(4, minmax(140px, 1fr));
+    }
+}
