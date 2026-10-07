@@ -561,6 +561,130 @@ enum AnyCodableValue: Decodable {
     }
 }
 
+
+struct CachedAppleParentalRuntime: Codable {
+    let parentalEnabled: Bool
+    let isChild: Bool
+    let trustedEpochMs: Int64
+    let trustedUptime: TimeInterval
+    var consumedSeconds: Int
+    let dailyLimitMinutes: Int?
+    let weekendLimitMinutes: Int?
+    let scheduleEnabled: Bool
+    let scheduleWindows: [ParentalScheduleWindowDTO]
+}
+
+final class AppleParentalRuntimeCache {
+    static let shared = AppleParentalRuntimeCache()
+
+    private let defaults = UserDefaults.standard
+    private let prefix = "zyviotv.apple.parental.runtime."
+
+    func store(profileId: String, state: ParentalRuntimeStateDTO) {
+        guard let serverNow = state.serverNowEpochMs else { return }
+
+        let windows = state.scheduleWindows.compactMap { raw -> ParentalScheduleWindowDTO? in
+            guard
+                case let .array(dayValues)? = raw["days"],
+                case let .string(start)? = raw["start"],
+                case let .string(end)? = raw["end"]
+            else { return nil }
+
+            let days = dayValues.compactMap { value -> Int? in
+                if case let .int(day) = value { return day }
+                return nil
+            }
+
+            return ParentalScheduleWindowDTO(days: days, start: start, end: end)
+        }
+
+        let existing = load(profileId: profileId)
+        let day = utcDayKey(epochMs: serverNow)
+        let consumed: Int
+        if let existing, utcDayKey(epochMs: trustedNowEpochMs(existing)) == day {
+            consumed = max(existing.consumedSeconds, state.consumedSeconds)
+        } else {
+            consumed = max(0, state.consumedSeconds)
+        }
+
+        let cached = CachedAppleParentalRuntime(
+            parentalEnabled: state.parentalEnabled,
+            isChild: state.isChild,
+            trustedEpochMs: serverNow,
+            trustedUptime: ProcessInfo.processInfo.systemUptime,
+            consumedSeconds: consumed,
+            dailyLimitMinutes: state.dailyLimitMinutes,
+            weekendLimitMinutes: state.weekendLimitMinutes,
+            scheduleEnabled: state.scheduleEnabled,
+            scheduleWindows: windows
+        )
+
+        if let data = try? JSONEncoder().encode(cached) {
+            defaults.set(data, forKey: key(profileId))
+        }
+    }
+
+    func load(profileId: String) -> CachedAppleParentalRuntime? {
+        guard let data = defaults.data(forKey: key(profileId)) else { return nil }
+        return try? JSONDecoder().decode(CachedAppleParentalRuntime.self, from: data)
+    }
+
+    func updateConsumed(profileId: String, seconds: Int) {
+        guard var cached = load(profileId: profileId) else { return }
+        let nowDay = utcDayKey(epochMs: trustedNowEpochMs(cached))
+        let storedDay = utcDayKey(epochMs: cached.trustedEpochMs)
+        cached.consumedSeconds = nowDay == storedDay
+            ? max(cached.consumedSeconds, max(0, seconds))
+            : max(0, seconds)
+        save(profileId: profileId, cached: cached)
+    }
+
+    func addOfflineSeconds(profileId: String, seconds: Int) -> Int {
+        guard var cached = load(profileId: profileId) else { return 0 }
+        let nowDay = utcDayKey(epochMs: trustedNowEpochMs(cached))
+        let storedDay = utcDayKey(epochMs: cached.trustedEpochMs)
+        let base = nowDay == storedDay ? cached.consumedSeconds : 0
+        cached.consumedSeconds = min(Int.max, base + max(0, seconds))
+        save(profileId: profileId, cached: cached)
+        return cached.consumedSeconds
+    }
+
+    func effectiveLimitMinutes(profileId: String) -> Int? {
+        guard let cached = load(profileId: profileId) else { return nil }
+        let now = Date(timeIntervalSince1970: Double(trustedNowEpochMs(cached)) / 1000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let weekday = calendar.component(.weekday, from: now)
+        let weekend = weekday == 1 || weekday == 7
+        return weekend ? (cached.weekendLimitMinutes ?? cached.dailyLimitMinutes) : cached.dailyLimitMinutes
+    }
+
+    func trustedNowEpochMs(_ cached: CachedAppleParentalRuntime) -> Int64 {
+        let delta = max(0, ProcessInfo.processInfo.systemUptime - cached.trustedUptime)
+        return cached.trustedEpochMs + Int64(delta * 1000)
+    }
+
+    private func save(profileId: String, cached: CachedAppleParentalRuntime) {
+        if let data = try? JSONEncoder().encode(cached) {
+            defaults.set(data, forKey: key(profileId))
+        }
+    }
+
+    private func key(_ profileId: String) -> String {
+        prefix + profileId
+    }
+
+    private func utcDayKey(epochMs: Int64) -> String {
+        let date = Date(timeIntervalSince1970: Double(epochMs) / 1000)
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+}
+
 final class AppleDeviceIdentityStore {
     static let shared = AppleDeviceIdentityStore()
     private let key = "zyviotv.apple.device_uid"
