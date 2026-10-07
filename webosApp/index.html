@@ -7,7 +7,25 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="shell">
+  <section id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <p class="eyebrow">ZYVIOTV PLAYER</p>
+      <h1>Connexion</h1>
+      <p class="auth-copy">Connectez votre compte pour restaurer vos playlists sur cette TV LG.</p>
+      <label>
+        <span>Adresse e-mail</span>
+        <input id="auth-email" data-focusable type="email" autocomplete="email">
+      </label>
+      <label>
+        <span>Mot de passe</span>
+        <input id="auth-password" data-focusable type="password" autocomplete="current-password">
+      </label>
+      <button class="primary" data-focusable data-action="sign-in">Se connecter</button>
+      <div id="auth-status" class="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <main id="app-shell" class="shell" hidden>
     <aside class="rail">
       <div class="brand">
         <strong>ZYVIOTV</strong>
@@ -41,18 +59,28 @@
         </div>
       </section>
 
-      <section class="shelf">
-        <h2>Reprendre la lecture</h2>
+      <section id="live-panel" class="catalog-panel" hidden>
+        <div class="catalog-header">
+          <h2>TV en direct</h2>
+          <span id="live-count"></span>
+        </div>
+        <div id="live-grid" class="catalog-grid"></div>
+      </section>
+
+      <section id="account-panel" class="catalog-panel" hidden>
+        <div class="catalog-header">
+          <h2>Plus</h2>
+        </div>
         <div class="cards">
-          <button class="card wide" data-focusable>Dernier contenu</button>
-          <button class="card wide" data-focusable>Épisode en cours</button>
-          <button class="card wide" data-focusable>Film commencé</button>
+          <button class="card" data-focusable data-action="sign-out">Se déconnecter</button>
         </div>
       </section>
 
-      <div id="status" class="status"></div>
+      <div id="status" class="status" aria-live="polite"></div>
     </section>
   </main>
+  <script src="auth.js"></script>
+  <script src="cloud.js"></script>
   <script src="provider.js"></script>
   <script src="player.js"></script>
   <script src="app.js"></script>
