@@ -943,6 +943,96 @@ private struct DevicesSettingsView: View {
     }
 }
 
+
+private struct ParentalPinRecoveryRequestView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var loadingEmail = true
+    @State private var busy = false
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("PIN oublié")
+                    .font(.largeTitle.bold())
+
+                Text("Un lien sécurisé sera envoyé à l’adresse e-mail de votre compte. Le lien est valable pour une réauthentification récente.")
+                    .foregroundStyle(.secondary)
+
+                TextField("Adresse e-mail", text: $email)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(loadingEmail)
+
+                if loadingEmail {
+                    ProgressView()
+                        .tint(.red)
+                }
+
+                if let message {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(message.hasPrefix("Erreur") ? .red : .secondary)
+                }
+
+                Button {
+                    Task { await send() }
+                } label: {
+                    if busy {
+                        ProgressView()
+                    } else {
+                        Text("Envoyer le lien")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(
+                    busy ||
+                    loadingEmail ||
+                    email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
+
+                Spacer()
+            }
+            .padding(22)
+            .background(Color.black)
+            .navigationTitle("Récupération du PIN")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Fermer") { dismiss() }
+                }
+            }
+            .task { await loadEmail() }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    @MainActor
+    private func loadEmail() async {
+        loadingEmail = true
+        defer { loadingEmail = false }
+        do {
+            email = try await SupabaseAuthService.shared.currentUserEmail()
+        } catch {
+            message = "Erreur : impossible de récupérer l’adresse e-mail du compte."
+        }
+    }
+
+    @MainActor
+    private func send() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await SupabaseAuthService.shared.requestParentalPinRecovery(email: email)
+            message = "Lien envoyé. Ouvrez l’e-mail sur cet appareil pour créer un nouveau PIN."
+        } catch {
+            message = "Erreur : \(error.localizedDescription)"
+        }
+    }
+}
+
 private struct PlaylistSettingsView: View {
     let onSignedOut: () -> Void
 
@@ -1166,6 +1256,7 @@ private struct ParentalSettingsView: View {
     @State private var scheduleEnabled = false
     @State private var scheduleWindows: [ParentalScheduleWindowDTO] = []
     @State private var message: String?
+    @State private var showingPinRecovery = false
 
     var body: some View {
         ScrollView {
@@ -1193,6 +1284,9 @@ private struct ParentalSettingsView: View {
         .task { await loadAll() }
         .onChange(of: selectedProfileId) { _, _ in
             Task { await loadProfile() }
+        }
+        .sheet(isPresented: $showingPinRecovery) {
+            ParentalPinRecoveryRequestView()
         }
     }
 
@@ -1227,6 +1321,13 @@ private struct ParentalSettingsView: View {
                 newPin.count != 4 ||
                 (account?.hasPin == true && currentPin.count != 4)
             )
+
+            if account?.hasPin == true {
+                Button("PIN oublié ?") {
+                    showingPinRecovery = true
+                }
+                .buttonStyle(.bordered)
+            }
         }
     }
 
