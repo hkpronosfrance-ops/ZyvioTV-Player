@@ -24,19 +24,34 @@ import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.shared.AppIdentity
 import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.auth.SupabaseAuthRepository
+import fr.zyviotv.player.data.cache.OfflineContentCache
+import fr.zyviotv.player.data.settings.ProfilePreferences
 import kotlinx.coroutines.delay
 
 @Composable
 fun StartupSplashScreen(
     onSessionReady: () -> Unit,
+    onOfflineReady: () -> Unit,
     onAuthRequired: () -> Unit,
 ) {
     val appContext = LocalContext.current.applicationContext
+    val offlineCache = remember(appContext) {
+        OfflineContentCache(appContext)
+    }
+    val profilePreferences = remember(appContext) {
+        ProfilePreferences(appContext)
+    }
     val coordinator = remember(appContext) {
         StartupSessionCoordinator(
-            SupabaseAuthRepository(
+            repository = SupabaseAuthRepository(
                 sessionStore = SecureSessionStore(appContext),
             ),
+            canUseOffline = {
+                offlineCache.hasUsableOfflineData(
+                    profilePreferences.selectedProfileId()
+                        ?: profilePreferences.defaultProfileId(),
+                )
+            },
         )
     }
     var attemptToken by remember { mutableIntStateOf(0) }
@@ -52,6 +67,7 @@ fun StartupSplashScreen(
         // appears when restoration genuinely takes long enough.
         when (result) {
             StartupSessionResult.SessionReady -> onSessionReady()
+            StartupSessionResult.OfflineReady -> onOfflineReady()
             StartupSessionResult.AuthRequired -> onAuthRequired()
             StartupSessionResult.ConnectionRequired -> {
                 connectionRequired = true
