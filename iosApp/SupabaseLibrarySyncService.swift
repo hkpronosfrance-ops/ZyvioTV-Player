@@ -178,7 +178,6 @@ actor SupabaseProfileService {
         case noProfile
         case invalidURL
         case invalidResponse
-        case noProfile
         case server
 
         var errorDescription: String? {
@@ -186,13 +185,11 @@ actor SupabaseProfileService {
             case .noSession:
                 return "Session absente."
             case .noProfile:
-                return "Aucun profil actif."
+                return "Aucun profil disponible."
             case .invalidURL:
                 return "Configuration serveur invalide."
             case .invalidResponse:
                 return "Réponse serveur invalide."
-            case .noProfile:
-                return "Aucun profil disponible."
             case .server:
                 return "Impossible de charger les profils."
             }
