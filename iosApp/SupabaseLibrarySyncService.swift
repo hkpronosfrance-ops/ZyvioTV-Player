@@ -183,12 +183,17 @@ actor SupabaseSystemStateService {
     func loadState() async -> AppleSystemGateState {
         guard let session = sessionStore.load() else { return .normal }
 
-        if let rows: [[String: String?]] = try? await get(
+        struct AccountState: Decodable {
+            let status: String
+            let message: String?
+        }
+
+        if let rows: [AccountState] = try? await get(
             path: "/rest/v1/player_account_status?select=status,message&limit=1",
             token: session.accessToken
         ), let row = rows.first,
-           row["status"] ?? nil == "suspended" {
-            return .accountSuspended(row["message"] ?? nil)
+           row.status == "suspended" {
+            return .accountSuspended(row.message)
         }
 
         struct ServiceState: Decodable {
