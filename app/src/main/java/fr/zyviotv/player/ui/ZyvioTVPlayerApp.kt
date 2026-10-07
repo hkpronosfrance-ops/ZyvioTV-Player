@@ -44,6 +44,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import fr.zyviotv.player.shared.AppIdentity
+import fr.zyviotv.player.shared.catalog.CatalogLiveChannel
 import fr.zyviotv.player.shared.catalog.CatalogMovie
 import fr.zyviotv.player.shared.catalog.CatalogSeries
 import fr.zyviotv.player.shared.epg.EpgWindow
@@ -283,6 +284,76 @@ fun ZyvioTVPlayerApp(
             }
         }
     }
+
+    fun isLiveChannelLocked(
+        ready: ProviderCatalogState.Ready,
+        channel: CatalogLiveChannel,
+    ): Boolean {
+        val locks = ready.contentLocks ?: return false
+        if (!locks.parentalEnabled || !locks.isChild) return false
+
+        return "live:" + channel.id in locks.lockedContentKeys ||
+            channel.categoryId?.let { "live:" + it in locks.lockedCategoryKeys } == true
+    }
+
+    fun tuneLiveChannel(channel: CatalogLiveChannel) {
+        val ready = providerState as? ProviderCatalogState.Ready ?: return
+        if (
+            ready.isOffline ||
+            channel.streamUrl.isBlank() ||
+            isLiveChannelLocked(ready, channel)
+        ) {
+            return
+        }
+
+        playbackRequest = PlaybackRequest(
+            title = channel.name,
+            streamUrl = channel.streamUrl,
+            kind = PlaybackKind.Live,
+        )
+        playbackSyncContext = null
+        scope.launch {
+            librarySession.recordLiveHistory(
+                playlistId = ready.playlistId,
+                channelId = channel.id,
+                channelName = channel.name,
+                logoUrl = channel.logoUrl,
+            )
+        }
+    }
+
+    fun zapLiveChannel(offset: Int) {
+        val ready = providerState as? ProviderCatalogState.Ready ?: return
+        val request = playbackRequest ?: return
+        if (request.kind != PlaybackKind.Live || ready.isOffline) return
+
+        val channels = ready.snapshot.liveChannels
+        if (channels.isEmpty()) return
+
+        val currentIndex = channels.indexOfFirst { it.streamUrl == request.streamUrl }
+        if (currentIndex < 0) return
+
+        val targetIndex = (currentIndex + offset + channels.size) % channels.size
+        val target = channels[targetIndex]
+
+        // Never skip over a locked target while zapping. The parental phase owns
+        // the unlock interaction; this player simply stops on the boundary.
+        if (isLiveChannelLocked(ready, target)) return
+
+        tuneLiveChannel(target)
+    }
+
+    fun tuneLiveChannelNumber(input: String) {
+        val ready = providerState as? ProviderCatalogState.Ready ?: return
+        if (ready.isOffline) return
+
+        val number = input.toIntOrNull() ?: return
+        val target = ready.snapshot.liveChannels.getOrNull(number - 1) ?: return
+        if (isLiveChannelLocked(ready, target)) return
+
+        tuneLiveChannel(target)
+    }
+
 
     LaunchedEffect(deepLink) {
         if (deepLink?.startsWith("zyviotv://parental-pin-recovery") == true) {
@@ -1474,6 +1545,9 @@ fun ZyvioTVPlayerApp(
                     profile = profile,
                     request = request,
                     onNext = { advanceToNextEpisode(false) },
+                    onPreviousChannel = { zapLiveChannel(-1) },
+                    onNextChannel = { zapLiveChannel(1) },
+                    onChannelNumberEntered = { tuneLiveChannelNumber(it) },
                     onBack = {
                         playbackRequest = null
                         navController.popBackStack()
