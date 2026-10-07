@@ -24,6 +24,7 @@ import fr.zyviotv.player.shared.sync.SyncResult
 
 data class LibrarySnapshot(
     val profileId: String,
+    val isOffline: Boolean = false,
     val favorites: List<SyncedFavorite> = emptyList(),
     val progress: List<SyncedWatchProgress> = emptyList(),
     val liveHistory: List<SyncedLiveHistory> = emptyList(),
@@ -217,6 +218,7 @@ fun rememberLibrarySession(): LibrarySession {
                 state.value = LibraryState.Ready(
                     LibrarySnapshot(
                         profileId = cached.profileId,
+                        isOffline = true,
                         favorites = cached.favorites,
                         progress = cached.progress,
                         liveHistory = cached.liveHistory,
@@ -233,6 +235,7 @@ fun rememberLibrarySession(): LibrarySession {
                 state.value = LibraryState.Ready(
                     LibrarySnapshot(
                         profileId = cached.profileId,
+                        isOffline = true,
                         favorites = cached.favorites,
                         progress = cached.progress,
                         liveHistory = cached.liveHistory,
