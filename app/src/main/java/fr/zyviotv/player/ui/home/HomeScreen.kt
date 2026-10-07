@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,10 +53,12 @@ import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.catalog.ProviderCatalogState
 import fr.zyviotv.player.ui.library.LibraryState
 import fr.zyviotv.player.ui.tv.tvFocusEffect
+import coil.compose.AsyncImage
 
 private data class HomeCardUi(
     val title: String,
     val poster: Boolean,
+    val artworkUrl: String? = null,
     val progress: Float? = null,
     val onClick: () -> Unit,
 )
@@ -107,6 +110,7 @@ fun HomeScreen(
             HomeCardUi(
                 title = it.title,
                 poster = it.contentType != ProgressContentType.Movie || it.artworkUrl != null,
+                artworkUrl = it.artworkUrl,
                 progress = it.fraction.takeIf { fraction -> fraction > 0f },
                 onClick = { onResumeProgress(it) },
             )
@@ -134,6 +138,7 @@ fun HomeScreen(
                         HomeCardUi(
                             title = favorite.title,
                             poster = false,
+                            artworkUrl = channel.logoUrl,
                             onClick = { onTuneRecentChannel(channel) },
                         )
                     }
@@ -144,6 +149,7 @@ fun HomeScreen(
                         HomeCardUi(
                             title = favorite.title,
                             poster = true,
+                            artworkUrl = movie.posterUrl,
                             onClick = { onOpenMovieItem(movie) },
                         )
                     }
@@ -154,6 +160,7 @@ fun HomeScreen(
                         HomeCardUi(
                             title = favorite.title,
                             poster = true,
+                            artworkUrl = series.posterUrl,
                             onClick = { onOpenSeriesItem(series) },
                         )
                     }
@@ -170,6 +177,7 @@ fun HomeScreen(
             HomeCardUi(
                 title = movie.title,
                 poster = true,
+                artworkUrl = movie.posterUrl,
                 onClick = { onOpenMovieItem(movie) },
             )
         }
@@ -184,6 +192,7 @@ fun HomeScreen(
             HomeCardUi(
                 title = series.title,
                 poster = true,
+                artworkUrl = series.posterUrl,
                 onClick = { onOpenSeriesItem(series) },
             )
         }
@@ -287,6 +296,13 @@ fun HomeScreen(
     } ?: newestAdded?.first
         ?: continueItems.firstOrNull()?.title
         ?: recentChannels.firstOrNull()?.name
+    val heroArtworkUrl = when {
+        heroNextEpisode != null -> heroNextEpisode.artworkUrl
+        newestAdded?.third == true -> newestMovie?.posterUrl
+        newestAdded?.third == false -> newestSeries?.posterUrl
+        continueItems.isNotEmpty() -> continueItems.first().artworkUrl
+        else -> recentChannels.firstOrNull()?.logoUrl
+    }
     val visibleNextEpisodes = if (heroNextEpisode != null) {
         nextEpisodes.filterNot {
             it.seriesId == heroNextEpisode.seriesId &&
@@ -383,6 +399,7 @@ fun HomeScreen(
             Hero(
                 profile = profile,
                 title = heroTitle,
+                artworkUrl = heroArtworkUrl,
                 subtitle = when {
                     heroNextEpisode != null -> "Votre prochain épisode est prêt."
                     newestAdded != null -> "Nouveau contenu ajouté à votre catalogue."
@@ -557,6 +574,7 @@ private fun LocalStatusBanner(
 private fun Hero(
     profile: DeviceProfile,
     title: String,
+    artworkUrl: String?,
     subtitle: String,
     actionLabel: String,
     eyebrow: String = "À la une",
@@ -573,21 +591,37 @@ private fun Hero(
             .fillMaxWidth()
             .height(heroHeight)
             .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFF250004),
-                        Color(0xFF0E0E0E),
-                        Color(0xFF080808),
-                    ),
-                ),
+                color = Color(0xFF080808),
                 shape = RoundedCornerShape(24.dp),
-            )
-            .padding(24.dp),
+            ),
     ) {
+        if (!artworkUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = artworkUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF120002).copy(alpha = 0.96f),
+                            Color.Black.copy(alpha = 0.76f),
+                            Color.Black.copy(alpha = 0.24f),
+                        ),
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                ),
+        )
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.78f),
+                .fillMaxWidth(0.78f)
+                .padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
@@ -741,6 +775,16 @@ private fun HomeRecentChannelsSection(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                     )
+                    if (!channel.logoUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = channel.logoUrl,
+                            contentDescription = channel.name,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(22.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
                     Text(
                         text = channel.name,
                         modifier = Modifier
@@ -811,6 +855,14 @@ private fun HomeNextEpisodesSection(
                         modifier = Modifier.align(Alignment.Center),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                     )
+                    if (!item.artworkUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = item.artworkUrl,
+                            contentDescription = item.seriesTitle,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -974,6 +1026,14 @@ private fun HomeSection(
                         modifier = Modifier.align(Alignment.Center),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                     )
+                    if (!item.artworkUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = item.artworkUrl,
+                            contentDescription = item.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = if (item.poster) ContentScale.Crop else ContentScale.Fit,
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
