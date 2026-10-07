@@ -47,6 +47,9 @@ class LibrarySession internal constructor(
     suspend fun toggleFavorite(favorite: SyncedFavorite): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
+        if (ready.snapshot.isOffline) {
+            return SyncResult.Failure("Action indisponible hors connexion.")
+        }
         val scopedFavorite = favorite.copy(profileId = ready.snapshot.profileId)
         val exists = ready.snapshot.favorites.any {
             it.playlistId == favorite.playlistId &&
@@ -83,6 +86,9 @@ class LibrarySession internal constructor(
     suspend fun saveProgress(progress: SyncedWatchProgress): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
+        if (ready.snapshot.isOffline) {
+            return SyncResult.Failure("Action indisponible hors connexion.")
+        }
         val scopedProgress = progress.copy(profileId = ready.snapshot.profileId)
         val result = repository.upsertWatchProgress(scopedProgress)
         if (result is SyncResult.Success) {
@@ -110,6 +116,9 @@ class LibrarySession internal constructor(
     ): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
+        if (ready.snapshot.isOffline) {
+            return SyncResult.Failure("Action indisponible hors connexion.")
+        }
         val item = SyncedLiveHistory(
             profileId = ready.snapshot.profileId,
             playlistId = playlistId,
@@ -136,6 +145,9 @@ class LibrarySession internal constructor(
     suspend fun removeProgress(progress: SyncedWatchProgress): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
+        if (ready.snapshot.isOffline) {
+            return SyncResult.Failure("Action indisponible hors connexion.")
+        }
         val result = repository.removeWatchProgress(
             profileId = ready.snapshot.profileId,
             playlistId = progress.playlistId,
@@ -257,22 +269,41 @@ fun rememberLibrarySession(): LibrarySession {
             profilePreferences.setSelectedProfileId(activeProfileId)
         }
 
-        val favorites = repository.listFavorites(profileId = activeProfileId).getOrElse {
-            state.value = LibraryState.Error("Impossible de charger vos favoris.")
-            return@LaunchedEffect
-        }
-        val progress = repository.listWatchProgress(
+        val favoritesResult = repository.listFavorites(profileId = activeProfileId)
+        val progressResult = repository.listWatchProgress(
             profileId = activeProfileId,
             limit = 200,
-        ).getOrElse {
-            state.value = LibraryState.Error("Impossible de charger votre progression.")
-            return@LaunchedEffect
-        }
-        val liveHistory = repository.listLiveHistory(
+        )
+        val liveHistoryResult = repository.listLiveHistory(
             profileId = activeProfileId,
             limit = 50,
-        ).getOrElse {
-            state.value = LibraryState.Error("Impossible de charger vos chaînes récentes.")
+        )
+
+        val favorites = favoritesResult.getOrNull()
+        val progress = progressResult.getOrNull()
+        val liveHistory = liveHistoryResult.getOrNull()
+
+        if (favorites == null || progress == null || liveHistory == null) {
+            val cached = offlineCache.loadLibrary(activeProfileId)
+            if (cached != null) {
+                state.value = LibraryState.Ready(
+                    LibrarySnapshot(
+                        profileId = cached.profileId,
+                        isOffline = true,
+                        favorites = cached.favorites,
+                        progress = cached.progress,
+                        liveHistory = cached.liveHistory,
+                    ),
+                )
+            } else {
+                state.value = LibraryState.Error(
+                    when {
+                        favorites == null -> "Impossible de charger vos favoris."
+                        progress == null -> "Impossible de charger votre progression."
+                        else -> "Impossible de charger vos chaînes récentes."
+                    },
+                )
+            }
             return@LaunchedEffect
         }
 
