@@ -47,6 +47,18 @@
       "/" + encode(streamId) + "." + safeExtension;
   }
 
+  function xtreamMovieStreamUrl(config, streamId, extension = "mp4") {
+    const base = trimSlash(config.serverUrl);
+    assertHttpsOrHttp(base);
+    const safeExtension = /^[a-z0-9]{2,5}$/i.test(extension) ? extension : "mp4";
+    return base + "/movie/" + encode(config.username) + "/" + encode(config.password) +
+      "/" + encode(streamId) + "." + safeExtension;
+  }
+
+  function xtreamSeriesInfoUrl(config, seriesId) {
+    return xtreamApiUrl(config, "get_series_info") + "&series_id=" + encode(seriesId);
+  }
+
   async function requestJson(url, timeoutMs = 15000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -89,6 +101,92 @@
       logo: item.stream_icon || null,
       epgChannelId: item.epg_channel_id || null,
       streamUrl: xtreamLiveStreamUrl(config, item.stream_id),
+    }));
+  }
+
+
+  async function loadXtreamMovies(config) {
+    const [categories, streams] = await Promise.all([
+      requestJson(xtreamApiUrl(config, "get_vod_categories")),
+      requestJson(xtreamApiUrl(config, "get_vod_streams")),
+    ]);
+
+    const categoryMap = new Map(
+      (Array.isArray(categories) ? categories : []).map((item) => [
+        String(item.category_id),
+        String(item.category_name || "Sans catégorie"),
+      ])
+    );
+
+    return (Array.isArray(streams) ? streams : []).map((item) => ({
+      id: String(item.stream_id),
+      title: String(item.name || "Film"),
+      categoryId: String(item.category_id || ""),
+      categoryName: categoryMap.get(String(item.category_id || "")) || "Sans catégorie",
+      poster: item.stream_icon || null,
+      rating: Number(item.rating || 0),
+      added: Number(item.added || 0),
+      streamUrl: xtreamMovieStreamUrl(
+        config,
+        item.stream_id,
+        String(item.container_extension || "mp4")
+      ),
+    }));
+  }
+
+  async function loadXtreamSeries(config) {
+    const [categories, series] = await Promise.all([
+      requestJson(xtreamApiUrl(config, "get_series_categories")),
+      requestJson(xtreamApiUrl(config, "get_series")),
+    ]);
+
+    const categoryMap = new Map(
+      (Array.isArray(categories) ? categories : []).map((item) => [
+        String(item.category_id),
+        String(item.category_name || "Sans catégorie"),
+      ])
+    );
+
+    return (Array.isArray(series) ? series : []).map((item) => ({
+      id: String(item.series_id),
+      title: String(item.name || "Série"),
+      categoryId: String(item.category_id || ""),
+      categoryName: categoryMap.get(String(item.category_id || "")) || "Sans catégorie",
+      poster: item.cover || null,
+      rating: Number(item.rating || 0),
+      added: Number(item.last_modified || item.added || 0),
+    }));
+  }
+
+  async function loadXtreamSeriesInfo(config, seriesId) {
+    const raw = await requestJson(xtreamSeriesInfoUrl(config, seriesId));
+    const seasons = Array.isArray(raw?.seasons) ? raw.seasons : [];
+    const episodesBySeason = raw?.episodes && typeof raw.episodes === "object"
+      ? raw.episodes
+      : {};
+
+    return {
+      info: raw?.info || {},
+      seasons: seasons.map((season) => ({
+        seasonNumber: Number(season.season_number || season.season || 0),
+        name: String(season.name || ("Saison " + (season.season_number || season.season || ""))),
+      })),
+      episodesBySeason,
+    };
+  }
+
+  async function loadXtreamShortEpg(config, streamId, limit = 10) {
+    const url = xtreamApiUrl(config, "get_short_epg") +
+      "&stream_id=" + encode(streamId) +
+      "&limit=" + encode(limit);
+    const raw = await requestJson(url);
+    const listings = Array.isArray(raw?.epg_listings) ? raw.epg_listings : [];
+    return listings.map((item) => ({
+      id: String(item.id || item.epg_id || ""),
+      title: String(item.title || "Programme"),
+      description: String(item.description || ""),
+      start: Number(item.start_timestamp || 0),
+      end: Number(item.stop_timestamp || 0),
     }));
   }
 
@@ -148,14 +246,32 @@
     throw new Error("Type de fournisseur non pris en charge.");
   }
 
+  async function loadMovies(config) {
+    if (!config || config.type !== "xtream") return [];
+    return loadXtreamMovies(config);
+  }
+
+  async function loadSeries(config) {
+    if (!config || config.type !== "xtream") return [];
+    return loadXtreamSeries(config);
+  }
+
   const api = {
     loadLive,
+    loadMovies,
+    loadSeries,
     loadXtreamLive,
+    loadXtreamMovies,
+    loadXtreamSeries,
+    loadXtreamSeriesInfo,
+    loadXtreamShortEpg,
     loadM3u,
     parseM3u,
     redactUrl,
     xtreamApiUrl,
     xtreamLiveStreamUrl,
+    xtreamMovieStreamUrl,
+    xtreamSeriesInfoUrl,
   };
 
   window.ZyvioProvider = api;
