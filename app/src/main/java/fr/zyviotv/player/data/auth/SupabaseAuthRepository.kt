@@ -136,7 +136,7 @@ class SupabaseAuthRepository(
         val stored = sessionStore.load() ?: return@withContext SessionRestoreResult.NoSession
         val now = System.currentTimeMillis() / 1000L
         if (stored.expiresAtEpochSeconds > now + SESSION_EXPIRY_SAFETY_SECONDS) {
-            return@withContext SessionRestoreResult.Valid
+            return@withContext verifyStoredAccessToken(stored.accessToken)
         }
 
         val response = runCatching {
@@ -161,6 +161,39 @@ class SupabaseAuthRepository(
                 SessionRestoreResult.Invalid
             }
             else -> SessionRestoreResult.NetworkUnavailable
+        }
+    }
+
+    private fun verifyStoredAccessToken(accessToken: String): SessionRestoreResult {
+        val response = runCatching {
+            val connection = (
+                URL(BuildConfig.SUPABASE_URL + "/auth/v1/user").openConnection()
+                    as HttpURLConnection
+                )
+            try {
+                connection.requestMethod = "GET"
+                connection.connectTimeout = SESSION_VERIFY_TIMEOUT_MS
+                connection.readTimeout = SESSION_VERIFY_TIMEOUT_MS
+                connection.doInput = true
+                connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+                connection.setRequestProperty("Authorization", "Bearer $accessToken")
+
+                val code = connection.responseCode
+                when {
+                    code in 200..299 -> SessionRestoreResult.Valid
+                    code == 400 || code == 401 || code == 403 -> {
+                        sessionStore.clear()
+                        SessionRestoreResult.Invalid
+                    }
+                    else -> SessionRestoreResult.NetworkUnavailable
+                }
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+        return response.getOrElse {
+            SessionRestoreResult.NetworkUnavailable
         }
     }
 
@@ -255,5 +288,6 @@ class SupabaseAuthRepository(
 
     private companion object {
         const val SESSION_EXPIRY_SAFETY_SECONDS = 60L
+        const val SESSION_VERIFY_TIMEOUT_MS = 5_000
     }
 }
