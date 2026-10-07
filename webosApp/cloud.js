@@ -195,6 +195,50 @@
     });
   }
 
+  async function getParentalRuntimeState(session, profileId, contentKey) {
+    return request("/rest/v1/rpc/player_parental_runtime_state", session, {
+      method: "POST",
+      body: {
+        p_profile_id: profileId,
+        p_content_key: String(contentKey || ""),
+      },
+    });
+  }
+
+  async function parentalHeartbeat(session, profileId, deviceUid, playing, contentKey, localConsumedSeconds) {
+    return request("/rest/v1/rpc/player_parental_screen_time_heartbeat_v2", session, {
+      method: "POST",
+      body: {
+        p_profile_id: profileId,
+        p_device_uid: String(deviceUid || ""),
+        p_playing: Boolean(playing),
+        p_content_key: String(contentKey || ""),
+        p_local_consumed_seconds: Math.max(0, Number(localConsumedSeconds || 0)),
+      },
+    });
+  }
+
+  async function grantParentalException(session, profileId, pin, contentKey) {
+    return request("/rest/v1/rpc/player_parental_grant_exception", session, {
+      method: "POST",
+      body: {
+        p_profile_id: profileId,
+        p_pin: String(pin || ""),
+        p_content_key: String(contentKey || ""),
+      },
+    });
+  }
+
+  async function endParentalException(session, profileId, contentKey) {
+    return request("/rest/v1/rpc/player_parental_end_exception", session, {
+      method: "POST",
+      body: {
+        p_profile_id: profileId,
+        p_content_key: String(contentKey || ""),
+      },
+    });
+  }
+
   async function listPlaylists(session) {
     const rows = await request(
       "/rest/v1/player_playlists" +
@@ -270,6 +314,10 @@
     getParentalSettings,
     verifyParentalPin,
     getProfileContentLocks,
+    getParentalRuntimeState,
+    parentalHeartbeat,
+    grantParentalException,
+    endParentalException,
     listPlaylists,
     getPlaylistSecret,
     providerConfigFromSecret,
