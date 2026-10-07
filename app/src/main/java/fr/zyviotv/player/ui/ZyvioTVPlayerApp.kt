@@ -1533,7 +1533,11 @@ fun ZyvioTVPlayerApp(
                                 },
                                 onTuneRecentChannel = { channel ->
                                     val ready = providerState as? ProviderCatalogState.Ready
-                                    if (ready != null) {
+                                    if (
+                                        ready != null &&
+                                        !ready.isOffline &&
+                                        channel.streamUrl.isNotBlank()
+                                    ) {
                                         playbackRequest = PlaybackRequest(
                                             title = channel.name,
                                             streamUrl = channel.streamUrl,
@@ -1549,7 +1553,117 @@ fun ZyvioTVPlayerApp(
                                             )
                                         }
                                         navController.navigate("player")
+                                    } else {
+                                        navController.navigate(AppDestination.Live.route)
                                     }
+                                },
+                                onResumeProgress = { progress ->
+                                    val ready = providerState as? ProviderCatalogState.Ready
+                                    if (ready == null || ready.isOffline) {
+                                        navController.navigate("continue-watching")
+                                    } else {
+                                        when (progress.contentType) {
+                                            ProgressContentType.Movie -> {
+                                                val movie = ready.snapshot.movies
+                                                    .firstOrNull { it.id == progress.contentId }
+                                                if (movie != null && movie.streamUrl.isNotBlank()) {
+                                                    playbackRequest = PlaybackRequest(
+                                                        title = movie.title,
+                                                        streamUrl = movie.streamUrl,
+                                                        kind = PlaybackKind.Movie,
+                                                        resumePositionMs = progress.positionMs,
+                                                    )
+                                                    playbackSyncContext = PlaybackSyncContext(
+                                                        playlistId = ready.playlistId,
+                                                        contentType = ProgressContentType.Movie,
+                                                        contentId = movie.id,
+                                                        title = movie.title,
+                                                        artworkUrl = movie.posterUrl,
+                                                    )
+                                                    lastSyncedPositionMs = progress.positionMs
+                                                    navController.navigate("player")
+                                                } else {
+                                                    navController.navigate("continue-watching")
+                                                }
+                                            }
+
+                                            ProgressContentType.Episode -> {
+                                                val seriesId = progress.seriesId
+                                                if (seriesId.isNullOrBlank()) {
+                                                    navController.navigate("continue-watching")
+                                                } else {
+                                                    scope.launch {
+                                                        val repository = SupabaseCloudSyncRepository(
+                                                            sessionStore = SecureSessionStore(appContext),
+                                                        )
+                                                        val secret = repository
+                                                            .getPlaylistSecret(ready.playlistId)
+                                                            .getOrNull() as? PlaylistSecret.Xtream
+                                                        if (secret == null) {
+                                                            navController.navigate("continue-watching")
+                                                            return@launch
+                                                        }
+                                                        val result = AndroidXtreamSeriesDetailLoader(
+                                                            XtreamCredentials(
+                                                                serverUrl = secret.serverUrl,
+                                                                username = secret.username,
+                                                                password = secret.password,
+                                                            ),
+                                                        ).load(seriesId)
+                                                        val detail = (
+                                                            result as? SeriesDetailLoadResult.Success
+                                                            )?.detail
+                                                        val episode = detail?.episodes?.firstOrNull {
+                                                            it.id == progress.contentId ||
+                                                                (
+                                                                    it.season == progress.seasonNumber &&
+                                                                        it.number == progress.episodeNumber
+                                                                    )
+                                                        }
+                                                        if (episode == null || episode.streamUrl.isBlank()) {
+                                                            navController.navigate("continue-watching")
+                                                            return@launch
+                                                        }
+                                                        val series = ready.snapshot.series
+                                                            .firstOrNull { it.id == seriesId }
+                                                        playbackRequest = PlaybackRequest(
+                                                            title = (series?.title ?: progress.title) +
+                                                                " — S" + episode.season +
+                                                                " E" + episode.number +
+                                                                " — " + episode.title,
+                                                            streamUrl = episode.streamUrl,
+                                                            kind = PlaybackKind.Episode,
+                                                            resumePositionMs = progress.positionMs,
+                                                        )
+                                                        playbackSyncContext = PlaybackSyncContext(
+                                                            playlistId = ready.playlistId,
+                                                            contentType = ProgressContentType.Episode,
+                                                            contentId = episode.id,
+                                                            title = episode.title,
+                                                            seriesId = seriesId,
+                                                            seasonNumber = episode.season,
+                                                            episodeNumber = episode.number,
+                                                            artworkUrl = series?.posterUrl
+                                                                ?: progress.artworkUrl,
+                                                        )
+                                                        lastSyncedPositionMs = progress.positionMs
+                                                        navController.navigate("player")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                onOpenMovieItem = { movie ->
+                                    selectedMovie = movie
+                                    navController.navigate("movie-detail")
+                                },
+                                onOpenSeriesItem = { series ->
+                                    selectedSeries = series
+                                    seriesDetailState = SeriesDetailState.Loading
+                                    seriesEpisodeSources = emptyMap()
+                                    seriesDetailReloadToken += 1
+                                    navController.navigate("series-detail")
                                 },
                                 onOpenLive = { navController.navigate(AppDestination.Live.route) },
                                 onOpenMovies = { navController.navigate(AppDestination.Movies.route) },

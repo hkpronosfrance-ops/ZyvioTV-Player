@@ -43,8 +43,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.shared.catalog.CatalogLiveChannel
+import fr.zyviotv.player.shared.catalog.CatalogMovie
+import fr.zyviotv.player.shared.catalog.CatalogSeries
 import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.ProgressContentType
+import fr.zyviotv.player.shared.sync.SyncedWatchProgress
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.catalog.ProviderCatalogState
 import fr.zyviotv.player.ui.library.LibraryState
@@ -54,6 +57,7 @@ private data class HomeCardUi(
     val title: String,
     val poster: Boolean,
     val progress: Float? = null,
+    val onClick: () -> Unit,
 )
 
 @Composable
@@ -64,6 +68,9 @@ fun HomeScreen(
     nextEpisodes: List<HomeNextEpisode>,
     onPlayNextEpisode: (HomeNextEpisode) -> Unit,
     onTuneRecentChannel: (CatalogLiveChannel) -> Unit,
+    onResumeProgress: (SyncedWatchProgress) -> Unit,
+    onOpenMovieItem: (CatalogMovie) -> Unit,
+    onOpenSeriesItem: (CatalogSeries) -> Unit,
     onOpenLive: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
@@ -101,6 +108,7 @@ fun HomeScreen(
                 title = it.title,
                 poster = it.contentType != ProgressContentType.Movie || it.artworkUrl != null,
                 progress = it.fraction.takeIf { fraction -> fraction > 0f },
+                onClick = { onResumeProgress(it) },
             )
         }
         .toList()
@@ -118,11 +126,38 @@ fun HomeScreen(
 
     val favoriteItems = filteredFavorites
         .take(MAX_HOME_ITEMS)
-        .map {
-            HomeCardUi(
-                title = it.title,
-                poster = it.contentType != FavoriteContentType.Live,
-            )
+        .mapNotNull { favorite ->
+            when (favorite.contentType) {
+                FavoriteContentType.Live -> readyProvider?.snapshot?.liveChannels
+                    ?.firstOrNull { it.id == favorite.contentId }
+                    ?.let { channel ->
+                        HomeCardUi(
+                            title = favorite.title,
+                            poster = false,
+                            onClick = { onTuneRecentChannel(channel) },
+                        )
+                    }
+
+                FavoriteContentType.Movie -> readyProvider?.snapshot?.movies
+                    ?.firstOrNull { it.id == favorite.contentId }
+                    ?.let { movie ->
+                        HomeCardUi(
+                            title = favorite.title,
+                            poster = true,
+                            onClick = { onOpenMovieItem(movie) },
+                        )
+                    }
+
+                FavoriteContentType.Series -> readyProvider?.snapshot?.series
+                    ?.firstOrNull { it.id == favorite.contentId }
+                    ?.let { series ->
+                        HomeCardUi(
+                            title = favorite.title,
+                            poster = true,
+                            onClick = { onOpenSeriesItem(series) },
+                        )
+                    }
+            }
         }
 
     val recentMovies = readyProvider?.snapshot?.movies
@@ -131,7 +166,13 @@ fun HomeScreen(
         .sortedByDescending { it.addedAtEpochSeconds }
     val recentMovieItems = recentMovies
         .take(MAX_HOME_ITEMS)
-        .map { HomeCardUi(title = it.title, poster = true) }
+        .map { movie ->
+            HomeCardUi(
+                title = movie.title,
+                poster = true,
+                onClick = { onOpenMovieItem(movie) },
+            )
+        }
 
     val recentSeries = readyProvider?.snapshot?.series
         .orEmpty()
@@ -139,7 +180,13 @@ fun HomeScreen(
         .sortedByDescending { it.addedAtEpochSeconds }
     val recentSeriesItems = recentSeries
         .take(MAX_HOME_ITEMS)
-        .map { HomeCardUi(title = it.title, poster = true) }
+        .map { series ->
+            HomeCardUi(
+                title = series.title,
+                poster = true,
+                onClick = { onOpenSeriesItem(series) },
+            )
+        }
 
     val activePlaylistProgress = readyLibrary?.snapshot?.progress
         .orEmpty()
@@ -197,10 +244,22 @@ fun HomeScreen(
     val sameCategoryItems = when (sameCategorySource) {
         SameCategorySource.Movies -> sameCategoryMovies
             .take(MAX_HOME_ITEMS)
-            .map { HomeCardUi(title = it.title, poster = true) }
+            .map { movie ->
+                HomeCardUi(
+                    title = movie.title,
+                    poster = true,
+                    onClick = { onOpenMovieItem(movie) },
+                )
+            }
         SameCategorySource.Series -> sameCategorySeries
             .take(MAX_HOME_ITEMS)
-            .map { HomeCardUi(title = it.title, poster = true) }
+            .map { series ->
+                HomeCardUi(
+                    title = series.title,
+                    poster = true,
+                    onClick = { onOpenSeriesItem(series) },
+                )
+            }
         null -> emptyList()
     }
 
@@ -266,7 +325,13 @@ fun HomeScreen(
         recentMovies
             .filterNot { it.id == newestMovie.id }
             .take(MAX_HOME_ITEMS)
-            .map { HomeCardUi(title = it.title, poster = true) }
+            .map { movie ->
+                HomeCardUi(
+                    title = movie.title,
+                    poster = true,
+                    onClick = { onOpenMovieItem(movie) },
+                )
+            }
     } else {
         recentMovieItems
     }
@@ -279,7 +344,13 @@ fun HomeScreen(
         recentSeries
             .filterNot { it.id == newestSeries.id }
             .take(MAX_HOME_ITEMS)
-            .map { HomeCardUi(title = it.title, poster = true) }
+            .map { series ->
+                HomeCardUi(
+                    title = series.title,
+                    poster = true,
+                    onClick = { onOpenSeriesItem(series) },
+                )
+            }
     } else {
         recentSeriesItems
     }
@@ -866,7 +937,7 @@ private fun HomeSection(
     ) {
         items.forEach { item ->
             Card(
-                onClick = onOpenSection,
+                onClick = item.onClick,
                 modifier = Modifier
                     .width(
                         if (isTelevision) {
