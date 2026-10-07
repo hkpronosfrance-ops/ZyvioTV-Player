@@ -40,7 +40,7 @@ class M3uCoreTest {
 
         assertEquals(1, entries.size)
         assertEquals("tf1.fr", entries.single().tvgId)
-        assertEquals(" France  Généralistes ", entries.single().groupTitle)
+        assertEquals("France  Généralistes", entries.single().groupTitle)
     }
 
     @Test
