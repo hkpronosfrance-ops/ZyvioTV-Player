@@ -58,6 +58,9 @@ import fr.zyviotv.player.data.settings.OnboardingPreferences
 import fr.zyviotv.player.data.settings.OnboardingSetupPreferences
 import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.data.settings.ProfileRepository
+import fr.zyviotv.player.data.system.SystemGateState
+import fr.zyviotv.player.data.system.SystemStatePreferences
+import fr.zyviotv.player.data.system.SystemStateRepository
 import fr.zyviotv.player.data.catalog.AndroidXtreamSeriesDetailLoader
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
@@ -118,6 +121,7 @@ import fr.zyviotv.player.ui.search.SearchScreen
 import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
 import fr.zyviotv.player.ui.startup.StartupSplashScreen
+import fr.zyviotv.player.ui.system.SystemStateScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -349,7 +353,7 @@ fun ZyvioTVPlayerApp(
                     providerCatalog.reload()
                     librarySession.reload()
                     val target = if (onboardingPreferences.isCompleted()) {
-                        "update-gate"
+                        "system-gate"
                     } else {
                         onboardingPreferences.markStarted()
                         "onboarding"
@@ -457,8 +461,80 @@ fun ZyvioTVPlayerApp(
                     onDevicePreferencesSaved = setupPreferences::saveDevice,
                     onFinished = {
                         onboardingPreferences.markCompleted()
-                        navController.navigate("update-gate") {
+                        navController.navigate("system-gate") {
                             popUpTo("onboarding") { inclusive = true }
+                        }
+                    },
+                )
+            }
+        }
+
+        composable("system-gate") {
+            val context = LocalContext.current
+            val appContext = context.applicationContext
+            val repository = remember(appContext) {
+                SystemStateRepository(SecureSessionStore(appContext))
+            }
+            val preferences = remember(appContext) {
+                SystemStatePreferences(appContext)
+            }
+            var state by remember { mutableStateOf<SystemGateState?>(null) }
+
+            LaunchedEffect(Unit) {
+                val loaded = repository.loadAndroidState()
+                state = if (
+                    loaded is SystemGateState.PlannedMaintenance &&
+                    !preferences.shouldShowPlannedMaintenance()
+                ) {
+                    SystemGateState.Normal
+                } else {
+                    loaded
+                }
+            }
+
+            when (val loaded = state) {
+                null -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                }
+
+                SystemGateState.Normal -> LaunchedEffect(Unit) {
+                    navController.navigate("update-gate") {
+                        popUpTo("system-gate") { inclusive = true }
+                    }
+                }
+
+                else -> SystemStateScreen(
+                    deviceProfile = profile,
+                    state = loaded,
+                    onContinue = {
+                        if (loaded is SystemGateState.PlannedMaintenance) {
+                            preferences.dismissPlannedMaintenance()
+                        }
+                        navController.navigate("update-gate") {
+                            popUpTo("system-gate") { inclusive = true }
+                        }
+                    },
+                    onSupport = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://zyviotv.fr"),
+                                ),
+                            )
+                        }
+                    },
+                    onSignOut = {
+                        scope.launch {
+                            fr.zyviotv.player.data.auth.SupabaseAuthRepository(
+                                SecureSessionStore(appContext),
+                            ).signOut()
+                            navController.navigate("auth") {
+                                popUpTo("system-gate") { inclusive = true }
+                            }
                         }
                     },
                 )
@@ -532,6 +608,26 @@ fun ZyvioTVPlayerApp(
                                 loadedPolicy.latestVersionCode,
                             )
                             navController.navigate(AppDestination.Home.route) {
+                                popUpTo("update-gate") { inclusive = true }
+                            }
+                        }
+                    },
+                    onSupport = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://zyviotv.fr"),
+                                ),
+                            )
+                        }
+                    },
+                    onSignOut = {
+                        scope.launch {
+                            fr.zyviotv.player.data.auth.SupabaseAuthRepository(
+                                SecureSessionStore(appContext),
+                            ).signOut()
+                            navController.navigate("auth") {
                                 popUpTo("update-gate") { inclusive = true }
                             }
                         }

@@ -1,4 +1,4 @@
-package fr.zyviotv.player.ui.onboarding
+package fr.zyviotv.player.ui.system
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,23 +17,47 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import fr.zyviotv.player.data.settings.AppUpdateKind
-import fr.zyviotv.player.data.settings.AppUpdatePolicy
+import fr.zyviotv.player.data.system.SystemGateState
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
 
 @Composable
-fun AppUpdateGateScreen(
+fun SystemStateScreen(
     deviceProfile: DeviceProfile,
-    policy: AppUpdatePolicy,
-    onUpdate: () -> Unit,
-    onLater: () -> Unit,
-    onSupport: () -> Unit = {},
-    onSignOut: () -> Unit = {},
+    state: SystemGateState,
+    onContinue: () -> Unit,
+    onSupport: () -> Unit,
+    onSignOut: () -> Unit,
 ) {
     val isTv = deviceProfile == DeviceProfile.Television
-    val mandatory = policy.kind == AppUpdateKind.Mandatory
+    val planned = state as? SystemGateState.PlannedMaintenance
+    val blocking = state is SystemGateState.BlockingMaintenance ||
+        state is SystemGateState.AccountSuspended
+
+    val title = when (state) {
+        is SystemGateState.PlannedMaintenance -> "Maintenance programmée"
+        is SystemGateState.BlockingMaintenance -> "Maintenance en cours"
+        is SystemGateState.AccountSuspended -> "Compte suspendu"
+        SystemGateState.Normal -> ""
+    }
+    val fallbackMessage = when (state) {
+        is SystemGateState.PlannedMaintenance ->
+            "Une maintenance est prévue prochainement. Vous pouvez continuer à utiliser ZYVIOTV."
+        is SystemGateState.BlockingMaintenance ->
+            "Le service est momentanément indisponible pendant la maintenance."
+        is SystemGateState.AccountSuspended ->
+            "L’accès au service est actuellement suspendu pour ce compte."
+        SystemGateState.Normal -> ""
+    }
+    val customMessage = when (state) {
+        is SystemGateState.PlannedMaintenance -> state.message
+        is SystemGateState.BlockingMaintenance -> state.message
+        is SystemGateState.AccountSuspended -> state.message
+        SystemGateState.Normal -> null
+    }
+
+    if (state == SystemGateState.Normal) return
 
     Column(
         modifier = Modifier
@@ -50,11 +74,7 @@ fun AppUpdateGateScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = if (mandatory) {
-                    "Mise à jour requise"
-                } else {
-                    "Une mise à jour est disponible"
-                },
+                text = title,
                 style = if (isTv) {
                     MaterialTheme.typography.displaySmall
                 } else {
@@ -62,45 +82,26 @@ fun AppUpdateGateScreen(
                 },
                 fontWeight = FontWeight.ExtraBold,
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             Text(
-                text = if (mandatory) {
-                    "Installez la dernière version pour continuer à utiliser ZYVIOTV."
-                } else {
-                    "Une nouvelle version de ZYVIOTV est disponible. Vous pouvez l’installer maintenant ou plus tard."
-                },
+                text = customMessage ?: fallbackMessage,
                 color = ZyvioTextSecondary,
             )
             Spacer(Modifier.height(22.dp))
-            Button(
-                onClick = onUpdate,
-                enabled = policy.storeUrl != null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .tvFocusEffect(isTv, cornerRadiusDp = 12),
-            ) {
-                Text("Mettre à jour")
-            }
 
-            if (!mandatory) {
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = onLater,
+            if (planned != null) {
+                Button(
+                    onClick = onContinue,
                     modifier = Modifier
                         .fillMaxWidth()
                         .tvFocusEffect(isTv, cornerRadiusDp = 12),
                 ) {
-                    Text("Plus tard")
+                    Text("Continuer")
                 }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Ce rappel ne sera pas réaffiché avant 7 jours.",
-                    color = ZyvioTextSecondary,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            } else {
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(
+            }
+
+            if (blocking) {
+                Button(
                     onClick = onSupport,
                     modifier = Modifier
                         .fillMaxWidth()
