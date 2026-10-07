@@ -182,6 +182,13 @@ private struct AccountView: View {
                     }
                     .buttonStyle(.bordered)
 
+                    NavigationLink {
+                        PlaylistSettingsView(onSignedOut: onSignedOut)
+                    } label: {
+                        Label("Playlists", systemImage: "list.bullet.rectangle")
+                    }
+                    .buttonStyle(.bordered)
+
                     Button(role: .destructive) {
                         Task { await signOut() }
                     } label: {
@@ -211,6 +218,207 @@ private struct AccountView: View {
     }
 }
 
+
+
+private struct PlaylistSettingsView: View {
+    let onSignedOut: () -> Void
+
+    @State private var playlists: [ProviderPlaylistDTO] = []
+    @State private var loading = true
+    @State private var busyId: String?
+    @State private var errorMessage: String?
+    @State private var showingAdd = false
+
+    var body: some View {
+        List {
+            Section {
+                HStack {
+                    Text("\(playlists.count) / 10")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Ajouter") {
+                        showingAdd = true
+                    }
+                    .disabled(playlists.count >= 10)
+                }
+            }
+
+            if loading {
+                HStack {
+                    Spacer()
+                    ProgressView("Chargement…")
+                    Spacer()
+                }
+            } else if let errorMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                    Button("Réessayer") {
+                        Task { await reload() }
+                    }
+                }
+            } else if playlists.isEmpty {
+                Text("Aucune playlist configurée.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(playlists.sorted(by: { $0.priority < $1.priority })) { playlist in
+                    playlistRow(playlist)
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.black)
+        .navigationTitle("Playlists")
+        .task { await reload() }
+        .sheet(isPresented: $showingAdd) {
+            PlaylistOnboardingView(
+                errorMessage: nil,
+                onSaved: {
+                    showingAdd = false
+                    Task { await reload() }
+                },
+                onSignedOut: onSignedOut
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func playlistRow(_ playlist: ProviderPlaylistDTO) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(playlist.name)
+                        .font(.headline)
+                    Text(statusText(playlist))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { playlist.isEnabled },
+                        set: { enabled in
+                            Task { await setEnabled(playlist, enabled: enabled) }
+                        }
+                    )
+                )
+                .labelsHidden()
+                .disabled(busyId == playlist.id)
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    Task { await move(playlist, offset: -1) }
+                } label: {
+                    Image(systemName: "arrow.up")
+                }
+                .disabled(
+                    busyId != nil ||
+                    playlist.priority <= playlists.map(\.priority).min() ?? playlist.priority
+                )
+
+                Button {
+                    Task { await move(playlist, offset: 1) }
+                } label: {
+                    Image(systemName: "arrow.down")
+                }
+                .disabled(
+                    busyId != nil ||
+                    playlist.priority >= playlists.map(\.priority).max() ?? playlist.priority
+                )
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    Task { await delete(playlist) }
+                } label: {
+                    Label("Supprimer", systemImage: "trash")
+                }
+                .disabled(busyId != nil)
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.vertical, 4)
+    }
+
+    @MainActor
+    private func reload() async {
+        loading = true
+        errorMessage = nil
+        do {
+            playlists = try await SupabasePlaylistService.shared.listPlaylists()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        loading = false
+    }
+
+    @MainActor
+    private func setEnabled(_ playlist: ProviderPlaylistDTO, enabled: Bool) async {
+        busyId = playlist.id
+        defer { busyId = nil }
+        do {
+            try await SupabasePlaylistService.shared.setEnabled(id: playlist.id, enabled: enabled)
+            await reload()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func move(_ playlist: ProviderPlaylistDTO, offset: Int) async {
+        let ordered = playlists.sorted { $0.priority < $1.priority }
+        guard let index = ordered.firstIndex(where: { $0.id == playlist.id }) else { return }
+        let target = index + offset
+        guard ordered.indices.contains(target) else { return }
+
+        busyId = playlist.id
+        defer { busyId = nil }
+
+        let other = ordered[target]
+        do {
+            try await SupabasePlaylistService.shared.setPriority(
+                id: playlist.id,
+                priority: other.priority
+            )
+            try await SupabasePlaylistService.shared.setPriority(
+                id: other.id,
+                priority: playlist.priority
+            )
+            await reload()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func delete(_ playlist: ProviderPlaylistDTO) async {
+        busyId = playlist.id
+        defer { busyId = nil }
+        do {
+            try await SupabasePlaylistService.shared.delete(id: playlist.id)
+            await reload()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func statusText(_ playlist: ProviderPlaylistDTO) -> String {
+        let provider = playlist.providerType == "xtream" ? "Xtream Codes" : "M3U"
+        let status: String
+        if playlist.secretStatus != "configured" {
+            status = "Identifiants invalides"
+        } else if playlist.isEnabled {
+            status = "À jour"
+        } else {
+            status = "Désactivée"
+        }
+        return "\(provider) · P\(playlist.priority) · \(status)"
+    }
+}
 
 private struct ParentalSettingsView: View {
     @State private var loading = true
