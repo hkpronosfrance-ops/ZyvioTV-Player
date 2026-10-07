@@ -64,6 +64,7 @@ fun AddPlaylistScreen(
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var m3uUrl by remember { mutableStateOf("") }
+    var xmlTvUrl by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
 
@@ -176,6 +177,16 @@ fun AddPlaylistScreen(
                     placeholder = { Text("https://") },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = xmlTvUrl,
+                    onValueChange = { xmlTvUrl = it },
+                    enabled = !busy,
+                    singleLine = true,
+                    label = { Text("URL XMLTV (optionnelle)") },
+                    placeholder = { Text("https://guide.exemple/epg.xml ou .xml.gz") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 
@@ -244,7 +255,21 @@ fun AddPlaylistScreen(
                                 is M3uImportResult.Success -> Unit
                             }
 
-                            secret = PlaylistSecret.M3u(cleanUrl)
+                            val cleanXmlTvUrl = xmlTvUrl.trim().takeIf(String::isNotBlank)
+                            if (
+                                cleanXmlTvUrl != null &&
+                                !cleanXmlTvUrl.startsWith("http://") &&
+                                !cleanXmlTvUrl.startsWith("https://")
+                            ) {
+                                message = "L’adresse XMLTV doit utiliser http:// ou https://."
+                                busy = false
+                                return@launch
+                            }
+
+                            secret = PlaylistSecret.M3u(
+                                url = cleanUrl,
+                                xmlTvUrl = cleanXmlTvUrl,
+                            )
                             providerType = "m3u"
                             serverHost = null
                             urlHint = safeHost(cleanUrl)
