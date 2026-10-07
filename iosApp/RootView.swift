@@ -17,7 +17,7 @@ struct RootView: View {
                 }
             } else if isAuthenticated {
                 if let activeProfile {
-                    MainTabView(
+                    PlaylistBootstrapView(
                         profile: activeProfile,
                         onSignedOut: {
                             isAuthenticated = false
@@ -94,6 +94,234 @@ struct RootView: View {
         }
 
         isLoadingProfile = false
+    }
+}
+
+
+private struct PlaylistBootstrapView: View {
+    let profile: PlayerProfileDTO
+    let onSignedOut: () -> Void
+    let onSwitchProfile: () -> Void
+
+    @State private var loading = true
+    @State private var ready = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if loading {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    ProgressView("Vérification de vos playlists…")
+                        .tint(.red)
+                }
+            } else if ready {
+                MainTabView(
+                    profile: profile,
+                    onSignedOut: onSignedOut,
+                    onSwitchProfile: onSwitchProfile
+                )
+            } else {
+                PlaylistOnboardingView(
+                    errorMessage: errorMessage,
+                    onSaved: {
+                        Task { await refresh() }
+                    },
+                    onSignedOut: onSignedOut
+                )
+            }
+        }
+        .task { await refresh() }
+    }
+
+    @MainActor
+    private func refresh() async {
+        loading = true
+        errorMessage = nil
+
+        do {
+            let playlists = try await SupabasePlaylistService.shared.listPlaylists()
+            ready = playlists.contains {
+                $0.isEnabled && $0.secretStatus == "configured"
+            }
+        } catch {
+            ready = false
+            errorMessage = error.localizedDescription
+        }
+
+        loading = false
+    }
+}
+
+private struct PlaylistOnboardingView: View {
+    let errorMessage: String?
+    let onSaved: () -> Void
+    let onSignedOut: () -> Void
+
+    @State private var type = "xtream"
+    @State private var name = ""
+    @State private var serverURL = ""
+    @State private var username = ""
+    @State private var password = ""
+    @State private var m3uURL = ""
+    @State private var xmlTvURL = ""
+    @State private var busy = false
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Ajoutez votre première playlist")
+                            .font(.largeTitle.bold())
+                        Text("ZYVIOTV doit disposer d’une source active avant d’ouvrir l’Accueil.")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Picker("Type", selection: $type) {
+                        Text("Xtream Codes").tag("xtream")
+                        Text("M3U").tag("m3u")
+                    }
+                    .pickerStyle(.segmented)
+
+                    TextField("Nom de la playlist", text: $name)
+                        .textFieldStyle(.roundedBorder)
+
+                    if type == "xtream" {
+                        TextField("Adresse du serveur", text: $serverURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Nom d’utilisateur", text: $username)
+                            .textInputAutocapitalization(.never)
+                            .textFieldStyle(.roundedBorder)
+                        SecureField("Mot de passe", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        TextField("URL M3U", text: $m3uURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("URL XMLTV (optionnelle)", text: $xmlTvURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    if let text = message ?? errorMessage {
+                        Text(text)
+                            .font(.footnote)
+                            .foregroundStyle((message ?? "").hasPrefix("Erreur") ? .red : .secondary)
+                    }
+
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if busy {
+                            ProgressView()
+                        } else {
+                            Text("Tester et enregistrer")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Text("Les identifiants sont testés puis enregistrés de façon sécurisée. Ils ne sont jamais affichés en clair.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(22)
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
+            }
+            .background(Color.black)
+            .navigationTitle("Configurer ZYVIOTV")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Déconnexion", action: onSignedOut)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    @MainActor
+    private func save() async {
+        busy = true
+        message = nil
+        defer { busy = false }
+
+        do {
+            let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let playlistId: String
+            let secret: ApplePlaylistSecret
+
+            if type == "xtream" {
+                let server = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                let user = username.trimmingCharacters(in: .whitespacesAndNewlines)
+                try await SupabasePlaylistService.shared.testXtream(
+                    serverURL: server,
+                    username: user,
+                    password: password
+                )
+                playlistId = try await SupabasePlaylistService.shared.createPlaylist(
+                    name: cleanName,
+                    providerType: "xtream",
+                    serverHost: safeOrigin(server),
+                    playlistUrlHint: nil
+                )
+                secret = .xtream(serverURL: server, username: user, password: password)
+            } else {
+                let url = m3uURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                try await SupabasePlaylistService.shared.testM3u(urlString: url)
+
+                let xml = xmlTvURL
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .nilIfBlank
+                if let xml,
+                   let parsed = URL(string: xml),
+                   !["http", "https"].contains(parsed.scheme?.lowercased() ?? "") {
+                    throw SupabasePlaylistService.PlaylistError.invalidURL
+                }
+
+                playlistId = try await SupabasePlaylistService.shared.createPlaylist(
+                    name: cleanName,
+                    providerType: "m3u",
+                    serverHost: nil,
+                    playlistUrlHint: URL(string: url)?.host
+                )
+                secret = .m3u(url: url, xmlTvURL: xml)
+            }
+
+            do {
+                try await SupabasePlaylistService.shared.setSecret(
+                    playlistId: playlistId,
+                    secret: secret
+                )
+            } catch {
+                try? await SupabasePlaylistService.shared.delete(id: playlistId)
+                throw error
+            }
+
+            message = "Playlist enregistrée."
+            onSaved()
+        } catch {
+            message = "Erreur : \(error.localizedDescription)"
+        }
+    }
+
+    private func safeOrigin(_ value: String) -> String? {
+        guard let url = URL(string: value),
+              let scheme = url.scheme,
+              let host = url.host
+        else { return nil }
+
+        if let port = url.port {
+            return "\(scheme)://\(host):\(port)"
+        }
+        return "\(scheme)://\(host)"
     }
 }
 
