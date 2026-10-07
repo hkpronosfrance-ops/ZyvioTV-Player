@@ -1,5 +1,4 @@
 import Foundation
-import FoundationXML
 
 struct SyncedFavoriteDTO: Codable, Identifiable {
     var id: String { playlistId + ":" + contentType + ":" + contentId }
