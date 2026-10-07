@@ -131,6 +131,39 @@ class SupabaseAuthRepository(
 
     fun hasStoredSession(): Boolean = sessionStore.load() != null
 
+
+    suspend fun restoreSession(): SessionRestoreResult = withContext(Dispatchers.IO) {
+        val stored = sessionStore.load() ?: return@withContext SessionRestoreResult.NoSession
+        val now = System.currentTimeMillis() / 1000L
+        if (stored.expiresAtEpochSeconds > now + SESSION_EXPIRY_SAFETY_SECONDS) {
+            return@withContext SessionRestoreResult.Valid
+        }
+
+        val response = runCatching {
+            request(
+                path = "/auth/v1/token?grant_type=refresh_token",
+                method = "POST",
+                body = JSONObject()
+                    .put("refresh_token", stored.refreshToken)
+                    .toString(),
+            )
+        }.getOrElse {
+            return@withContext SessionRestoreResult.NetworkUnavailable
+        }
+
+        when {
+            response.code in 200..299 -> {
+                saveSessionFromResponse(response.body)
+                SessionRestoreResult.Valid
+            }
+            response.code == 400 || response.code == 401 || response.code == 403 -> {
+                sessionStore.clear()
+                SessionRestoreResult.Invalid
+            }
+            else -> SessionRestoreResult.NetworkUnavailable
+        }
+    }
+
     private fun saveSessionFromResponse(body: String) {
         val json = JSONObject(body)
         val accessToken = json.optString("access_token")
@@ -208,8 +241,19 @@ class SupabaseAuthRepository(
             ?: "Une erreur est survenue. Réessayez."
     }
 
+    sealed interface SessionRestoreResult {
+        data object Valid : SessionRestoreResult
+        data object NoSession : SessionRestoreResult
+        data object Invalid : SessionRestoreResult
+        data object NetworkUnavailable : SessionRestoreResult
+    }
+
     private data class HttpResponse(
         val code: Int,
         val body: String,
     )
+
+    private companion object {
+        const val SESSION_EXPIRY_SAFETY_SECONDS = 60L
+    }
 }
