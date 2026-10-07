@@ -34,6 +34,20 @@
         </div>
     </section>
 
+    <section id="pin-screen" class="pin-screen" hidden>
+        <div class="pin-card">
+            <p class="eyebrow">CONTRÔLE PARENTAL</p>
+            <h1 id="pin-title">Code PIN requis</h1>
+            <p id="pin-copy">Saisissez le code PIN parental à 4 chiffres.</p>
+            <input id="pin-input" data-focusable type="password" inputmode="numeric" maxlength="4" autocomplete="off">
+            <div class="pin-actions">
+                <button class="primary" data-focusable data-action="verify-pin">Valider</button>
+                <button class="secondary" data-focusable data-action="cancel-pin">Annuler</button>
+            </div>
+            <div id="pin-status" class="status" aria-live="polite"></div>
+        </div>
+    </section>
+
     <main id="app-shell" class="app-shell" hidden>
         <aside class="rail" aria-label="Navigation principale">
             <div class="brand">
