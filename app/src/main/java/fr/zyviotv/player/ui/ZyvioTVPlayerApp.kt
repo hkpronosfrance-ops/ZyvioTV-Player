@@ -117,6 +117,7 @@ import fr.zyviotv.player.shared.xtream.XtreamCredentials
 import fr.zyviotv.player.ui.search.SearchScreen
 import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
+import fr.zyviotv.player.ui.startup.StartupSplashScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -290,11 +291,18 @@ fun ZyvioTVPlayerApp(
         startDestination = "splash",
     ) {
         composable("splash") {
-            SplashScreen {
-                navController.navigate("auth") {
-                    popUpTo("splash") { inclusive = true }
-                }
-            }
+            StartupSplashScreen(
+                onSessionReady = {
+                    navController.navigate("profile-gate") {
+                        popUpTo("splash") { inclusive = true }
+                    }
+                },
+                onAuthRequired = {
+                    navController.navigate("auth") {
+                        popUpTo("splash") { inclusive = true }
+                    }
+                },
+            )
         }
 
         composable("parental-pin-recovery") {
@@ -1536,40 +1544,6 @@ fun ZyvioTVPlayerApp(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SplashScreen(onFinished: () -> Unit) {
-    LaunchedEffect(Unit) {
-        delay(1200)
-        onFinished()
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = AppIdentity.name.removeSuffix(" Player").uppercase(),
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-            )
-            Text(
-                text = "PLAYER",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = AppIdentity.tagline,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-            )
         }
     }
 }
