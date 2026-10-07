@@ -270,7 +270,11 @@ fun PlayerScreen(
             state.playbackState == PlaybackState.Error -> ErrorOverlay(
                 profile = profile,
                 message = state.errorMessage ?: "Flux indisponible",
-                nextLabel = if (state.metadata.kind == PlaybackKind.Live) "Chaîne suivante" else "Épisode suivant",
+                nextLabel = when (state.metadata.kind) {
+                    PlaybackKind.Live -> "Chaîne suivante"
+                    PlaybackKind.Episode -> "Épisode suivant"
+                    PlaybackKind.Movie -> null
+                },
                 onRetry = onRetry,
                 onNext = onNext,
                 onBack = onBack,
@@ -416,11 +420,16 @@ private fun PlayerControlsOverlay(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedButton(
-                modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 999),
-                onClick = onSeekBack,
-            ) {
-                Icon(Icons.Default.FastRewind, contentDescription = null)
+            if (state.metadata.kind != PlaybackKind.Live) {
+                OutlinedButton(
+                    modifier = Modifier.tvFocusEffect(
+                        profile == DeviceProfile.Television,
+                        cornerRadiusDp = 999,
+                    ),
+                    onClick = onSeekBack,
+                ) {
+                    Icon(Icons.Default.FastRewind, contentDescription = null)
+                }
             }
 
             Button(
@@ -433,11 +442,16 @@ private fun PlayerControlsOverlay(
                 )
             }
 
-            OutlinedButton(
-                modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 999),
-                onClick = onSeekForward,
-            ) {
-                Icon(Icons.Default.FastForward, contentDescription = null)
+            if (state.metadata.kind != PlaybackKind.Live) {
+                OutlinedButton(
+                    modifier = Modifier.tvFocusEffect(
+                        profile == DeviceProfile.Television,
+                        cornerRadiusDp = 999,
+                    ),
+                    onClick = onSeekForward,
+                ) {
+                    Icon(Icons.Default.FastForward, contentDescription = null)
+                }
             }
         }
 
@@ -573,7 +587,7 @@ private fun BufferingOverlay(title: String) {
 private fun ErrorOverlay(
     profile: DeviceProfile,
     message: String,
-    nextLabel: String,
+    nextLabel: String?,
     onRetry: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
@@ -611,13 +625,18 @@ private fun ErrorOverlay(
                     Spacer(Modifier.width(6.dp))
                     Text("Réessayer")
                 }
-                OutlinedButton(
-                    modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
-                    onClick = onNext,
-                ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(nextLabel)
+                if (nextLabel != null) {
+                    OutlinedButton(
+                        modifier = Modifier.tvFocusEffect(
+                            profile == DeviceProfile.Television,
+                            cornerRadiusDp = 10,
+                        ),
+                        onClick = onNext,
+                    ) {
+                        Icon(Icons.Default.SkipNext, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(nextLabel)
+                    }
                 }
                 OutlinedButton(
                     modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
