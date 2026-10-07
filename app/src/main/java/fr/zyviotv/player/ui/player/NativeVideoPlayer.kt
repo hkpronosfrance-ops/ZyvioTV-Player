@@ -50,6 +50,7 @@ fun NativeVideoPlayer(
     selectedAudioLanguage: String? = null,
     selectedSubtitleLanguage: String? = null,
     subtitlesEnabled: Boolean = true,
+    playbackQuality: String = "Auto",
     showNativeControls: Boolean = true,
     command: NativePlayerCommand = NativePlayerCommand.None,
     commandToken: Long = 0L,
@@ -79,13 +80,26 @@ fun NativeVideoPlayer(
         }
     }
 
-    LaunchedEffect(player, selectedAudioLanguage, selectedSubtitleLanguage, subtitlesEnabled) {
+    LaunchedEffect(
+        player,
+        selectedAudioLanguage,
+        selectedSubtitleLanguage,
+        subtitlesEnabled,
+        playbackQuality,
+    ) {
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
             .apply {
                 selectedAudioLanguage?.let { setPreferredAudioLanguage(it) }
                 selectedSubtitleLanguage?.let { setPreferredTextLanguage(it) }
                 setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
+                when (playbackQuality) {
+                    "4K" -> setMaxVideoSize(3840, 2160)
+                    "FHD" -> setMaxVideoSize(1920, 1080)
+                    "HD" -> setMaxVideoSize(1280, 720)
+                    "SD" -> setMaxVideoSize(854, 480)
+                    else -> clearVideoSizeConstraints()
+                }
             }
             .build()
     }
