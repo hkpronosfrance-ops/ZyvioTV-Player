@@ -56,3 +56,19 @@ The LG webOS client now also supports:
 Provider credentials and stream URLs are never written to UI status or local account storage.
 
 No database migration is required.
+
+
+## Catalog + EPG parity
+
+The LG webOS client now also supports:
+- Xtream movie categories and VOD streams
+- Xtream series categories and series listings
+- series detail loading with normalized seasons/episodes
+- direct movie playback
+- direct episode playback
+- Xtream short EPG lookup for live channels
+- current-program display when live playback starts
+- remote-focusable dynamic movie/series/episode grids
+
+M3U remains Live-only for this phase.
+No database migration is required.
