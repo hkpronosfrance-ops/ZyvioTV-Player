@@ -303,9 +303,10 @@
     liveHistory = loadedLiveHistory;
     parentalSettings = loadedParental;
     contentLocks = loadedLocks;
-    liveChannels = filterForProfile("live", liveChannels);
-    movies = filterForProfile("movie", movies);
-    series = filterForProfile("series", series);
+    liveChannels = [];
+    movies = [];
+    series = [];
+    episodes = [];
     showApp();
     renderHomeShelves();
     setStatus("Profil : " + profile.name);
@@ -893,7 +894,7 @@
 
   async function resolveProgressPlayback(progress) {
     if (progress.content_type === "movie") {
-      if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
+      if (!movies.length) movies = filterForProfile("movie", await window.ZyvioProvider.loadMovies(providerConfig));
       const movie = movies.find((item) => item.id === String(progress.content_id));
       if (!movie) throw new Error("Film introuvable.");
       return startTrackedPlayback(movie.streamUrl, {
@@ -905,6 +906,7 @@
     }
 
     if (progress.content_type === "episode" && progress.series_id) {
+      if (isLibraryItemLocked(progress)) throw new Error("Contenu bloqué.");
       const detail = await window.ZyvioProvider.loadXtreamSeriesInfo(
         providerConfig,
         String(progress.series_id)
@@ -1229,7 +1231,7 @@
       if (!item) return;
 
       if (item.content_type === "movie") {
-        if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
+        if (!movies.length) movies = filterForProfile("movie", await window.ZyvioProvider.loadMovies(providerConfig));
         const movie = movies.find((entry) => entry.id === String(item.content_id));
         if (movie) {
           await playCatalogStream(movie.streamUrl, {
@@ -1240,7 +1242,7 @@
           });
         }
       } else if (item.content_type === "series") {
-        if (!series.length) series = await window.ZyvioProvider.loadSeries(providerConfig);
+        if (!series.length) series = filterForProfile("series", await window.ZyvioProvider.loadSeries(providerConfig));
         const seriesItem = series.find((entry) => entry.id === String(item.content_id));
         if (seriesItem) {
           try {
@@ -1271,7 +1273,7 @@
       const id = target.dataset.catalogId;
 
       if (type === "movie") {
-        if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
+        if (!movies.length) movies = filterForProfile("movie", await window.ZyvioProvider.loadMovies(providerConfig));
         const movie = movies.find((item) => item.id === id);
         if (movie) {
           await playCatalogStream(movie.streamUrl, {
@@ -1282,7 +1284,7 @@
           });
         }
       } else if (type === "series") {
-        if (!series.length) series = await window.ZyvioProvider.loadSeries(providerConfig);
+        if (!series.length) series = filterForProfile("series", await window.ZyvioProvider.loadSeries(providerConfig));
         const seriesItem = series.find((item) => item.id === id);
         if (seriesItem) {
           try {
