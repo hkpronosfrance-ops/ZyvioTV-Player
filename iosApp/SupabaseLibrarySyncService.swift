@@ -1,4 +1,237 @@
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
+
+
+struct AppleSyncedDeviceDTO: Codable, Identifiable {
+    let id: String
+    let deviceUid: String
+    let displayName: String
+    let platform: String
+    let appVersion: String?
+    let lastSeenAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case deviceUid = "device_uid"
+        case displayName = "display_name"
+        case platform
+        case appVersion = "app_version"
+        case lastSeenAt = "last_seen_at"
+    }
+}
+
+enum AppleSystemGateState: Equatable {
+    case normal
+    case plannedMaintenance(String?)
+    case blockingMaintenance(String?)
+    case accountSuspended(String?)
+}
+
+final class AppleDeviceIdentity {
+    static let shared = AppleDeviceIdentity()
+
+    private let defaults = UserDefaults.standard
+    private let key = "zyviotv.apple.device_uid"
+
+    var deviceUid: String {
+        if let existing = defaults.string(forKey: key), !existing.isEmpty {
+            return existing
+        }
+        let value = UUID().uuidString.lowercased()
+        defaults.set(value, forKey: key)
+        return value
+    }
+
+    var displayName: String {
+        #if os(iOS)
+        return UIDevice.current.model
+        #else
+        return "Appareil Apple"
+        #endif
+    }
+
+    var platform: String {
+        #if os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .pad ? "ios_tablet" : "ios_phone"
+        #else
+        return "ios_phone"
+        #endif
+    }
+
+    var appVersion: String? {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    }
+}
+
+actor SupabaseDeviceService {
+    static let shared = SupabaseDeviceService()
+
+    private let baseURL = URL(string: "https://nvpuftuluguawdxonmlc.supabase.co")!
+    private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
+    private let sessionStore = AuthSessionStore()
+
+    func registerCurrentDevice() async throws {
+        let userId = try await currentUserId()
+        let identity = AppleDeviceIdentity.shared
+        let now = ISO8601DateFormatter().string(from: Date())
+        let payload: [[String: Any]] = [[
+            "user_id": userId,
+            "device_uid": identity.deviceUid,
+            "display_name": identity.displayName,
+            "platform": identity.platform,
+            "app_version": identity.appVersion ?? NSNull(),
+            "last_seen_at": now,
+            "updated_at": now,
+        ]]
+
+        _ = try await request(
+            path: "/rest/v1/player_devices?on_conflict=user_id,device_uid",
+            method: "POST",
+            payload: payload,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
+    }
+
+    func listDevices() async throws -> [AppleSyncedDeviceDTO] {
+        let data = try await request(
+            path: "/rest/v1/player_devices?select=id,device_uid,display_name,platform,app_version,last_seen_at&order=last_seen_at.desc",
+            method: "GET"
+        )
+        return try JSONDecoder().decode([AppleSyncedDeviceDTO].self, from: data)
+    }
+
+    func renameDevice(id: String, displayName: String) async throws {
+        let clean = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { throw DeviceError.emptyName }
+        _ = try await request(
+            path: "/rest/v1/player_devices?id=eq.\(encoded(id))",
+            method: "PATCH",
+            payload: [
+                "display_name": clean,
+                "updated_at": ISO8601DateFormatter().string(from: Date()),
+            ],
+            prefer: "return=minimal"
+        )
+    }
+
+    func deleteDevice(id: String) async throws {
+        _ = try await request(
+            path: "/rest/v1/player_devices?id=eq.\(encoded(id))",
+            method: "DELETE"
+        )
+    }
+
+    private func currentUserId() async throws -> String {
+        struct UserDTO: Decodable { let id: String }
+        let data = try await request(path: "/auth/v1/user", method: "GET")
+        return try JSONDecoder().decode(UserDTO.self, from: data).id
+    }
+
+    private func request(
+        path: String,
+        method: String,
+        payload: Any? = nil,
+        prefer: String? = nil
+    ) async throws -> Data {
+        guard let session = sessionStore.load() else { throw DeviceError.noSession }
+        guard let url = URL(string: path, relativeTo: baseURL) else { throw DeviceError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        if let prefer { request.setValue(prefer, forHTTPHeaderField: "Prefer") }
+        if let payload { request.httpBody = try JSONSerialization.data(withJSONObject: payload) }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw DeviceError.server
+        }
+        return data
+    }
+
+    private func encoded(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+    }
+
+    enum DeviceError: LocalizedError {
+        case noSession, invalidURL, emptyName, server
+
+        var errorDescription: String? {
+            switch self {
+            case .noSession: return "Session absente."
+            case .invalidURL: return "Configuration serveur invalide."
+            case .emptyName: return "Le nom de l’appareil est vide."
+            case .server: return "Impossible de synchroniser les appareils."
+            }
+        }
+    }
+}
+
+actor SupabaseSystemStateService {
+    static let shared = SupabaseSystemStateService()
+
+    private let baseURL = URL(string: "https://nvpuftuluguawdxonmlc.supabase.co")!
+    private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
+    private let sessionStore = AuthSessionStore()
+
+    func loadState() async -> AppleSystemGateState {
+        guard let session = sessionStore.load() else { return .normal }
+
+        if let rows: [[String: String?]] = try? await get(
+            path: "/rest/v1/player_account_status?select=status,message&limit=1",
+            token: session.accessToken
+        ), let row = rows.first,
+           row["status"] ?? nil == "suspended" {
+            return .accountSuspended(row["message"] ?? nil)
+        }
+
+        struct ServiceState: Decodable {
+            let blocking: Bool
+            let maintenanceMessage: String?
+
+            enum CodingKeys: String, CodingKey {
+                case blocking
+                case maintenanceMessage = "maintenance_message"
+            }
+        }
+
+        guard let rows: [ServiceState] = try? await get(
+            path: "/rest/v1/player_service_state?platform=eq.ios&select=blocking,maintenance_message&limit=1",
+            token: session.accessToken
+        ), let row = rows.first else {
+            return .normal
+        }
+
+        if row.blocking {
+            return .blockingMaintenance(row.maintenanceMessage)
+        }
+        if let message = row.maintenanceMessage, !message.isEmpty {
+            return .plannedMaintenance(message)
+        }
+        return .normal
+    }
+
+    private func get<T: Decodable>(path: String, token: String) async throws -> T {
+        guard let url = URL(string: path, relativeTo: baseURL) else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+}
 
 struct SyncedFavoriteDTO: Codable, Identifiable {
     var id: String { playlistId + ":" + contentType + ":" + contentId }
