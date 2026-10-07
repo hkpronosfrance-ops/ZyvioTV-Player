@@ -15,6 +15,7 @@ class StartupSessionCoordinator(
     private val canUseOffline: () -> Boolean = { false },
 ) {
     suspend fun restore(): StartupSessionResult {
+        val startedAtNanos = System.nanoTime()
         var last = repository.restoreSession()
         if (last == SupabaseAuthRepository.SessionRestoreResult.Valid) {
             return StartupSessionResult.SessionReady
@@ -27,6 +28,23 @@ class StartupSessionCoordinator(
         }
 
         for (delayMs in RETRY_DELAYS_MS) {
+            if (last == SupabaseAuthRepository.SessionRestoreResult.NetworkUnavailable) {
+                val elapsedMs = (System.nanoTime() - startedAtNanos) / 1_000_000L
+                if (canUseOffline() && elapsedMs >= OFFLINE_FALLBACK_AFTER_MS) {
+                    return StartupSessionResult.OfflineReady
+                }
+
+                val untilOfflineMs = OFFLINE_FALLBACK_AFTER_MS - elapsedMs
+                if (
+                    canUseOffline() &&
+                    untilOfflineMs > 0L &&
+                    untilOfflineMs <= delayMs
+                ) {
+                    delay(untilOfflineMs)
+                    return StartupSessionResult.OfflineReady
+                }
+            }
+
             delay(delayMs)
             last = repository.restoreSession()
             when (last) {
@@ -48,5 +66,6 @@ class StartupSessionCoordinator(
 
     companion object {
         val RETRY_DELAYS_MS = longArrayOf(1_000L, 2_000L, 4_000L)
+        const val OFFLINE_FALLBACK_AFTER_MS = 8_000L
     }
 }
