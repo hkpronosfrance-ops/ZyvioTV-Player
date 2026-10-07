@@ -590,6 +590,22 @@ struct ParentalWriteDTO: Decodable {
     let reason: String?
 }
 
+struct ProfileContentLocksDTO: Decodable {
+    let parentalEnabled: Bool
+    let isChild: Bool
+    let hideLocked: Bool
+    let lockedCategoryKeys: [String]
+    let lockedContentKeys: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case parentalEnabled = "parental_enabled"
+        case isChild = "is_child"
+        case hideLocked = "hide_locked"
+        case lockedCategoryKeys = "locked_category_keys"
+        case lockedContentKeys = "locked_content_keys"
+    }
+}
+
 struct ParentalScheduleWindowDTO: Codable, Hashable {
     let days: [Int]
     let start: String
@@ -647,6 +663,30 @@ actor SupabaseParentalService {
             body: [
                 "p_pin": pin,
                 "p_enabled": enabled,
+            ]
+        )
+    }
+
+    func contentLocks(profileId: String) async throws -> ProfileContentLocksDTO {
+        try await rpc(
+            name: "player_get_profile_content_locks",
+            body: ["p_profile_id": profileId]
+        )
+    }
+
+    func updateContentLocks(
+        profileId: String,
+        pin: String,
+        lockedCategoryKeys: [String],
+        lockedContentKeys: [String]
+    ) async throws -> ParentalWriteDTO {
+        try await rpc(
+            name: "player_update_profile_content_locks",
+            body: [
+                "p_profile_id": profileId,
+                "p_pin": pin,
+                "p_locked_category_keys": lockedCategoryKeys,
+                "p_locked_content_keys": lockedContentKeys,
             ]
         )
     }
