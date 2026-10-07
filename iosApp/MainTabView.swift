@@ -229,6 +229,7 @@ private struct ParentalSettingsView: View {
     @State private var weekendLimit = ""
     @State private var warningMinutes = "10"
     @State private var scheduleEnabled = false
+    @State private var scheduleWindows: [ParentalScheduleWindowDTO] = []
     @State private var message: String?
 
     var body: some View {
@@ -365,7 +366,24 @@ private struct ParentalSettingsView: View {
                     .keyboardType(.numberPad)
                     .textFieldStyle(.roundedBorder)
 
-                Toggle("Plages horaires activées", isOn: $scheduleEnabled)
+                Toggle(
+                    "Plages horaires activées",
+                    isOn: Binding(
+                        get: { scheduleEnabled },
+                        set: { requested in
+                            scheduleEnabled = requested
+                            if requested && scheduleWindows.isEmpty {
+                                scheduleWindows = [
+                                    ParentalScheduleWindowDTO(
+                                        days: [1, 2, 3, 4, 5],
+                                        start: "16:30",
+                                        end: "19:30"
+                                    )
+                                ]
+                            }
+                        }
+                    )
+                )
 
                 Button("Enregistrer les restrictions") {
                     Task { await saveProfile() }
@@ -410,6 +428,7 @@ private struct ParentalSettingsView: View {
             weekendLimit = settings.weekendLimitMinutes?.description ?? ""
             warningMinutes = settings.warningMinutes.description
             scheduleEnabled = settings.scheduleEnabled
+            scheduleWindows = settings.scheduleWindows
         } catch {
             message = "Erreur : \(error.localizedDescription)"
         }
@@ -476,7 +495,8 @@ private struct ParentalSettingsView: View {
                 dailyLimitMinutes: Int(dailyLimit),
                 weekendLimitMinutes: Int(weekendLimit),
                 warningMinutes: Int(warningMinutes) ?? 10,
-                scheduleEnabled: scheduleEnabled
+                scheduleEnabled: scheduleEnabled,
+                scheduleWindows: scheduleEnabled ? scheduleWindows : []
             )
             if result.success {
                 actionPin = ""
