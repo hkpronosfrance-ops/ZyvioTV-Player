@@ -1093,7 +1093,7 @@ actor SupabaseProviderCatalogService {
         )
     }
 
-    func loadCatalog() async throws -> ProviderCatalogDTO {
+    func loadCatalog(applyParentalFilters: Bool = true) async throws -> ProviderCatalogDTO {
         let playlists: [ProviderPlaylistDTO] = try await supabaseGet(
             path: "/rest/v1/player_playlists?select=id,name,provider_type,secret_status,is_enabled,priority&order=priority.asc,updated_at.desc"
         )
@@ -1280,7 +1280,7 @@ actor SupabaseProviderCatalogService {
 
         let blockedCategories = Set(locks?.lockedCategoryKeys ?? [])
         let blockedContent = Set(locks?.lockedContentKeys ?? [])
-        let shouldFilter = locks?.parentalEnabled == true && locks?.isChild == true
+        let shouldFilter = applyParentalFilters && locks?.parentalEnabled == true && locks?.isChild == true
 
         let visibleLive = shouldFilter ? liveChannels.filter { channel in
             let contentKey = "live:" + channel.id
