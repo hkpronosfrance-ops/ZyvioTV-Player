@@ -151,6 +151,7 @@ private fun MovieDetailReady(
                 modifier = Modifier.fillMaxWidth(),
                 movie = movie,
                 primaryLabel = primaryLabel,
+                isOffline = isOffline,
                 onPlay = onPlay,
                 onToggleFavorite = onToggleFavorite,
                 isTelevision = false,
