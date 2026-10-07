@@ -46,8 +46,6 @@ fun StartupSplashScreen(
     LaunchedEffect(attemptToken) {
         connectionRequired = false
         statusText = null
-        val statusJobStart = System.currentTimeMillis()
-
         val result = coordinator.restore()
 
         // No artificial minimum splash duration. The status copy below only
