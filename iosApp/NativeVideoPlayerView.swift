@@ -21,6 +21,7 @@ struct ParentalProtectedPlayerView: View {
     @State private var submitting = false
     @State private var localConsumedSeconds = 0
     @State private var heartbeatTask: Task<Void, Never>?
+    private let runtimeCache = AppleParentalRuntimeCache.shared
 
     private var profileId: String? {
         PlayerProfileSelectionStore.shared.activeProfileId
@@ -122,6 +123,7 @@ struct ParentalProtectedPlayerView: View {
                 contentKey: contentKey
             )
             localConsumedSeconds = max(state.consumedSeconds, 0)
+            runtimeCache.store(profileId: profileId, state: state)
 
             if state.parentalEnabled && state.isChild {
                 let exceptionActive: Bool
@@ -147,11 +149,25 @@ struct ParentalProtectedPlayerView: View {
                 startHeartbeat()
             }
         } catch {
+            if let cached = runtimeCache.load(profileId: profileId),
+               cached.parentalEnabled,
+               cached.isChild {
+                localConsumedSeconds = cached.consumedSeconds
+
+                let limit = runtimeCache.effectiveLimitMinutes(profileId: profileId)
+                if let limit, localConsumedSeconds >= limit * 60 {
+                    blockTitle = "Temps d’écran atteint"
+                    isBlocked = true
+                } else if !isScheduleAllowed(cached) {
+                    blockTitle = "Pas maintenant"
+                    isBlocked = true
+                }
+            }
+
             isChecking = false
-            // Existing server-side rules remain authoritative when reachable.
-            // If unavailable, do not invent a permissive local override.
-            isBlocked = false
-            startHeartbeat()
+            if !isBlocked {
+                startHeartbeat()
+            }
         }
     }
 
@@ -189,7 +205,13 @@ struct ParentalProtectedPlayerView: View {
 
         let deviceUid = AppleDeviceIdentityStore.shared.deviceUid
         heartbeatTask = Task {
+            var previousUptime = ProcessInfo.processInfo.systemUptime
+
             while !Task.isCancelled {
+                let currentUptime = ProcessInfo.processInfo.systemUptime
+                let elapsedSeconds = max(0, min(30, Int(currentUptime - previousUptime)))
+                previousUptime = currentUptime
+
                 do {
                     let heartbeat = try await SupabaseParentalService.shared.heartbeat(
                         profileId: profileId,
@@ -203,6 +225,11 @@ struct ParentalProtectedPlayerView: View {
                             localConsumedSeconds,
                             heartbeat.consumedSeconds
                         )
+                        runtimeCache.updateConsumed(
+                            profileId: profileId,
+                            seconds: localConsumedSeconds
+                        )
+
                         if heartbeat.blockedByTime {
                             blockTitle = "Temps d’écran atteint"
                             isBlocked = true
@@ -212,13 +239,34 @@ struct ParentalProtectedPlayerView: View {
                         break
                     }
                 } catch {
-                    // Keep playback stable; the next heartbeat will reconcile usage.
+                    let offlineConsumed = runtimeCache.addOfflineSeconds(
+                        profileId: profileId,
+                        seconds: elapsedSeconds
+                    )
+                    await MainActor.run {
+                        localConsumedSeconds = max(localConsumedSeconds, offlineConsumed)
+
+                        if let cached = runtimeCache.load(profileId: profileId) {
+                            let limit = runtimeCache.effectiveLimitMinutes(profileId: profileId)
+                            if let limit, localConsumedSeconds >= limit * 60 {
+                                blockTitle = "Temps d’écran atteint"
+                                isBlocked = true
+                            } else if !isScheduleAllowed(cached) {
+                                blockTitle = "Pas maintenant"
+                                isBlocked = true
+                            }
+                        }
+                    }
+
+                    if await MainActor.run(body: { isBlocked }) {
+                        break
+                    }
                 }
 
                 try? await Task.sleep(for: .seconds(30))
             }
 
-            if isBlocked {
+            if await MainActor.run(body: { isBlocked }) {
                 await stopServerHeartbeat(profileId: profileId, deviceUid: deviceUid)
             }
         }
@@ -299,6 +347,56 @@ struct ParentalProtectedPlayerView: View {
                 if case let .int(value) = $0 { return value }
                 return nil
             })
+
+            if start == end, days.contains(isoDay) {
+                return true
+            }
+            if start < end,
+               days.contains(isoDay),
+               minuteOfDay >= start,
+               minuteOfDay < end {
+                return true
+            }
+            if start > end {
+                if days.contains(isoDay), minuteOfDay >= start {
+                    return true
+                }
+                if days.contains(previousIsoDay), minuteOfDay < end {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    private func isScheduleAllowed(_ cached: CachedAppleParentalRuntime) -> Bool {
+        guard cached.parentalEnabled, cached.isChild, cached.scheduleEnabled else {
+            return true
+        }
+        guard !cached.scheduleWindows.isEmpty else {
+            return false
+        }
+
+        let now = Date(
+            timeIntervalSince1970: Double(runtimeCache.trustedNowEpochMs(cached)) / 1000
+        )
+        var calendar = Calendar.current
+        calendar.timeZone = .current
+        let weekday = calendar.component(.weekday, from: now)
+        let isoDay = weekday == 1 ? 7 : weekday - 1
+        let previousIsoDay = isoDay == 1 ? 7 : isoDay - 1
+        let minuteOfDay =
+            calendar.component(.hour, from: now) * 60 +
+            calendar.component(.minute, from: now)
+
+        for window in cached.scheduleWindows {
+            guard
+                let start = parseMinute(window.start),
+                let end = parseMinute(window.end)
+            else { continue }
+
+            let days = Set(window.days)
 
             if start == end, days.contains(isoDay) {
                 return true

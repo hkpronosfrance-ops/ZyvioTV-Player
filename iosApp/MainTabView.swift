@@ -219,6 +219,10 @@ private struct ParentalSettingsView: View {
     @State private var profiles: [PlayerProfileDTO] = []
     @State private var selectedProfileId: String?
     @State private var profileSettings: ProfileParentalSettingsDTO?
+    @State private var catalog: ProviderCatalogDTO?
+    @State private var lockedCategoryKeys: Set<String> = []
+    @State private var lockedContentKeys: Set<String> = []
+    @State private var contentLockQuery = ""
 
     @State private var currentPin = ""
     @State private var newPin = ""
@@ -391,6 +395,78 @@ private struct ParentalSettingsView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
                 .disabled(busy || actionPin.count != 4)
+
+                if settings.profileType == "child", let catalog {
+                    Divider().padding(.vertical, 4)
+
+                    Text("Verrouillages")
+                        .font(.headline)
+
+                    Text("\(lockedCategoryKeys.count) catégorie(s) · \(lockedContentKeys.count) contenu(s)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    DisclosureGroup("Catégories") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(lockCategories(catalog), id: \.key) { item in
+                                Toggle(
+                                    isOn: Binding(
+                                        get: { lockedCategoryKeys.contains(item.key) },
+                                        set: { checked in
+                                            if checked {
+                                                lockedCategoryKeys.insert(item.key)
+                                            } else {
+                                                lockedCategoryKeys.remove(item.key)
+                                            }
+                                        }
+                                    )
+                                ) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.name)
+                                        Text(item.kind)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+
+                    TextField("Rechercher une chaîne, un film ou une série", text: $contentLockQuery)
+                        .textFieldStyle(.roundedBorder)
+
+                    if contentLockQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
+                        ForEach(lockContentResults(catalog), id: \.key) { item in
+                            Toggle(
+                                isOn: Binding(
+                                    get: { lockedContentKeys.contains(item.key) },
+                                    set: { checked in
+                                        if checked {
+                                            lockedContentKeys.insert(item.key)
+                                        } else {
+                                            lockedContentKeys.remove(item.key)
+                                        }
+                                    }
+                                )
+                            ) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.name)
+                                    Text(item.kind)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+
+                    Button("Enregistrer les verrouillages") {
+                        Task { await saveLocks() }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(busy || actionPin.count != 4)
+                }
+
             }
         }
     }
@@ -402,8 +478,12 @@ private struct ParentalSettingsView: View {
         do {
             async let settings = SupabaseParentalService.shared.accountSettings()
             async let loadedProfiles = SupabaseProfileService.shared.listProfiles()
+            async let loadedCatalog = SupabaseProviderCatalogService.shared.loadCatalog(
+                applyParentalFilters: false
+            )
             account = try await settings
             profiles = try await loadedProfiles
+            catalog = try await loadedCatalog
             if selectedProfileId == nil {
                 selectedProfileId = profiles.first(where: { !$0.isPrimary })?.id ?? profiles.first?.id
             }
@@ -418,10 +498,17 @@ private struct ParentalSettingsView: View {
     private func loadProfile() async {
         guard let selectedProfileId else { return }
         do {
-            let settings = try await SupabaseParentalService.shared.profileSettings(
+            async let loadedSettings = SupabaseParentalService.shared.profileSettings(
                 profileId: selectedProfileId
             )
+            async let loadedLocks = SupabaseParentalService.shared.contentLocks(
+                profileId: selectedProfileId
+            )
+            let settings = try await loadedSettings
+            let locks = try await loadedLocks
             profileSettings = settings
+            lockedCategoryKeys = Set(locks.lockedCategoryKeys)
+            lockedContentKeys = Set(locks.lockedContentKeys)
             maxAge = settings.maxAge
             hideLocked = settings.hideLocked
             dailyLimit = settings.dailyLimitMinutes?.description ?? ""
@@ -508,6 +595,88 @@ private struct ParentalSettingsView: View {
         } catch {
             message = "Erreur : \(error.localizedDescription)"
         }
+    }
+
+
+    @MainActor
+    private func saveLocks() async {
+        guard let selectedProfileId else { return }
+        busy = true
+        defer { busy = false }
+
+        do {
+            let result = try await SupabaseParentalService.shared.updateContentLocks(
+                profileId: selectedProfileId,
+                pin: actionPin,
+                lockedCategoryKeys: lockedCategoryKeys.sorted(),
+                lockedContentKeys: lockedContentKeys.sorted()
+            )
+            if result.success {
+                actionPin = ""
+                message = "Verrouillages mis à jour."
+                await loadProfile()
+            } else {
+                message = "Erreur : \(reasonMessage(result.reason))"
+            }
+        } catch {
+            message = "Erreur : \(error.localizedDescription)"
+        }
+    }
+
+    private struct LockEditorItem {
+        let key: String
+        let name: String
+        let kind: String
+    }
+
+    private func lockCategories(_ catalog: ProviderCatalogDTO) -> [LockEditorItem] {
+        let live = catalog.liveCategories.map {
+            LockEditorItem(key: "live:" + $0.key, name: $0.value, kind: "TV")
+        }
+        let movies = catalog.movieCategories.map {
+            LockEditorItem(key: "movie:" + $0.key, name: $0.value, kind: "Films")
+        }
+        let series = catalog.seriesCategories.map {
+            LockEditorItem(key: "series:" + $0.key, name: $0.value, kind: "Séries")
+        }
+        return (live + movies + series).sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private func lockContentResults(_ catalog: ProviderCatalogDTO) -> [LockEditorItem] {
+        let query = contentLockQuery
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+        guard query.count >= 2 else { return [] }
+
+        let live = Array(
+            catalog.liveChannels.lazy
+                .filter { normalized($0.name).contains(query) }
+                .prefix(40)
+                .map { LockEditorItem(key: "live:" + $0.id, name: $0.name, kind: "Chaîne TV") }
+        )
+        let movies = Array(
+            catalog.movies.lazy
+                .filter { normalized($0.title).contains(query) }
+                .prefix(40)
+                .map { LockEditorItem(key: "movie:" + $0.id, name: $0.title, kind: "Film") }
+        )
+        let series = Array(
+            catalog.series.lazy
+                .filter { normalized($0.title).contains(query) }
+                .prefix(40)
+                .map { LockEditorItem(key: "series:" + $0.id, name: $0.title, kind: "Série") }
+        )
+
+        return Array((live + movies + series).prefix(80))
+    }
+
+    private func normalized(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
     }
 
     private func reasonMessage(_ reason: String?) -> String {

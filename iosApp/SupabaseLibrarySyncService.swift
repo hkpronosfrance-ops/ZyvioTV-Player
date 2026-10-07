@@ -480,6 +480,8 @@ struct ProviderCatalogDTO {
     let playlistName: String
     let liveChannels: [ProviderLiveChannelDTO]
     let liveCategories: [String: String]
+    let movieCategories: [String: String]
+    let seriesCategories: [String: String]
     let movies: [ProviderMovieDTO]
     let series: [ProviderSeriesDTO]
 }
@@ -559,6 +561,130 @@ enum AnyCodableValue: Decodable {
     }
 }
 
+
+struct CachedAppleParentalRuntime: Codable {
+    let parentalEnabled: Bool
+    let isChild: Bool
+    let trustedEpochMs: Int64
+    let trustedUptime: TimeInterval
+    var consumedSeconds: Int
+    let dailyLimitMinutes: Int?
+    let weekendLimitMinutes: Int?
+    let scheduleEnabled: Bool
+    let scheduleWindows: [ParentalScheduleWindowDTO]
+}
+
+final class AppleParentalRuntimeCache {
+    static let shared = AppleParentalRuntimeCache()
+
+    private let defaults = UserDefaults.standard
+    private let prefix = "zyviotv.apple.parental.runtime."
+
+    func store(profileId: String, state: ParentalRuntimeStateDTO) {
+        guard let serverNow = state.serverNowEpochMs else { return }
+
+        let windows = state.scheduleWindows.compactMap { raw -> ParentalScheduleWindowDTO? in
+            guard
+                case let .array(dayValues)? = raw["days"],
+                case let .string(start)? = raw["start"],
+                case let .string(end)? = raw["end"]
+            else { return nil }
+
+            let days = dayValues.compactMap { value -> Int? in
+                if case let .int(day) = value { return day }
+                return nil
+            }
+
+            return ParentalScheduleWindowDTO(days: days, start: start, end: end)
+        }
+
+        let existing = load(profileId: profileId)
+        let day = utcDayKey(epochMs: serverNow)
+        let consumed: Int
+        if let existing, utcDayKey(epochMs: trustedNowEpochMs(existing)) == day {
+            consumed = max(existing.consumedSeconds, state.consumedSeconds)
+        } else {
+            consumed = max(0, state.consumedSeconds)
+        }
+
+        let cached = CachedAppleParentalRuntime(
+            parentalEnabled: state.parentalEnabled,
+            isChild: state.isChild,
+            trustedEpochMs: serverNow,
+            trustedUptime: ProcessInfo.processInfo.systemUptime,
+            consumedSeconds: consumed,
+            dailyLimitMinutes: state.dailyLimitMinutes,
+            weekendLimitMinutes: state.weekendLimitMinutes,
+            scheduleEnabled: state.scheduleEnabled,
+            scheduleWindows: windows
+        )
+
+        if let data = try? JSONEncoder().encode(cached) {
+            defaults.set(data, forKey: key(profileId))
+        }
+    }
+
+    func load(profileId: String) -> CachedAppleParentalRuntime? {
+        guard let data = defaults.data(forKey: key(profileId)) else { return nil }
+        return try? JSONDecoder().decode(CachedAppleParentalRuntime.self, from: data)
+    }
+
+    func updateConsumed(profileId: String, seconds: Int) {
+        guard var cached = load(profileId: profileId) else { return }
+        let nowDay = utcDayKey(epochMs: trustedNowEpochMs(cached))
+        let storedDay = utcDayKey(epochMs: cached.trustedEpochMs)
+        cached.consumedSeconds = nowDay == storedDay
+            ? max(cached.consumedSeconds, max(0, seconds))
+            : max(0, seconds)
+        save(profileId: profileId, cached: cached)
+    }
+
+    func addOfflineSeconds(profileId: String, seconds: Int) -> Int {
+        guard var cached = load(profileId: profileId) else { return 0 }
+        let nowDay = utcDayKey(epochMs: trustedNowEpochMs(cached))
+        let storedDay = utcDayKey(epochMs: cached.trustedEpochMs)
+        let base = nowDay == storedDay ? cached.consumedSeconds : 0
+        cached.consumedSeconds = min(Int.max, base + max(0, seconds))
+        save(profileId: profileId, cached: cached)
+        return cached.consumedSeconds
+    }
+
+    func effectiveLimitMinutes(profileId: String) -> Int? {
+        guard let cached = load(profileId: profileId) else { return nil }
+        let now = Date(timeIntervalSince1970: Double(trustedNowEpochMs(cached)) / 1000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let weekday = calendar.component(.weekday, from: now)
+        let weekend = weekday == 1 || weekday == 7
+        return weekend ? (cached.weekendLimitMinutes ?? cached.dailyLimitMinutes) : cached.dailyLimitMinutes
+    }
+
+    func trustedNowEpochMs(_ cached: CachedAppleParentalRuntime) -> Int64 {
+        let delta = max(0, ProcessInfo.processInfo.systemUptime - cached.trustedUptime)
+        return cached.trustedEpochMs + Int64(delta * 1000)
+    }
+
+    private func save(profileId: String, cached: CachedAppleParentalRuntime) {
+        if let data = try? JSONEncoder().encode(cached) {
+            defaults.set(data, forKey: key(profileId))
+        }
+    }
+
+    private func key(_ profileId: String) -> String {
+        prefix + profileId
+    }
+
+    private func utcDayKey(epochMs: Int64) -> String {
+        let date = Date(timeIntervalSince1970: Double(epochMs) / 1000)
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+}
+
 final class AppleDeviceIdentityStore {
     static let shared = AppleDeviceIdentityStore()
     private let key = "zyviotv.apple.device_uid"
@@ -588,6 +714,22 @@ struct ParentalAccountSettingsDTO: Decodable {
 struct ParentalWriteDTO: Decodable {
     let success: Bool
     let reason: String?
+}
+
+struct ProfileContentLocksDTO: Decodable {
+    let parentalEnabled: Bool
+    let isChild: Bool
+    let hideLocked: Bool
+    let lockedCategoryKeys: [String]
+    let lockedContentKeys: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case parentalEnabled = "parental_enabled"
+        case isChild = "is_child"
+        case hideLocked = "hide_locked"
+        case lockedCategoryKeys = "locked_category_keys"
+        case lockedContentKeys = "locked_content_keys"
+    }
 }
 
 struct ParentalScheduleWindowDTO: Codable, Hashable {
@@ -647,6 +789,30 @@ actor SupabaseParentalService {
             body: [
                 "p_pin": pin,
                 "p_enabled": enabled,
+            ]
+        )
+    }
+
+    func contentLocks(profileId: String) async throws -> ProfileContentLocksDTO {
+        try await rpc(
+            name: "player_get_profile_content_locks",
+            body: ["p_profile_id": profileId]
+        )
+    }
+
+    func updateContentLocks(
+        profileId: String,
+        pin: String,
+        lockedCategoryKeys: [String],
+        lockedContentKeys: [String]
+    ) async throws -> ParentalWriteDTO {
+        try await rpc(
+            name: "player_update_profile_content_locks",
+            body: [
+                "p_profile_id": profileId,
+                "p_pin": pin,
+                "p_locked_category_keys": lockedCategoryKeys,
+                "p_locked_content_keys": lockedContentKeys,
             ]
         )
     }
@@ -1051,7 +1217,7 @@ actor SupabaseProviderCatalogService {
         )
     }
 
-    func loadCatalog() async throws -> ProviderCatalogDTO {
+    func loadCatalog(applyParentalFilters: Bool = true) async throws -> ProviderCatalogDTO {
         let playlists: [ProviderPlaylistDTO] = try await supabaseGet(
             path: "/rest/v1/player_playlists?select=id,name,provider_type,secret_status,is_enabled,priority&order=priority.asc,updated_at.desc"
         )
@@ -1070,6 +1236,8 @@ actor SupabaseProviderCatalogService {
                 playlistName: playlist.name,
                 liveChannels: [],
                 liveCategories: [:],
+                movieCategories: [:],
+                seriesCategories: [:],
                 movies: [],
                 series: []
             )
@@ -1095,6 +1263,18 @@ actor SupabaseProviderCatalogService {
             password: password,
             action: "get_live_streams"
         )
+        async let movieCategoryPayload = providerArray(
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            action: "get_vod_categories"
+        )
+        async let seriesCategoryPayload = providerArray(
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            action: "get_series_categories"
+        )
         async let moviePayload = providerArray(
             serverURL: serverURL,
             username: username,
@@ -1116,6 +1296,26 @@ actor SupabaseProviderCatalogService {
                 else {
                     return nil
                 }
+                return (id, name)
+            }
+        )
+
+        let movieCategories = Dictionary(
+            uniqueKeysWithValues: try await movieCategoryPayload.compactMap { item -> (String, String)? in
+                guard
+                    let id = stringValue(item["category_id"]),
+                    let name = cleanString(item["category_name"])
+                else { return nil }
+                return (id, name)
+            }
+        )
+
+        let seriesCategories = Dictionary(
+            uniqueKeysWithValues: try await seriesCategoryPayload.compactMap { item -> (String, String)? in
+                guard
+                    let id = stringValue(item["category_id"]),
+                    let name = cleanString(item["category_name"])
+                else { return nil }
                 return (id, name)
             }
         )
@@ -1195,18 +1395,72 @@ actor SupabaseProviderCatalogService {
             )
         }
 
+        let locks: ProfileContentLocksDTO?
+        if let profileId = PlayerProfileSelectionStore.shared.activeProfileId {
+            locks = try? await SupabaseParentalService.shared.contentLocks(profileId: profileId)
+        } else {
+            locks = nil
+        }
+
+        let blockedCategories = Set(locks?.lockedCategoryKeys ?? [])
+        let blockedContent = Set(locks?.lockedContentKeys ?? [])
+        let shouldFilter = applyParentalFilters && locks?.parentalEnabled == true && locks?.isChild == true
+
+        let visibleLive = shouldFilter ? liveChannels.filter { channel in
+            let contentKey = "live:" + channel.id
+            let categoryKey = channel.categoryId.map { "live:" + $0 }
+            let adultCategory = channel.categoryId
+                .flatMap { liveCategories[$0] }
+                .map(isAdultCategoryName) ?? false
+            return !blockedContent.contains(contentKey)
+                && !(categoryKey.map(blockedCategories.contains) ?? false)
+                && !adultCategory
+        } : liveChannels
+
+        let visibleMovies = shouldFilter ? movies.filter { movie in
+            let contentKey = "movie:" + movie.id
+            let categoryKey = movie.categoryId.map { "movie:" + $0 }
+            let adultCategory = movie.categoryId
+                .flatMap { movieCategories[$0] }
+                .map(isAdultCategoryName) ?? false
+            return !blockedContent.contains(contentKey)
+                && !(categoryKey.map(blockedCategories.contains) ?? false)
+                && !adultCategory
+        } : movies
+
+        let visibleSeries = shouldFilter ? series.filter { item in
+            let contentKey = "series:" + item.id
+            let categoryKey = item.categoryId.map { "series:" + $0 }
+            let adultCategory = item.categoryId
+                .flatMap { seriesCategories[$0] }
+                .map(isAdultCategoryName) ?? false
+            return !blockedContent.contains(contentKey)
+                && !(categoryKey.map(blockedCategories.contains) ?? false)
+                && !adultCategory
+        } : series
+
         return ProviderCatalogDTO(
             playlistId: playlist.id,
             playlistName: playlist.name,
-            liveChannels: liveChannels,
+            liveChannels: visibleLive,
             liveCategories: liveCategories,
-            movies: movies.sorted {
+            movieCategories: movieCategories,
+            seriesCategories: seriesCategories,
+            movies: visibleMovies.sorted {
                 ($0.addedAtEpochSeconds ?? 0) > ($1.addedAtEpochSeconds ?? 0)
             },
-            series: series.sorted {
+            series: visibleSeries.sorted {
                 ($0.addedAtEpochSeconds ?? 0) > ($1.addedAtEpochSeconds ?? 0)
             }
         )
+    }
+
+    private func isAdultCategoryName(_ value: String) -> Bool {
+        let normalized = value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+        return ["adult", "adulte", "xxx", "porn", "erotic", "erotique", "18+", "+18"]
+            .contains { normalized.contains($0) }
     }
 
     private struct PlaylistSecretPayload {
