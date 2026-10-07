@@ -100,3 +100,19 @@ The Samsung client now also supports:
 - fixed catalog-card activation for remote/Enter clicks
 
 Child-profile parental enforcement remains a dedicated follow-up phase; this phase only establishes correct profile selection and scoped library data.
+
+
+## Child profile parental enforcement
+
+The Samsung client now also supports:
+- loading account parental settings
+- loading profile-scoped content locks
+- hiding explicitly locked live/movie/series content for Child profiles
+- always hiding adult-labelled categories on Child profiles when parental controls are enabled
+- parental PIN verification through the existing secure RPC
+- PIN-gated exit from a Child profile to the profile picker
+- PIN-gated access to the account/More area from a Child profile
+- PIN-gated sign-out from a Child profile
+- lockout/attempt feedback returned by the backend
+
+Screen-time heartbeat, schedules and temporary 30-minute runtime exceptions remain a dedicated follow-up phase.
