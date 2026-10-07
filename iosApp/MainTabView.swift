@@ -1041,6 +1041,7 @@ private struct PlaylistSettingsView: View {
     @State private var busyId: String?
     @State private var errorMessage: String?
     @State private var showingAdd = false
+    @State private var editingPlaylist: ProviderPlaylistDTO?
 
     var body: some View {
         List {
@@ -1091,6 +1092,15 @@ private struct PlaylistSettingsView: View {
                     Task { await reload() }
                 },
                 onSignedOut: onSignedOut
+            )
+        }
+        .sheet(item: $editingPlaylist) { playlist in
+            PlaylistEditView(
+                playlist: playlist,
+                onSaved: {
+                    editingPlaylist = nil
+                    Task { await reload() }
+                }
             )
         }
     }
@@ -1144,6 +1154,13 @@ private struct PlaylistSettingsView: View {
                 )
 
                 Spacer()
+
+                Button {
+                    editingPlaylist = playlist
+                } label: {
+                    Label("Modifier", systemImage: "pencil")
+                }
+                .disabled(busyId != nil)
 
                 Button(role: .destructive) {
                     Task { await delete(playlist) }
@@ -1230,6 +1247,202 @@ private struct PlaylistSettingsView: View {
             status = "Désactivée"
         }
         return "\(provider) · P\(playlist.priority) · \(status)"
+    }
+}
+
+
+private struct PlaylistEditView: View {
+    let playlist: ProviderPlaylistDTO
+    let onSaved: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var serverURL = ""
+    @State private var username = ""
+    @State private var password = ""
+    @State private var m3uURL = ""
+    @State private var xmlTvURL = ""
+    @State private var busy = false
+    @State private var message: String?
+
+    init(playlist: ProviderPlaylistDTO, onSaved: @escaping () -> Void) {
+        self.playlist = playlist
+        self.onSaved = onSaved
+        _name = State(initialValue: playlist.name)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    TextField("Nom de la playlist", text: $name)
+                        .textFieldStyle(.roundedBorder)
+
+                    Divider()
+
+                    if playlist.providerType == "xtream" {
+                        Text("Remplacer les identifiants Xtream")
+                            .font(.headline)
+                        Text("Les identifiants actuels ne sont jamais affichés. Laissez ces champs vides pour conserver la source existante.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+
+                        TextField(
+                            playlist.serverHost ?? "Adresse du serveur",
+                            text: $serverURL
+                        )
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .textFieldStyle(.roundedBorder)
+
+                        TextField("Nom d’utilisateur", text: $username)
+                            .textInputAutocapitalization(.never)
+                            .textFieldStyle(.roundedBorder)
+
+                        SecureField("Mot de passe", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        Text("Remplacer la source M3U / XMLTV")
+                            .font(.headline)
+                        Text("La source actuelle n’est pas affichée en clair. Laissez l’URL M3U vide pour conserver la source existante.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+
+                        if let hint = playlist.playlistUrlHint, !hint.isEmpty {
+                            Text("Source actuelle : \(hint)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        TextField("Nouvelle URL M3U", text: $m3uURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .textFieldStyle(.roundedBorder)
+
+                        TextField("Nouvelle URL XMLTV (optionnelle)", text: $xmlTvURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    if let message {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(message.hasPrefix("Erreur") ? .red : .secondary)
+                    }
+
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if busy {
+                            ProgressView()
+                        } else {
+                            Text("Enregistrer")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(
+                        busy ||
+                        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                }
+                .padding(22)
+            }
+            .background(Color.black)
+            .navigationTitle("Modifier la playlist")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Fermer") { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    @MainActor
+    private func save() async {
+        busy = true
+        message = nil
+        defer { busy = false }
+
+        do {
+            try await SupabasePlaylistService.shared.rename(id: playlist.id, name: name)
+
+            if playlist.providerType == "xtream" {
+                let server = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                let user = username.trimmingCharacters(in: .whitespacesAndNewlines)
+                let replacingSource = !server.isEmpty || !user.isEmpty || !password.isEmpty
+
+                if replacingSource {
+                    guard !server.isEmpty, !user.isEmpty, !password.isEmpty else {
+                        throw SupabasePlaylistService.PlaylistError.invalidCredentials
+                    }
+
+                    try await SupabasePlaylistService.shared.testXtream(
+                        serverURL: server,
+                        username: user,
+                        password: password
+                    )
+                    try await SupabasePlaylistService.shared.setSecret(
+                        playlistId: playlist.id,
+                        secret: .xtream(
+                            serverURL: server,
+                            username: user,
+                            password: password
+                        )
+                    )
+                    try await SupabasePlaylistService.shared.updateSourceMetadata(
+                        id: playlist.id,
+                        serverHost: safeOrigin(server),
+                        playlistUrlHint: nil
+                    )
+                }
+            } else {
+                let url = m3uURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !url.isEmpty {
+                    try await SupabasePlaylistService.shared.testM3u(urlString: url)
+
+                    let cleanXml = xmlTvURL
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let xml = cleanXml.isEmpty ? nil : cleanXml
+
+                    if let xml,
+                       let parsed = URL(string: xml),
+                       !["http", "https"].contains(parsed.scheme?.lowercased() ?? "") {
+                        throw SupabasePlaylistService.PlaylistError.invalidURL
+                    }
+
+                    try await SupabasePlaylistService.shared.setSecret(
+                        playlistId: playlist.id,
+                        secret: .m3u(url: url, xmlTvURL: xml)
+                    )
+                    try await SupabasePlaylistService.shared.updateSourceMetadata(
+                        id: playlist.id,
+                        serverHost: nil,
+                        playlistUrlHint: URL(string: url)?.host
+                    )
+                }
+            }
+
+            message = "Playlist mise à jour."
+            onSaved()
+        } catch {
+            message = "Erreur : \(error.localizedDescription)"
+        }
+    }
+
+    private func safeOrigin(_ value: String) -> String? {
+        guard
+            let url = URL(string: value),
+            let scheme = url.scheme,
+            let host = url.host
+        else { return nil }
+
+        if let port = url.port {
+            return "\(scheme)://\(host):\(port)"
+        }
+        return "\(scheme)://\(host)"
     }
 }
 
