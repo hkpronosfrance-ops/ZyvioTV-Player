@@ -11,6 +11,30 @@ actor SupabaseAuthService {
         sessionStore.load() != nil
     }
 
+    func restoreSession() async -> Bool {
+        guard let session = sessionStore.load() else {
+            return false
+        }
+
+        let now = Int64(Date().timeIntervalSince1970)
+        if session.expiresAtEpochSeconds > now + 60 {
+            return true
+        }
+
+        do {
+            let response = try await request(
+                path: "/auth/v1/token?grant_type=refresh_token",
+                method: "POST",
+                body: ["refresh_token": session.refreshToken]
+            )
+            try persistSession(from: response)
+            return sessionStore.load() != nil
+        } catch {
+            sessionStore.clear()
+            return false
+        }
+    }
+
     func signIn(email: String, password: String) async throws {
         let body = [
             "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
