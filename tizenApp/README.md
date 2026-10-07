@@ -167,3 +167,24 @@ The Samsung client now also supports:
 - blocking states remain isolated from the application shell
 
 No database migration is required; existing player_devices, player_account_status and player_service_state RLS-backed tables are reused.
+
+
+## Release readiness
+
+The Tizen client now includes:
+- contextual Samsung Back/Exit behavior
+- media remote Play/Pause/Stop/Fast-forward/Rewind handling
+- Samsung product-info privilege for device model detection
+- a reproducible signed WGT packaging script
+- CI checks for release manifest fields and signing-artifact hygiene
+- a physical Samsung TV QA checklist
+
+Create a signed package locally with:
+
+```bash
+bash tizenApp/package-wgt.sh "<security-profile>" ["<device-name>"]
+```
+
+The signing profile and certificates remain local and must never be committed.
+
+Physical Samsung hardware validation and Samsung Seller Office submission remain external release steps.

@@ -63,7 +63,28 @@ jobs:
           assert application is not None
           assert application.attrib.get("id")
           assert application.attrib.get("package")
-          print("Tizen manifest structure OK")
+          assert application.attrib.get("required_version") == "6.0"
+
+          privileges = {
+              item.attrib.get("name")
+              for item in root.findall("t:privilege", ns)
+          }
+          assert "http://tizen.org/privilege/internet" in privileges
+          assert "http://developer.samsung.com/privilege/productinfo" in privileges
+
+          setting = root.find("t:setting", ns)
+          assert setting is not None
+          assert setting.attrib.get("hwkey-event") == "enable"
+
+          access = root.find("w:access", ns)
+          assert access is not None
+          assert access.attrib.get("origin") == "*"
+
+          version = root.attrib.get("version", "")
+          parts = version.split(".")
+          assert len(parts) == 3 and all(part.isdigit() for part in parts)
+
+          print("Tizen release manifest structure OK")
           PY
 
       - name: Validate required client files
@@ -76,3 +97,14 @@ jobs:
           test -s tizenApp/provider.js
           test -s tizenApp/player.js
           test -s tizenApp/config.xml
+
+
+      - name: Validate WGT packaging script
+        run: bash -n tizenApp/package-wgt.sh
+
+      - name: Reject committed Tizen signing artifacts
+        run: |
+          if find tizenApp -type f \( -name '*.wgt' -o -name '*.p12' -o -name '*.pfx' -o -name '*.pem' -o -name '*.key' -o -name 'author-signature.xml' -o -name 'signature1.xml' \) | grep -q .; then
+            echo "Tizen signing/package artifact committed to source."
+            exit 1
+          fi

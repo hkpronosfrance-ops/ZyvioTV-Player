@@ -1525,6 +1525,58 @@
         setStatus(labels[section] || section);
     }
 
+    function exitApplication() {
+        try {
+            window.tizen?.application?.getCurrentApplication?.().exit();
+            return;
+        } catch (_) {}
+        setStatus("Utilisez Retour pour quitter ZYVIOTV.");
+    }
+
+    function focusHomeNavigation() {
+        const home = document.querySelector('[data-section="home"]');
+        setTimeout(() => home?.focus(), 0);
+    }
+
+    async function stopCurrentPlayback(statusMessage = "Retour") {
+        if (!player?.isActive?.() && !activePlayback) return false;
+        try { await syncActivePlayback(); } catch (_) {}
+        try { await finishParentalPlayback(); } catch (_) {}
+        activePlayback = null;
+        player?.stop();
+        setStatus(statusMessage);
+        focusHomeNavigation();
+        return true;
+    }
+
+    function returnFromSecondaryPanel() {
+        if (devicesPanel && !devicesPanel.hidden) {
+            devicesPanel.hidden = true;
+            if (morePanel) morePanel.hidden = false;
+            setStatus("Plus");
+            setTimeout(() => morePanel?.querySelector("[data-focusable]")?.focus(), 0);
+            return true;
+        }
+
+        if (morePanel && !morePanel.hidden) {
+            morePanel.hidden = true;
+            activateSection("home");
+            renderHomeShelves();
+            focusHomeNavigation();
+            return true;
+        }
+
+        if (catalogPanel && !catalogPanel.hidden) {
+            hideCatalog();
+            activateSection("home");
+            renderHomeShelves();
+            focusHomeNavigation();
+            return true;
+        }
+
+        return false;
+    }
+
     function registerRemoteKeys() {
         if (!window.tizen?.tvinputdevice) return;
 
@@ -1560,6 +1612,40 @@
             return;
         }
 
+        const mediaKey = event.key || "";
+        if (mediaKey === "MediaPlayPause") {
+            event.preventDefault();
+            if (player?.togglePause?.()) {
+                setStatus(player.paused ? "Pause" : "Lecture");
+            }
+            return;
+        }
+        if (mediaKey === "MediaPlay") {
+            event.preventDefault();
+            player?.resume();
+            return;
+        }
+        if (mediaKey === "MediaPause") {
+            event.preventDefault();
+            player?.pause();
+            return;
+        }
+        if (mediaKey === "MediaStop") {
+            event.preventDefault();
+            stopCurrentPlayback("Lecture arrêtée.");
+            return;
+        }
+        if (mediaKey === "MediaFastForward") {
+            event.preventDefault();
+            if (activePlayback?.contentType !== "live") player?.seekByMs?.(30_000);
+            return;
+        }
+        if (mediaKey === "MediaRewind") {
+            event.preventDefault();
+            if (activePlayback?.contentType !== "live") player?.seekByMs?.(-30_000);
+            return;
+        }
+
         if (event.key === "ColorF0Red" || event.keyCode === 403) {
             event.preventDefault();
             if (document.activeElement?.closest?.("[data-device-id]")) {
@@ -1585,17 +1671,55 @@
             return;
         }
 
-        if (event.key === "Backspace" || event.key === "Escape") {
+        const isBack =
+            event.key === "Backspace" ||
+            event.key === "Escape" ||
+            event.key === "XF86Back" ||
+            event.keyCode === 10009;
+
+        if (isBack) {
             event.preventDefault();
+
             if (deviceEditScreen && !deviceEditScreen.hidden) {
                 closeDeviceRename();
                 return;
             }
-            syncActivePlayback();
-            finishParentalPlayback();
-            activePlayback = null;
-            player?.stop();
-            setStatus("Retour");
+
+            if (pinScreen && !pinScreen.hidden) {
+                closePinPrompt();
+                return;
+            }
+
+            if (systemScreen && !systemScreen.hidden) {
+                if (systemState.type === "maintenance_planned") {
+                    plannedMaintenanceDismissed = true;
+                    systemScreen.hidden = true;
+                    if (!currentProfile) restoreProviderFromAccount(currentSession);
+                } else {
+                    exitApplication();
+                }
+                return;
+            }
+
+            if (profileScreen && !profileScreen.hidden) {
+                if (currentProfile) {
+                    profileScreen.hidden = true;
+                    showApp();
+                    focusHomeNavigation();
+                } else {
+                    exitApplication();
+                }
+                return;
+            }
+
+            if (player?.isActive?.() || activePlayback) {
+                stopCurrentPlayback();
+                return;
+            }
+
+            if (returnFromSecondaryPanel()) return;
+
+            exitApplication();
         }
     });
 
