@@ -7,6 +7,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
 import androidx.media3.common.util.UnstableApi
+import fr.zyviotv.player.data.settings.InterfaceLanguageController
+import fr.zyviotv.player.data.settings.OnboardingSetupPreferences
 import fr.zyviotv.player.ui.ZyvioTVPlayerApp
 import fr.zyviotv.player.ui.theme.ZyvioTVTheme
 
@@ -16,6 +18,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        InterfaceLanguageController.apply(
+            this,
+            OnboardingSetupPreferences(this).device().interfaceLanguage,
+        )
         pendingDeepLink.value = intent?.dataString
         enableEdgeToEdge()
         setContent {

@@ -55,6 +55,7 @@ import fr.zyviotv.player.data.settings.AppUpdateKind
 import fr.zyviotv.player.data.settings.AppUpdatePreferences
 import fr.zyviotv.player.data.settings.AppUpdateRepository
 import fr.zyviotv.player.data.settings.OnboardingPreferences
+import fr.zyviotv.player.data.settings.InterfaceLanguageController
 import fr.zyviotv.player.data.settings.OnboardingSetupPreferences
 import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.data.settings.ProfileRepository
@@ -423,22 +424,46 @@ fun ZyvioTVPlayerApp(
             }
 
             var profiles by remember { mutableStateOf<List<PlayerProfile>?>(null) }
+            var profilesLoadError by remember { mutableStateOf(false) }
+            var profilesReloadToken by remember { mutableIntStateOf(0) }
             var defaultProfileId by remember {
                 mutableStateOf(profilePreferences.defaultProfileId())
             }
             val selectedProfileId = profilePreferences.selectedProfileId()
 
-            LaunchedEffect(Unit) {
-                profiles = profileRepository.listProfiles().getOrDefault(emptyList())
+            LaunchedEffect(profilesReloadToken) {
+                profilesLoadError = false
+                val result = profileRepository.listProfiles()
+                profiles = result.getOrNull()
+                profilesLoadError = result.isFailure
             }
 
             val loadedProfiles = profiles
-            if (loadedProfiles == null) {
+            if (loadedProfiles == null && !profilesLoadError) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     androidx.compose.material3.CircularProgressIndicator()
+                }
+            } else if (profilesLoadError || loadedProfiles.isNullOrEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Impossible de charger vos profils.",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.material3.Button(
+                            onClick = { profilesReloadToken += 1 },
+                        ) {
+                            Text("Réessayer")
+                        }
+                    }
                 }
             } else {
                 val preferenceProfileId = selectedProfileId
@@ -458,7 +483,13 @@ fun ZyvioTVPlayerApp(
                     onProfilePreferencesSaved = { profileId, snapshot ->
                         setupPreferences.saveProfile(profileId, snapshot)
                     },
-                    onDevicePreferencesSaved = setupPreferences::saveDevice,
+                    onDevicePreferencesSaved = { snapshot ->
+                        setupPreferences.saveDevice(snapshot)
+                        InterfaceLanguageController.apply(
+                            context,
+                            snapshot.interfaceLanguage,
+                        )
+                    },
                     onFinished = {
                         onboardingPreferences.markCompleted()
                         navController.navigate("system-gate") {
