@@ -1735,6 +1735,7 @@ fun ZyvioTVPlayerApp(
                             LiveTvScreen(
                                 profile = profile,
                                 state = providerState.toLiveState(),
+                                isOffline = (providerState as? ProviderCatalogState.Ready)?.isOffline == true,
                                 onRetry = providerCatalog::reload,
                                 onTuneChannel = { channel ->
                                     val ready = providerState as? ProviderCatalogState.Ready
@@ -1742,7 +1743,12 @@ fun ZyvioTVPlayerApp(
                                         ?.snapshot
                                         ?.liveChannels
                                         ?.firstOrNull { it.id == channel.id }
-                                    if (ready != null && source != null) {
+                                    if (
+                                        ready != null &&
+                                        !ready.isOffline &&
+                                        source != null &&
+                                        source.streamUrl.isNotBlank()
+                                    ) {
                                         playbackRequest = PlaybackRequest(
                                             title = source.name,
                                             streamUrl = source.streamUrl,
