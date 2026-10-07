@@ -30,11 +30,14 @@ object M3uParser {
         var emitted = 0
 
         while (iterator.hasNext() && emitted < maxEntries) {
-            val line = iterator.next().trim()
+            val line = iterator.next()
+                .trim()
+                .removePrefix("\uFEFF")
+                .trim()
             if (line.isEmpty()) continue
 
             if (!headerSeen) {
-                if (!line.startsWith("#EXTM3U")) return 0
+                if (!line.startsWith("#EXTM3U", ignoreCase = true)) return 0
                 headerSeen = true
                 continue
             }
@@ -61,37 +64,39 @@ object M3uParser {
         }
 
         val commaIndex = metadata.lastIndexOf(',')
-        val name = if (commaIndex >= 0) {
+        val metadataName = if (commaIndex >= 0) {
             metadata.substring(commaIndex + 1).trim()
         } else {
             ""
         }
-
+        val tvgName = attribute(metadata, "tvg-name")
+        val name = metadataName.ifBlank { tvgName.orEmpty() }.trim()
         if (name.isBlank()) return null
 
         return M3uEntry(
             name = name,
-            streamUrl = streamUrl,
+            streamUrl = streamUrl.trim(),
             tvgId = attribute(metadata, "tvg-id"),
-            tvgName = attribute(metadata, "tvg-name"),
+            tvgName = tvgName,
             logoUrl = attribute(metadata, "tvg-logo"),
             groupTitle = attribute(metadata, "group-title"),
         )
     }
 
     private fun attribute(line: String, name: String): String? {
-        val regex = when (name) {
-            "tvg-id" -> TVG_ID_REGEX
-            "tvg-name" -> TVG_NAME_REGEX
-            "tvg-logo" -> TVG_LOGO_REGEX
-            "group-title" -> GROUP_TITLE_REGEX
-            else -> return null
-        }
-        return regex.find(line)?.groups?.get(1)?.value?.takeIf { it.isNotBlank() }
-    }
+        val escaped = Regex.escape(name)
+        val quoted = Regex(
+            """(?:^|\s)$escaped\s*=\s*["']([^"']*)["']""",
+            RegexOption.IGNORE_CASE,
+        ).find(line)?.groups?.get(1)?.value
 
-    private val TVG_ID_REGEX = Regex("""tvg-id\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
-    private val TVG_NAME_REGEX = Regex("""tvg-name\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
-    private val TVG_LOGO_REGEX = Regex("""tvg-logo\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
-    private val GROUP_TITLE_REGEX = Regex("""group-title\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
+        val unquoted = Regex(
+            """(?:^|\s)$escaped\s*=\s*([^\s,]+)""",
+            RegexOption.IGNORE_CASE,
+        ).find(line)?.groups?.get(1)?.value
+
+        return (quoted ?: unquoted)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    }
 }
