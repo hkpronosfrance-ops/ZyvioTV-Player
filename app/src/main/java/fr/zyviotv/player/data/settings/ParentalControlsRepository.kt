@@ -21,6 +21,8 @@ data class ParentalRuntimeState(
     val isChild: Boolean,
     val consumedSeconds: Int,
     val limitMinutes: Int?,
+    val dailyLimitMinutes: Int?,
+    val weekendLimitMinutes: Int?,
     val warningMinutes: Int,
     val scheduleEnabled: Boolean,
     val scheduleWindowsJson: String,
@@ -389,6 +391,16 @@ class ParentalControlsRepository(
                 isChild = json.optBoolean("is_child", false),
                 consumedSeconds = json.optInt("consumed_seconds", 0),
                 limitMinutes = if (json.isNull("limit_minutes")) null else json.getInt("limit_minutes"),
+                dailyLimitMinutes = if (json.isNull("daily_limit_minutes")) {
+                    null
+                } else {
+                    json.getInt("daily_limit_minutes")
+                },
+                weekendLimitMinutes = if (json.isNull("weekend_limit_minutes")) {
+                    null
+                } else {
+                    json.getInt("weekend_limit_minutes")
+                },
                 warningMinutes = json.optInt("warning_minutes", 10),
                 scheduleEnabled = json.optBoolean("schedule_enabled", false),
                 scheduleWindowsJson = json.optJSONArray("schedule_windows")?.toString() ?: "[]",
