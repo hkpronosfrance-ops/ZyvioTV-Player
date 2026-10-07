@@ -65,6 +65,7 @@ fun FavoritesScreen(
         is LibraryState.Ready -> ReadyFavorites(
             profile = profile,
             favorites = state.snapshot.favorites,
+            isOffline = state.snapshot.isOffline,
             onOpenFavorite = onOpenFavorite,
             onRemoveFavorite = onRemoveFavorite,
         )
@@ -75,6 +76,7 @@ fun FavoritesScreen(
 private fun ReadyFavorites(
     profile: DeviceProfile,
     favorites: List<SyncedFavorite>,
+    isOffline: Boolean,
     onOpenFavorite: (SyncedFavorite) -> Unit,
     onRemoveFavorite: (SyncedFavorite) -> Unit,
 ) {
@@ -110,6 +112,15 @@ private fun ReadyFavorites(
             TextButton(onClick = { sortAlphabetically = !sortAlphabetically }) {
                 Text(if (sortAlphabetically) "Récents" else "A-Z")
             }
+        }
+
+        if (isOffline) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Hors connexion : favoris consultables en lecture seule.",
+                color = ZyvioTextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         Spacer(Modifier.height(14.dp))
@@ -155,6 +166,8 @@ private fun ReadyFavorites(
                 FavoriteCard(
                     favorite = favorite,
                     isTelevision = profile == DeviceProfile.Television,
+                    enabled = !isOffline || favorite.contentType != FavoriteContentType.Live,
+                    canRemove = !isOffline,
                     onOpen = { onOpenFavorite(favorite) },
                     onRemove = { onRemoveFavorite(favorite) },
                 )
@@ -167,6 +180,8 @@ private fun ReadyFavorites(
 private fun FavoriteCard(
     favorite: SyncedFavorite,
     isTelevision: Boolean,
+    enabled: Boolean,
+    canRemove: Boolean,
     onOpen: () -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -174,7 +189,7 @@ private fun FavoriteCard(
         modifier = Modifier
             .fillMaxWidth()
             .tvFocusEffect(isTelevision, cornerRadiusDp = 16)
-            .clickable(onClick = onOpen),
+            .clickable(enabled = enabled, onClick = onOpen),
         color = ZyvioSurface1,
         shape = RoundedCornerShape(16.dp),
     ) {
@@ -225,6 +240,7 @@ private fun FavoriteCard(
             )
 
             TextButton(
+                enabled = canRemove,
                 onClick = onRemove,
                 modifier = Modifier.align(Alignment.End),
             ) {

@@ -1053,7 +1053,11 @@ fun ZyvioTVPlayerApp(
                                 FavoriteContentType.Live -> {
                                     val channel = readyProvider.snapshot.liveChannels
                                         .firstOrNull { it.id == favorite.contentId }
-                                    if (channel != null) {
+                                    if (
+                                        channel != null &&
+                                        !readyProvider.isOffline &&
+                                        channel.streamUrl.isNotBlank()
+                                    ) {
                                         playbackRequest = PlaybackRequest(
                                             title = channel.name,
                                             streamUrl = channel.streamUrl,
@@ -1158,6 +1162,7 @@ fun ZyvioTVPlayerApp(
 
                     MovieDetailScreen(
                         profile = profile,
+                        isOffline = readyProvider?.isOffline == true,
                         state = MovieDetailState.Ready(
                             MovieDetailUi(
                                 id = movie.id,
@@ -1168,6 +1173,9 @@ fun ZyvioTVPlayerApp(
                             ),
                         ),
                         onPlay = { _, resume ->
+                            if (readyProvider?.isOffline == true || movie.streamUrl.isBlank()) {
+                                return@MovieDetailScreen
+                            }
                             playbackRequest = PlaybackRequest(
                                 title = movie.title,
                                 streamUrl = movie.streamUrl,
@@ -1226,9 +1234,25 @@ fun ZyvioTVPlayerApp(
                     )
                 }
 
-                LaunchedEffect(series.id, readyProvider.playlistId, seriesDetailReloadToken) {
+                LaunchedEffect(series.id, readyProvider.playlistId, seriesDetailReloadToken, readyProvider.isOffline) {
                     seriesDetailState = SeriesDetailState.Loading
                     seriesEpisodeSources = emptyMap()
+
+                    if (readyProvider.isOffline) {
+                        seriesDetailState = SeriesDetailState.Ready(
+                            SeriesDetailUi(
+                                id = series.id,
+                                title = series.title,
+                                isFavorite = librarySession.isFavorite(
+                                    playlistId = readyProvider.playlistId,
+                                    type = FavoriteContentType.Series,
+                                    contentId = series.id,
+                                ),
+                                episodes = emptyList(),
+                            ),
+                        )
+                        return@LaunchedEffect
+                    }
 
                     val secret = repository
                         .getPlaylistSecret(readyProvider.playlistId)
@@ -1318,6 +1342,7 @@ fun ZyvioTVPlayerApp(
                     SeriesDetailScreen(
                         profile = profile,
                         state = seriesDetailState,
+                        isOffline = readyProvider.isOffline,
                         onRetry = {
                             seriesDetailReloadToken += 1
                         },

@@ -67,6 +67,7 @@ fun MovieDetailScreen(
     profile: DeviceProfile,
     state: MovieDetailState,
     onRetry: () -> Unit = {},
+    isOffline: Boolean = false,
     onPlay: (MovieDetailUi, Boolean) -> Unit = { _, _ -> },
     onToggleFavorite: (MovieDetailUi) -> Unit = {},
 ) {
@@ -76,6 +77,7 @@ fun MovieDetailScreen(
         is MovieDetailState.Ready -> MovieDetailReady(
             profile = profile,
             movie = state.movie,
+            isOffline = isOffline,
             onPlay = onPlay,
             onToggleFavorite = onToggleFavorite,
         )
@@ -86,6 +88,7 @@ fun MovieDetailScreen(
 private fun MovieDetailReady(
     profile: DeviceProfile,
     movie: MovieDetailUi,
+    isOffline: Boolean,
     onPlay: (MovieDetailUi, Boolean) -> Unit,
     onToggleFavorite: (MovieDetailUi) -> Unit,
 ) {
@@ -137,6 +140,7 @@ private fun MovieDetailReady(
                     modifier = Modifier.weight(1f),
                     movie = movie,
                     primaryLabel = primaryLabel,
+                    isOffline = isOffline,
                     onPlay = onPlay,
                     onToggleFavorite = onToggleFavorite,
                     isTelevision = profile == DeviceProfile.Television,
@@ -147,6 +151,7 @@ private fun MovieDetailReady(
                 modifier = Modifier.fillMaxWidth(),
                 movie = movie,
                 primaryLabel = primaryLabel,
+                isOffline = isOffline,
                 onPlay = onPlay,
                 onToggleFavorite = onToggleFavorite,
                 isTelevision = false,
@@ -187,6 +192,7 @@ private fun MovieInfo(
     modifier: Modifier,
     movie: MovieDetailUi,
     primaryLabel: String,
+    isOffline: Boolean,
     onPlay: (MovieDetailUi, Boolean) -> Unit,
     onToggleFavorite: (MovieDetailUi) -> Unit,
     isTelevision: Boolean,
@@ -249,8 +255,18 @@ private fun MovieInfo(
 
         Spacer(Modifier.height(20.dp))
 
+        if (isOffline) {
+            Text(
+                text = "Lecture et modification des favoris indisponibles hors connexion.",
+                color = ZyvioTextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(10.dp))
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(
+                enabled = !isOffline,
                 modifier = Modifier.tvFocusEffect(isTelevision, cornerRadiusDp = 12),
                 onClick = { onPlay(movie, movie.progress > 0f && movie.progress <= 0.95f) },
             ) {
@@ -260,6 +276,7 @@ private fun MovieInfo(
             }
 
             OutlinedButton(
+                enabled = !isOffline,
                 modifier = Modifier.tvFocusEffect(isTelevision, cornerRadiusDp = 12),
                 onClick = { onToggleFavorite(movie) },
             ) {
