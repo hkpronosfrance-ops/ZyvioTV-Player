@@ -116,3 +116,22 @@ The Samsung client now also supports:
 - lockout/attempt feedback returned by the backend
 
 Screen-time heartbeat, schedules and temporary 30-minute runtime exceptions remain a dedicated follow-up phase.
+
+
+## Parental runtime enforcement
+
+The Samsung client now also supports:
+- server-anchored parental runtime state
+- a stable per-TV device UID for multi-device heartbeat reconciliation
+- screen-time heartbeat v2 every 30 seconds
+- weekday/weekend limit enforcement
+- schedule-window enforcement using trusted server time
+- local cached consumed-time high-water mark for temporary network loss
+- fail-safe monotonic clock handling that never advances time from a backwards/reset local clock
+- PIN-granted 30-minute exception scoped to the current content
+- exception termination when playback ends/leaves the current content
+- live, movie and episode runtime enforcement
+- adult-labelled categories always hidden on Child profiles
+- Child-profile exits always PIN protected
+
+No database migration is required; the existing hardened parental RPCs are reused.
