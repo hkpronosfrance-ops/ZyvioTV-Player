@@ -87,6 +87,14 @@ fun ContinueWatchingScreen(
                     text = "${visibleItems.size} contenu" + if (visibleItems.size > 1) "s" else "",
                     color = ZyvioTextSecondary,
                 )
+                if (state.snapshot.isOffline) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "Hors connexion : votre progression reste consultable, mais la lecture nécessite Internet.",
+                        color = ZyvioTextSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 Spacer(Modifier.height(18.dp))
 
                 if (visibleItems.isEmpty()) {
@@ -107,6 +115,7 @@ fun ContinueWatchingScreen(
                             ContinueWatchingRow(
                                 progress = progress,
                                 isTelevision = profile == DeviceProfile.Television,
+                                enabled = !state.snapshot.isOffline,
                                 onClick = { onOpen(progress) },
                             )
                         }
@@ -121,13 +130,14 @@ fun ContinueWatchingScreen(
 private fun ContinueWatchingRow(
     progress: SyncedWatchProgress,
     isTelevision: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .tvFocusEffect(isTelevision, cornerRadiusDp = 16)
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         color = ZyvioSurface1,
         shape = RoundedCornerShape(16.dp),
     ) {
