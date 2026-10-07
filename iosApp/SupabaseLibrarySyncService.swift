@@ -226,3 +226,351 @@ actor SupabaseLibrarySyncService {
         }
     }
 }
+
+
+struct ProviderPlaylistDTO: Decodable {
+    let id: String
+    let name: String
+    let providerType: String
+    let secretStatus: String
+    let isEnabled: Bool
+    let priority: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case providerType = "provider_type"
+        case secretStatus = "secret_status"
+        case isEnabled = "is_enabled"
+        case priority
+    }
+}
+
+struct ProviderMovieDTO: Identifiable, Hashable {
+    let id: String
+    let playlistId: String
+    let title: String
+    let categoryId: String?
+    let posterUrl: String?
+    let streamUrl: URL
+    let addedAtEpochSeconds: Int64?
+}
+
+struct ProviderSeriesDTO: Identifiable, Hashable {
+    let id: String
+    let playlistId: String
+    let title: String
+    let categoryId: String?
+    let posterUrl: String?
+    let addedAtEpochSeconds: Int64?
+}
+
+struct ProviderCatalogDTO {
+    let playlistId: String
+    let playlistName: String
+    let movies: [ProviderMovieDTO]
+    let series: [ProviderSeriesDTO]
+}
+
+actor SupabaseProviderCatalogService {
+    static let shared = SupabaseProviderCatalogService()
+
+    private let baseURL = URL(string: "https://nvpuftuluguawdxonmlc.supabase.co")!
+    private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
+    private let sessionStore = AuthSessionStore()
+
+    func loadCatalog() async throws -> ProviderCatalogDTO {
+        let playlists: [ProviderPlaylistDTO] = try await supabaseGet(
+            path: "/rest/v1/player_playlists?select=id,name,provider_type,secret_status,is_enabled,priority&order=priority.asc,updated_at.desc"
+        )
+
+        guard let playlist = playlists.first(where: {
+            $0.isEnabled && $0.secretStatus == "configured"
+        }) else {
+            throw ProviderCatalogError.noConfiguredPlaylist
+        }
+
+        let secret = try await loadPlaylistSecret(playlistId: playlist.id)
+        guard secret.providerType == "xtream" else {
+            // M3U playlists currently provide Live content only in the shared product model.
+            return ProviderCatalogDTO(
+                playlistId: playlist.id,
+                playlistName: playlist.name,
+                movies: [],
+                series: []
+            )
+        }
+
+        guard
+            let serverURL = secret.serverURL,
+            let username = secret.username,
+            let password = secret.password
+        else {
+            throw ProviderCatalogError.invalidSecret
+        }
+
+        async let moviePayload = providerArray(
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            action: "get_vod_streams"
+        )
+        async let seriesPayload = providerArray(
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            action: "get_series"
+        )
+
+        let movies = try await moviePayload.compactMap { item -> ProviderMovieDTO? in
+            guard
+                let id = stringValue(item["stream_id"]),
+                let title = cleanString(item["name"])
+            else {
+                return nil
+            }
+
+            let extensionValue = cleanString(item["container_extension"]) ?? "mp4"
+            guard let streamURL = mediaURL(
+                serverURL: serverURL,
+                kind: "movie",
+                username: username,
+                password: password,
+                id: id,
+                extensionValue: extensionValue
+            ) else {
+                return nil
+            }
+
+            return ProviderMovieDTO(
+                id: id,
+                playlistId: playlist.id,
+                title: title,
+                categoryId: cleanString(item["category_id"]),
+                posterUrl: cleanString(item["stream_icon"]),
+                streamUrl: streamURL,
+                addedAtEpochSeconds: epochSeconds(item["added"])
+            )
+        }
+
+        let series = try await seriesPayload.compactMap { item -> ProviderSeriesDTO? in
+            guard
+                let id = stringValue(item["series_id"]),
+                let title = cleanString(item["name"])
+            else {
+                return nil
+            }
+
+            return ProviderSeriesDTO(
+                id: id,
+                playlistId: playlist.id,
+                title: title,
+                categoryId: cleanString(item["category_id"]),
+                posterUrl: cleanString(item["cover"]),
+                addedAtEpochSeconds: epochSeconds(item["added"])
+            )
+        }
+
+        return ProviderCatalogDTO(
+            playlistId: playlist.id,
+            playlistName: playlist.name,
+            movies: movies.sorted {
+                ($0.addedAtEpochSeconds ?? 0) > ($1.addedAtEpochSeconds ?? 0)
+            },
+            series: series.sorted {
+                ($0.addedAtEpochSeconds ?? 0) > ($1.addedAtEpochSeconds ?? 0)
+            }
+        )
+    }
+
+    private struct PlaylistSecretPayload {
+        let providerType: String
+        let serverURL: URL?
+        let username: String?
+        let password: String?
+    }
+
+    private func loadPlaylistSecret(playlistId: String) async throws -> PlaylistSecretPayload {
+        guard let session = sessionStore.load() else {
+            throw ProviderCatalogError.noSession
+        }
+        guard let url = URL(string: "/rest/v1/rpc/player_get_playlist_secret", relativeTo: baseURL) else {
+            throw ProviderCatalogError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(
+            withJSONObject: ["p_playlist_id": playlistId]
+        )
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let httpResponse = response as? HTTPURLResponse,
+            (200...299).contains(httpResponse.statusCode),
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            throw ProviderCatalogError.secretUnavailable
+        }
+
+        let providerType = cleanString(json["provider_type"]) ?? ""
+        if providerType == "xtream" {
+            guard
+                let rawServerURL = cleanString(json["server_url"]),
+                let serverURL = URL(string: rawServerURL),
+                let username = cleanString(json["username"]),
+                let password = cleanString(json["password"])
+            else {
+                throw ProviderCatalogError.invalidSecret
+            }
+            return PlaylistSecretPayload(
+                providerType: providerType,
+                serverURL: serverURL,
+                username: username,
+                password: password
+            )
+        }
+
+        return PlaylistSecretPayload(
+            providerType: providerType,
+            serverURL: nil,
+            username: nil,
+            password: nil
+        )
+    }
+
+    private func providerArray(
+        serverURL: URL,
+        username: String,
+        password: String,
+        action: String
+    ) async throws -> [[String: Any]] {
+        guard var components = URLComponents(
+            url: serverURL.appendingPathComponent("player_api.php"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw ProviderCatalogError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "username", value: username),
+            URLQueryItem(name: "password", value: password),
+            URLQueryItem(name: "action", value: action),
+        ]
+
+        guard let url = components.url else {
+            throw ProviderCatalogError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("ZYVIOTV-Player/0.1", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let httpResponse = response as? HTTPURLResponse,
+            (200...299).contains(httpResponse.statusCode),
+            let payload = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else {
+            throw ProviderCatalogError.providerUnavailable
+        }
+
+        return payload
+    }
+
+    private func mediaURL(
+        serverURL: URL,
+        kind: String,
+        username: String,
+        password: String,
+        id: String,
+        extensionValue: String
+    ) -> URL? {
+        var url = serverURL
+        for component in [kind, username, password, "\(id).\(extensionValue)"] {
+            url.appendPathComponent(component)
+        }
+        return url
+    }
+
+    private func supabaseGet<T: Decodable>(path: String) async throws -> T {
+        guard let session = sessionStore.load() else {
+            throw ProviderCatalogError.noSession
+        }
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw ProviderCatalogError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let httpResponse = response as? HTTPURLResponse,
+            (200...299).contains(httpResponse.statusCode)
+        else {
+            throw ProviderCatalogError.server
+        }
+
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func cleanString(_ value: Any?) -> String? {
+        guard let value, !(value is NSNull) else {
+            return nil
+        }
+        let clean = String(describing: value)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty || clean == "null" ? nil : clean
+    }
+
+    private func stringValue(_ value: Any?) -> String? {
+        cleanString(value)
+    }
+
+    private func epochSeconds(_ value: Any?) -> Int64? {
+        guard let raw = cleanString(value), let number = Int64(raw), number > 0 else {
+            return nil
+        }
+        return number > 9_999_999_999 ? number / 1_000 : number
+    }
+
+    enum ProviderCatalogError: LocalizedError {
+        case noSession
+        case noConfiguredPlaylist
+        case invalidURL
+        case secretUnavailable
+        case invalidSecret
+        case providerUnavailable
+        case server
+
+        var errorDescription: String? {
+            switch self {
+            case .noSession:
+                return "Session absente."
+            case .noConfiguredPlaylist:
+                return "Aucune playlist active et configurée n’est disponible."
+            case .invalidURL:
+                return "Configuration fournisseur invalide."
+            case .secretUnavailable:
+                return "Impossible de restaurer la configuration sécurisée de la playlist."
+            case .invalidSecret:
+                return "La configuration sécurisée de la playlist est invalide."
+            case .providerUnavailable:
+                return "Impossible de charger le catalogue IPTV."
+            case .server:
+                return "Impossible de récupérer vos playlists."
+            }
+        }
+    }
+}
