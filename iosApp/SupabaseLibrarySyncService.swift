@@ -573,6 +573,23 @@ final class AppleDeviceIdentityStore {
     }
 }
 
+struct ParentalAccountSettingsDTO: Decodable {
+    let hasPin: Bool
+    let enabled: Bool
+    let blockedUntil: String?
+
+    enum CodingKeys: String, CodingKey {
+        case hasPin = "has_pin"
+        case enabled
+        case blockedUntil = "blocked_until"
+    }
+}
+
+struct ParentalWriteDTO: Decodable {
+    let success: Bool
+    let reason: String?
+}
+
 actor SupabaseParentalService {
     static let shared = SupabaseParentalService()
 
