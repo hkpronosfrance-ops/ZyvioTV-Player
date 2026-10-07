@@ -21,6 +21,7 @@ import fr.zyviotv.player.data.settings.ParentalExceptionResult
 import fr.zyviotv.player.data.settings.ParentalRuntimeCache
 import fr.zyviotv.player.data.settings.ParentalScheduleEvaluator
 import fr.zyviotv.player.data.settings.ProfilePreferences
+import fr.zyviotv.player.data.sync.AndroidDeviceDescriptor
 import fr.zyviotv.player.shared.playback.PlaybackState
 import android.os.SystemClock
 import java.security.MessageDigest
@@ -43,6 +44,9 @@ internal fun ParentalPlaybackGuard(
     }
     val runtimeCache = remember(context) { ParentalRuntimeCache(context) }
     val scope = rememberCoroutineScope()
+    val deviceUid = remember(context) {
+        AndroidDeviceDescriptor.current(context).deviceUid
+    }
 
     val profileId = remember { profilePreferences.selectedProfileId() }
     val contentKey = remember(streamUrl, playbackKind) {
@@ -107,15 +111,25 @@ internal fun ParentalPlaybackGuard(
         if (playbackState == PlaybackState.Ended) {
             repository.heartbeatScreenTime(
                 profileId = profileId,
+                deviceUid = deviceUid,
                 playing = false,
                 contentKey = contentKey,
+                localConsumedSeconds = runtimeCache.consumedSeconds(profileId),
             )
             repository.endRuntimeException(profileId, contentKey)
             return@LaunchedEffect
         }
 
+        var previousTickElapsed = SystemClock.elapsedRealtime()
+
         while (true) {
-            val exceptionActive = SystemClock.elapsedRealtime() < exceptionUntilElapsed
+            val nowElapsed = SystemClock.elapsedRealtime()
+            val elapsedSeconds = (
+                (nowElapsed - previousTickElapsed).coerceAtLeast(0L) / 1_000L
+                ).coerceAtMost(30L).toInt()
+            previousTickElapsed = nowElapsed
+
+            val exceptionActive = nowElapsed < exceptionUntilElapsed
             val cached = runtimeCache.load(profileId)
 
             if (
@@ -134,13 +148,37 @@ internal fun ParentalPlaybackGuard(
                     isPlaying &&
                     !blocked
 
+            val localConsumed = runtimeCache.consumedSeconds(profileId)
             val heartbeat = repository.heartbeatScreenTime(
                 profileId = profileId,
+                deviceUid = deviceUid,
                 playing = activelyPlaying,
                 contentKey = contentKey,
+                localConsumedSeconds = localConsumed,
             ).getOrNull()
 
-            if (heartbeat?.blockedByTime == true && !exceptionActive) {
+            if (heartbeat != null) {
+                runtimeCache.updateConsumedSeconds(
+                    profileId = profileId,
+                    consumedSeconds = heartbeat.consumedSeconds,
+                )
+            } else if (activelyPlaying && elapsedSeconds > 0) {
+                runtimeCache.addOfflineSeconds(
+                    profileId = profileId,
+                    seconds = elapsedSeconds,
+                )
+            }
+
+            val effectiveConsumed = runtimeCache.consumedSeconds(profileId)
+            val effectiveLimit = runtimeCache.effectiveLimitMinutes(profileId)
+            val blockedByLocalTime =
+                effectiveLimit != null &&
+                    effectiveConsumed >= effectiveLimit * 60
+
+            if (
+                !exceptionActive &&
+                (heartbeat?.blockedByTime == true || blockedByLocalTime)
+            ) {
                 blockTitle = "Temps d’écran atteint"
                 blocked = true
                 onBlockPlayback()
