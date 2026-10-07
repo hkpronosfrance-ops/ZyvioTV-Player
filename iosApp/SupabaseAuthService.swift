@@ -75,6 +75,73 @@ actor SupabaseAuthService {
         )
     }
 
+
+    func requestParentalPinRecovery(email: String) async throws {
+        let redirect = "zyviotv://parental-pin-recovery"
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+            ?? "zyviotv://parental-pin-recovery"
+
+        _ = try await request(
+            path: "/auth/v1/recover?redirect_to=\(redirect)",
+            method: "POST",
+            body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines)]
+        )
+    }
+
+    func currentUserEmail() async throws -> String {
+        guard let session = sessionStore.load() else {
+            throw AuthServiceError.invalidResponse
+        }
+        let response = try await request(
+            path: "/auth/v1/user",
+            method: "GET",
+            body: [:],
+            bearerToken: session.accessToken
+        )
+        guard let email = response["email"] as? String, !email.isEmpty else {
+            throw AuthServiceError.invalidResponse
+        }
+        return email
+    }
+
+    func consumeParentalRecoveryURL(_ url: URL) throws {
+        guard
+            url.scheme?.lowercased() == "zyviotv",
+            url.host?.lowercased() == "parental-pin-recovery"
+        else {
+            throw AuthServiceError.server("Lien de récupération invalide.")
+        }
+
+        var values: [String: String] = [:]
+        for source in [url.query, url.fragment].compactMap({ $0 }) {
+            for item in source.split(separator: "&") {
+                let pair = item.split(separator: "=", maxSplits: 1).map(String.init)
+                guard let key = pair.first else { continue }
+                let value = pair.count > 1 ? pair[1] : ""
+                values[key.removingPercentEncoding ?? key] = value.removingPercentEncoding ?? value
+            }
+        }
+
+        guard
+            let accessToken = values["access_token"], !accessToken.isEmpty,
+            let refreshToken = values["refresh_token"], !refreshToken.isEmpty
+        else {
+            throw AuthServiceError.server(
+                "Le lien de récupération a expiré ou ne contient pas de session valide."
+            )
+        }
+
+        let expiresIn = Int64(values["expires_in"] ?? "") ?? 3600
+        let now = Int64(Date().timeIntervalSince1970)
+        try sessionStore.save(
+            AuthSession(
+                accessToken: accessToken,
+                refreshToken: refreshToken,
+                expiresAtEpochSeconds: now + expiresIn
+            )
+        )
+    }
+
     func signOut() async {
         guard let session = sessionStore.load() else {
             sessionStore.clear()
