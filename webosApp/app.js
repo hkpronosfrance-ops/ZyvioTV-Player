@@ -100,6 +100,11 @@
     activePlayback = null;
     providerConfig = null;
     currentPlaylist = null;
+    profiles = [];
+    currentProfile = null;
+    favorites = [];
+    watchProgress = [];
+    liveHistory = [];
     liveChannels = [];
     movies = [];
     series = [];
@@ -558,6 +563,8 @@
     button.dataset.focusable = "";
     button.dataset.homeKind = kind;
     button.dataset.homeId = String(item.id || item.content_id || "");
+    button.dataset.homeType = String(item.content_type || (kind === "recent-live" ? "live" : ""));
+    button.dataset.homePlaylist = String(item.playlist_id || currentPlaylist?.id || "");
 
     const title = document.createElement("span");
     title.textContent = item.title || "Contenu";
@@ -599,7 +606,12 @@
     clearHomeContainer(recentChannelCards);
     recentChannels.forEach((item) => {
       recentChannelCards?.append(createHomeCard(
-        { id: item.channel_id, title: item.channel_name },
+        {
+          id: item.channel_id,
+          title: item.channel_name,
+          content_type: "live",
+          playlist_id: item.playlist_id,
+        },
         "recent-live",
         "TV en direct"
       ));
@@ -741,7 +753,7 @@
 
   async function toggleFavoriteForFocused() {
     if (!currentSession || !currentProfile || !currentPlaylist) return;
-    const target = document.activeElement?.closest?.("[data-catalog-kind]");
+    const target = document.activeElement?.closest?.("[data-catalog-kind], [data-channel-id]");
     let kind = target?.dataset.catalogKind || "";
     let source = null;
 
@@ -749,6 +761,9 @@
       source = movies.find((item) => item.id === target.dataset.catalogId);
     } else if (kind === "series") {
       source = series.find((item) => item.id === target.dataset.catalogId);
+    } else if (target?.dataset.channelId) {
+      kind = "live";
+      source = liveChannels.find((item) => item.id === target.dataset.channelId);
     } else if (activePlayback?.contentType === "live") {
       kind = "live";
       source = liveChannels.find((item) => item.id === activePlayback.contentId);
@@ -980,8 +995,13 @@
     }
 
     if (target.dataset.homeKind === "continue" || target.dataset.homeKind === "history") {
+      const progressKey = libraryKey(
+        target.dataset.homePlaylist,
+        target.dataset.homeType,
+        target.dataset.homeId
+      );
       const progress = watchProgress.find(
-        (item) => String(item.content_id) === String(target.dataset.homeId)
+        (item) => libraryKey(item.playlist_id, item.content_type, item.content_id) === progressKey
       );
       if (progress) {
         try { await resolveProgressPlayback(progress); }
@@ -1001,8 +1021,13 @@
     }
 
     if (target.dataset.homeKind === "favorite") {
+      const favoriteHomeKey = libraryKey(
+        target.dataset.homePlaylist,
+        target.dataset.homeType,
+        target.dataset.homeId
+      );
       const item = favorites.find(
-        (entry) => String(entry.content_id) === String(target.dataset.homeId)
+        (entry) => libraryKey(entry.playlist_id, entry.content_type, entry.content_id) === favoriteHomeKey
       );
       if (!item) return;
 
