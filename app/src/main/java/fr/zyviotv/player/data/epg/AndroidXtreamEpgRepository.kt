@@ -56,10 +56,10 @@ class AndroidXtreamEpgRepository(
                 val programmes = buildList(array.length()) {
                     for (index in 0 until array.length()) {
                         val item = array.optJSONObject(index) ?: continue
-                        val start = normalizeEpochSeconds(
+                        val start = EpgTimeParsing.epochSeconds(
                             item.optLong("start_timestamp", Long.MIN_VALUE),
                         )
-                        val end = normalizeEpochSeconds(
+                        val end = EpgTimeParsing.epochSeconds(
                             item.optLong("stop_timestamp", Long.MIN_VALUE),
                         )
                         if (start == null || end == null || end <= start) continue
@@ -93,11 +93,6 @@ class AndroidXtreamEpgRepository(
         }
     }
 
-    private fun normalizeEpochSeconds(value: Long): Long? {
-        if (value == Long.MIN_VALUE || value <= 0L) return null
-        return if (value >= MILLIS_EPOCH_THRESHOLD) value / 1000L else value
-    }
-
     private fun decodeMaybeBase64(value: String): String {
         if (value.isBlank()) return ""
         return try {
@@ -113,6 +108,5 @@ class AndroidXtreamEpgRepository(
         const val CONNECT_TIMEOUT_MS = 15_000
         const val READ_TIMEOUT_MS = 20_000
         const val MAX_PROGRAMMES = 100
-        const val MILLIS_EPOCH_THRESHOLD = 100_000_000_000L
     }
 }
