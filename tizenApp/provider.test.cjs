@@ -21,3 +21,22 @@ assert.ok(!redacted.includes("secret"));
 assert.ok(redacted.includes("[REDACTED]"));
 
 console.log("TV provider core OK");
+
+
+const movieUrl = provider.xtreamMovieStreamUrl(
+  { serverUrl: "https://provider.example", username: "alice", password: "secret" },
+  99,
+  "mkv"
+);
+assert.equal(movieUrl, "https://provider.example/movie/alice/secret/99.mkv");
+
+const seriesInfoUrl = provider.xtreamSeriesInfoUrl(
+  { serverUrl: "https://provider.example", username: "alice", password: "secret" },
+  7
+);
+assert.ok(seriesInfoUrl.includes("action=get_series_info"));
+assert.ok(seriesInfoUrl.includes("series_id=7"));
+
+const redactedMovie = provider.redactUrl(movieUrl);
+assert.ok(!redactedMovie.includes("alice"));
+assert.ok(!redactedMovie.includes("secret"));

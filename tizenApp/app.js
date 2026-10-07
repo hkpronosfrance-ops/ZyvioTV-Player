@@ -6,12 +6,18 @@
     const authStatus = document.getElementById("auth-status");
     const authScreen = document.getElementById("auth-screen");
     const appShell = document.getElementById("app-shell");
+    const catalogPanel = document.getElementById("catalog-panel");
+    const catalogTitle = document.getElementById("catalog-title");
+    const catalogCount = document.getElementById("catalog-count");
+    const catalogGrid = document.getElementById("catalog-grid");
     const emailInput = document.getElementById("auth-email");
     const passwordInput = document.getElementById("auth-password");
     const video = document.getElementById("tv-player");
     const player = window.ZyvioPlayer?.create(video);
     let providerConfig = null;
     let liveChannels = [];
+    let movies = [];
+    let series = [];
     let currentSession = null;
 
     function setAuthStatus(message) {
@@ -101,6 +107,70 @@
         setAuthStatus("Vous êtes déconnecté.");
     }
 
+    function hideCatalog() {
+        if (catalogPanel) catalogPanel.hidden = true;
+        if (catalogGrid) catalogGrid.replaceChildren();
+    }
+
+    function renderCatalog(title, items, kind) {
+        if (!catalogPanel || !catalogGrid) return;
+        catalogPanel.hidden = false;
+        catalogTitle.textContent = title;
+        catalogCount.textContent = items.length + " élément" + (items.length > 1 ? "s" : "");
+        catalogGrid.replaceChildren();
+
+        items.slice(0, 60).forEach((item) => {
+            const button = document.createElement("button");
+            button.className = "catalog-card";
+            button.dataset.focusable = "";
+            button.dataset.catalogKind = kind;
+            button.dataset.catalogId = item.id;
+
+            const strong = document.createElement("strong");
+            strong.textContent = item.title || item.name || "Contenu";
+
+            const small = document.createElement("small");
+            small.textContent = item.categoryName || "";
+
+            button.append(strong, small);
+            catalogGrid.append(button);
+        });
+
+        setTimeout(() => catalogGrid.querySelector("[data-focusable]")?.focus(), 0);
+    }
+
+    async function loadMovies() {
+        if (!providerConfig) {
+            setStatus("Aucun fournisseur configuré.");
+            return;
+        }
+        setStatus("Chargement des films…");
+        try {
+            movies = await window.ZyvioProvider.loadMovies(providerConfig);
+            renderCatalog("Films", movies, "movie");
+            setStatus(movies.length ? movies.length + " films chargés." : "Aucun film disponible.");
+        } catch (error) {
+            hideCatalog();
+            setStatus(error?.message || "Impossible de charger les films.");
+        }
+    }
+
+    async function loadSeries() {
+        if (!providerConfig) {
+            setStatus("Aucun fournisseur configuré.");
+            return;
+        }
+        setStatus("Chargement des séries…");
+        try {
+            series = await window.ZyvioProvider.loadSeries(providerConfig);
+            renderCatalog("Séries", series, "series");
+            setStatus(series.length ? series.length + " séries chargées." : "Aucune série disponible.");
+        } catch (error) {
+            hideCatalog();
+            setStatus(error?.message || "Impossible de charger les séries.");
+        }
+    }
+
     async function loadProviderLive() {
         if (!providerConfig) {
             setStatus("Aucun fournisseur configuré.");
@@ -128,7 +198,20 @@
         }
         try {
             await player.play(channel.streamUrl);
-            setStatus("Lecture : " + channel.name);
+            let epgSuffix = "";
+            if (providerConfig?.type === "xtream") {
+                try {
+                    const epg = await window.ZyvioProvider.loadXtreamShortEpg(
+                        providerConfig,
+                        channel.id,
+                        6
+                    );
+                    const now = Math.floor(Date.now() / 1000);
+                    const current = epg.find((item) => item.start <= now && item.end > now);
+                    if (current?.title) epgSuffix = " — " + current.title;
+                } catch (_) {}
+            }
+            setStatus("Lecture : " + channel.name + epgSuffix);
         } catch (_) {
             setStatus("Flux indisponible.");
         }
@@ -300,6 +383,7 @@
         }
 
         if (target.dataset.action === "open-live") {
+            hideCatalog();
             activateSection("live");
             loadProviderLive();
             return;
@@ -310,14 +394,60 @@
             return;
         }
 
+        if (target.dataset.catalogKind === "movie") {
+            const movie = movies.find((item) => item.id === target.dataset.catalogId);
+            if (movie) {
+                player.play(movie.streamUrl)
+                    .then(() => setStatus("Lecture : " + movie.title))
+                    .catch(() => setStatus("Film indisponible."));
+            }
+            return;
+        }
+
+        if (target.dataset.catalogKind === "series") {
+            const item = series.find((entry) => entry.id === target.dataset.catalogId);
+            if (!item) return;
+            setStatus("Chargement : " + item.title + "…");
+            window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, item.id)
+                .then((info) => {
+                    const seasons = info.seasons.length;
+                    const episodes = Object.values(info.episodesBySeason || {})
+                        .reduce((sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
+                    setStatus(item.title + " — " + seasons + " saison(s), " + episodes + " épisode(s).");
+                })
+                .catch(() => setStatus("Détails de série indisponibles."));
+            return;
+        }
+
         if (target.dataset.section === "more") {
+            hideCatalog();
             activateSection("more");
             setStatus("Plus — appuyez de nouveau pour vous déconnecter.");
             target.dataset.action = "sign-out";
             return;
         }
 
+        if (target.dataset.section === "movies") {
+            activateSection("movies");
+            loadMovies();
+            return;
+        }
+
+        if (target.dataset.section === "series") {
+            activateSection("series");
+            loadSeries();
+            return;
+        }
+
+        if (target.dataset.section === "live") {
+            hideCatalog();
+            activateSection("live");
+            loadProviderLive();
+            return;
+        }
+
         if (target.dataset.section) {
+            hideCatalog();
             activateSection(target.dataset.section);
         }
     });

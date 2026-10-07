@@ -7,9 +7,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "iosApp/**"
-      - ".github/workflows/ios-ci.yml"
 
 jobs:
   build:
