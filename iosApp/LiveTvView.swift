@@ -284,10 +284,11 @@ private struct LivePlayer: View {
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
 
-            NativeVideoPlayerView(
+            ParentalProtectedPlayerView(
                 title: channel.name,
                 streamURL: channel.streamUrl,
                 resumePositionSeconds: 0,
+                playbackKind: "live",
                 onError: { error = $0 }
             )
             .ignoresSafeArea()
