@@ -55,9 +55,22 @@
             <p id="system-copy"></p>
             <div class="system-actions">
                 <button id="system-continue" class="primary" data-focusable data-action="system-continue" hidden>Continuer</button>
-                <button id="system-devices" class="secondary" data-focusable data-action="system-devices" hidden>Appareils</button>
                 <button id="system-signout" class="secondary" data-focusable data-action="sign-out" hidden>Se déconnecter</button>
             </div>
+        </div>
+    </section>
+
+    <section id="device-edit-screen" class="pin-screen" hidden>
+        <div class="pin-card">
+            <p class="eyebrow">APPAREIL</p>
+            <h1>Renommer l’appareil</h1>
+            <p>Choisissez un nom facile à reconnaître.</p>
+            <input id="device-name-input" data-focusable type="text" maxlength="60" autocomplete="off">
+            <div class="pin-actions">
+                <button class="primary" data-focusable data-action="save-device-name">Enregistrer</button>
+                <button class="secondary" data-focusable data-action="cancel-device-name">Annuler</button>
+            </div>
+            <div id="device-edit-status" class="status" aria-live="polite"></div>
         </div>
     </section>
 
