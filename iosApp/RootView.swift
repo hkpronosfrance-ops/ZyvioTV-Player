@@ -1,11 +1,17 @@
 import SwiftUI
 
+private struct ParentalRecoveryLink: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 struct RootView: View {
     @State private var isAuthenticated = false
     @State private var isCheckingSession = true
     @State private var isLoadingProfile = false
     @State private var activeProfile: PlayerProfileDTO?
     @State private var profileError: String?
+    @State private var parentalRecoveryLink: ParentalRecoveryLink?
 
     var body: some View {
         Group {
@@ -70,6 +76,23 @@ struct RootView: View {
                 await loadActiveProfile(useStoredSelection: true)
             }
         }
+        .onOpenURL { url in
+            guard
+                url.scheme?.lowercased() == "zyviotv",
+                url.host?.lowercased() == "parental-pin-recovery"
+            else { return }
+            parentalRecoveryLink = ParentalRecoveryLink(url: url)
+        }
+        .sheet(item: $parentalRecoveryLink) { link in
+            ParentalPinRecoveryView(
+                url: link.url,
+                onCompleted: {
+                    parentalRecoveryLink = nil
+                    isAuthenticated = true
+                    Task { await loadActiveProfile(useStoredSelection: true) }
+                }
+            )
+        }
     }
 
     @MainActor
@@ -105,6 +128,110 @@ struct RootView: View {
 }
 
 
+
+
+private struct ParentalPinRecoveryView: View {
+    let url: URL
+    let onCompleted: () -> Void
+
+    @State private var linkReady = false
+    @State private var loading = true
+    @State private var busy = false
+    @State private var newPin = ""
+    @State private var confirmPin = ""
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                Text("Réinitialiser le code PIN")
+                    .font(.largeTitle.bold())
+
+                Text("Créez un nouveau code PIN parental à 4 chiffres.")
+                    .foregroundStyle(.secondary)
+
+                if loading {
+                    ProgressView()
+                        .tint(.red)
+                } else if let errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                } else if linkReady {
+                    SecureField("Nouveau PIN", text: $newPin)
+                        .keyboardType(.numberPad)
+                        .onChange(of: newPin) { _, value in
+                            newPin = String(value.filter(\.isNumber).prefix(4))
+                        }
+                        .textFieldStyle(.roundedBorder)
+
+                    SecureField("Confirmer le PIN", text: $confirmPin)
+                        .keyboardType(.numberPad)
+                        .onChange(of: confirmPin) { _, value in
+                            confirmPin = String(value.filter(\.isNumber).prefix(4))
+                        }
+                        .textFieldStyle(.roundedBorder)
+
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if busy {
+                            ProgressView()
+                        } else {
+                            Text("Enregistrer le nouveau PIN")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(
+                        busy ||
+                        newPin.count != 4 ||
+                        confirmPin.count != 4 ||
+                        newPin != confirmPin
+                    )
+
+                    if newPin.count == 4, confirmPin.count == 4, newPin != confirmPin {
+                        Text("Les deux codes PIN ne correspondent pas.")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+            .preferredColorScheme(.dark)
+            .task { await consumeLink() }
+        }
+    }
+
+    @MainActor
+    private func consumeLink() async {
+        loading = true
+        errorMessage = nil
+        do {
+            try await SupabaseAuthService.shared.consumeParentalRecoveryURL(url)
+            linkReady = true
+        } catch {
+            linkReady = false
+            errorMessage = error.localizedDescription
+        }
+        loading = false
+    }
+
+    @MainActor
+    private func save() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await SupabaseParentalService.shared.resetPinAfterRecentAuth(newPin: newPin)
+            onCompleted()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
 
 private struct AppleSystemGateContainer<Content: View>: View {
     let onSignedOut: () -> Void
