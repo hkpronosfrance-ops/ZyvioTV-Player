@@ -3,10 +3,103 @@
 
     const focusableSelector = "[data-focusable]";
     const status = document.getElementById("status");
+    const authStatus = document.getElementById("auth-status");
+    const authScreen = document.getElementById("auth-screen");
+    const appShell = document.getElementById("app-shell");
+    const emailInput = document.getElementById("auth-email");
+    const passwordInput = document.getElementById("auth-password");
     const video = document.getElementById("tv-player");
     const player = window.ZyvioPlayer?.create(video);
     let providerConfig = null;
     let liveChannels = [];
+    let currentSession = null;
+
+    function setAuthStatus(message) {
+        if (authStatus) authStatus.textContent = message || "";
+    }
+
+    function showAuth() {
+        if (authScreen) authScreen.hidden = false;
+        if (appShell) appShell.hidden = true;
+        providerConfig = null;
+        liveChannels = [];
+        player?.stop();
+        setTimeout(() => emailInput?.focus(), 0);
+    }
+
+    function showApp() {
+        if (authScreen) authScreen.hidden = true;
+        if (appShell) appShell.hidden = false;
+        setTimeout(() => focusables()[0]?.focus(), 0);
+    }
+
+    async function restoreProviderFromAccount(session) {
+        setStatus("Synchronisation du compte…");
+        const restored = await window.ZyvioCloud.restorePrimaryProvider(session);
+        providerConfig = restored.providerConfig;
+        liveChannels = [];
+
+        if (!providerConfig) {
+            setStatus("Aucune playlist active configurée sur ce compte.");
+            return;
+        }
+
+        setStatus(
+            restored.playlist?.name
+                ? "Playlist restaurée : " + restored.playlist.name
+                : "Playlist restaurée."
+        );
+    }
+
+    async function restoreAccount() {
+        setAuthStatus("Restauration de la session…");
+        try {
+            currentSession = await window.ZyvioAuth.restoreSession();
+            if (!currentSession) {
+                setAuthStatus("");
+                showAuth();
+                return;
+            }
+            showApp();
+            await restoreProviderFromAccount(currentSession);
+        } catch (_) {
+            currentSession = null;
+            window.ZyvioAuth.clearSession();
+            setAuthStatus("Session expirée. Reconnectez-vous.");
+            showAuth();
+        }
+    }
+
+    async function signIn() {
+        const email = String(emailInput?.value || "").trim();
+        const password = String(passwordInput?.value || "");
+
+        if (!email || !password) {
+            setAuthStatus("Renseignez votre adresse e-mail et votre mot de passe.");
+            return;
+        }
+
+        setAuthStatus("Connexion…");
+        try {
+            currentSession = await window.ZyvioAuth.signIn(email, password);
+            if (passwordInput) passwordInput.value = "";
+            showApp();
+            await restoreProviderFromAccount(currentSession);
+            setAuthStatus("");
+        } catch (error) {
+            currentSession = null;
+            setAuthStatus(error?.message || "Connexion impossible.");
+            passwordInput?.focus();
+        }
+    }
+
+    async function signOut() {
+        setStatus("Déconnexion…");
+        await window.ZyvioAuth.signOut();
+        currentSession = null;
+        showAuth();
+        setAuthStatus("Vous êtes déconnecté.");
+    }
 
     async function loadProviderLive() {
         if (!providerConfig) {
@@ -201,9 +294,26 @@
         const target = event.target.closest("[data-section], [data-action]");
         if (!target) return;
 
+        if (target.dataset.action === "sign-in") {
+            signIn();
+            return;
+        }
+
         if (target.dataset.action === "open-live") {
             activateSection("live");
             loadProviderLive();
+            return;
+        }
+
+        if (target.dataset.action === "sign-out") {
+            signOut();
+            return;
+        }
+
+        if (target.dataset.section === "more") {
+            activateSection("more");
+            setStatus("Plus — appuyez de nouveau pour vous déconnecter.");
+            target.dataset.action = "sign-out";
             return;
         }
 
@@ -214,7 +324,6 @@
 
     window.addEventListener("load", () => {
         registerRemoteKeys();
-        focusables()[0]?.focus();
-        setStatus("Prêt — navigation télécommande activée.");
+        restoreAccount();
     });
 })();
