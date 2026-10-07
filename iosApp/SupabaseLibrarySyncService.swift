@@ -1470,6 +1470,7 @@ actor SupabaseParentalService {
         case invalidURL
         case invalidResponse
         case server
+        case reauthRequired
 
         var errorDescription: String? {
             switch self {
