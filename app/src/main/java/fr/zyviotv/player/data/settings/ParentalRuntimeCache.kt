@@ -13,6 +13,8 @@ data class CachedParentalRuntime(
     val scheduleWindowsJson: String,
     val trustedEpochMillis: Long,
     val trustedElapsedRealtime: Long,
+    val consumedSeconds: Int,
+    val usageDayUtc: String,
 )
 
 class ParentalRuntimeCache(context: Context) {
@@ -28,6 +30,11 @@ class ParentalRuntimeCache(context: Context) {
             .putString(key(profileId, "schedule_windows"), state.scheduleWindowsJson)
             .putLong(key(profileId, "trusted_epoch"), epoch)
             .putLong(key(profileId, "trusted_elapsed"), SystemClock.elapsedRealtime())
+            .putInt(key(profileId, "consumed_seconds"), state.consumedSeconds.coerceAtLeast(0))
+            .putString(
+                key(profileId, "usage_day_utc"),
+                utcDayKey(state.serverNowEpochMillis ?: epoch),
+            )
             .apply()
     }
 
@@ -43,7 +50,44 @@ class ParentalRuntimeCache(context: Context) {
             ) ?: "[]",
             trustedEpochMillis = preferences.getLong(key(profileId, "trusted_epoch"), 0L),
             trustedElapsedRealtime = preferences.getLong(key(profileId, "trusted_elapsed"), 0L),
+            consumedSeconds = preferences.getInt(key(profileId, "consumed_seconds"), 0),
+            usageDayUtc = preferences.getString(
+                key(profileId, "usage_day_utc"),
+                "",
+            ).orEmpty(),
         )
+    }
+
+    fun updateConsumedSeconds(profileId: String, consumedSeconds: Int) {
+        val cached = load(profileId) ?: return
+        val currentDay = utcDayKey(ParentalScheduleEvaluator.trustedNowMillis(cached))
+        val value = if (cached.usageDayUtc == currentDay) {
+            maxOf(cached.consumedSeconds, consumedSeconds.coerceAtLeast(0))
+        } else {
+            consumedSeconds.coerceAtLeast(0)
+        }
+        preferences.edit()
+            .putInt(key(profileId, "consumed_seconds"), value)
+            .putString(key(profileId, "usage_day_utc"), currentDay)
+            .apply()
+    }
+
+    fun addOfflineSeconds(profileId: String, seconds: Int): Int {
+        val cached = load(profileId) ?: return 0
+        val currentDay = utcDayKey(ParentalScheduleEvaluator.trustedNowMillis(cached))
+        val base = if (cached.usageDayUtc == currentDay) cached.consumedSeconds else 0
+        val next = (base + seconds.coerceAtLeast(0)).coerceAtMost(Int.MAX_VALUE)
+        preferences.edit()
+            .putInt(key(profileId, "consumed_seconds"), next)
+            .putString(key(profileId, "usage_day_utc"), currentDay)
+            .apply()
+        return next
+    }
+
+    fun consumedSeconds(profileId: String): Int {
+        val cached = load(profileId) ?: return 0
+        val currentDay = utcDayKey(ParentalScheduleEvaluator.trustedNowMillis(cached))
+        return if (cached.usageDayUtc == currentDay) cached.consumedSeconds else 0
     }
 
     fun clear(profileId: String) {
@@ -54,6 +98,8 @@ class ParentalRuntimeCache(context: Context) {
             .remove(key(profileId, "schedule_windows"))
             .remove(key(profileId, "trusted_epoch"))
             .remove(key(profileId, "trusted_elapsed"))
+            .remove(key(profileId, "consumed_seconds"))
+            .remove(key(profileId, "usage_day_utc"))
             .apply()
     }
 
@@ -62,6 +108,17 @@ class ParentalRuntimeCache(context: Context) {
     private companion object {
         const val PREFS_NAME = "zyviotv_parental_runtime_cache"
     }
+}
+
+private fun utcDayKey(epochMillis: Long): String {
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        timeInMillis = epochMillis
+    }
+    return "%04d-%02d-%02d".format(
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH) + 1,
+        calendar.get(Calendar.DAY_OF_MONTH),
+    )
 }
 
 object ParentalScheduleEvaluator {
