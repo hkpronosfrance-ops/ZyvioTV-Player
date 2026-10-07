@@ -1464,6 +1464,197 @@ actor SupabaseProviderCatalogService {
         )
     }
 
+
+    private struct AppleM3uEntry {
+        let name: String
+        let streamURL: URL
+        let tvgId: String?
+        let tvgName: String?
+        let logoURL: String?
+        let groupTitle: String?
+    }
+
+    private func loadM3uEntries(url: URL, maxEntries: Int = 20_000) async throws -> [AppleM3uEntry] {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        request.setValue("application/x-mpegURL, audio/x-mpegurl, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("ZYVIOTV-Player/0.1", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let http = response as? HTTPURLResponse,
+            (200...299).contains(http.statusCode),
+            let text = String(data: data, encoding: .utf8)
+        else {
+            throw ProviderCatalogError.providerUnavailable
+        }
+
+        let lines = text
+            .replacingOccurrences(of: "\u{FEFF}", with: "")
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        guard lines.first(where: { !$0.isEmpty })?.uppercased().hasPrefix("#EXTM3U") == true else {
+            throw ProviderCatalogError.providerUnavailable
+        }
+
+        var result: [AppleM3uEntry] = []
+        result.reserveCapacity(min(maxEntries, 512))
+        var metadata: String?
+
+        for line in lines {
+            if result.count >= maxEntries { break }
+            if line.isEmpty { continue }
+
+            if line.uppercased().hasPrefix("#EXTINF:") {
+                metadata = line
+                continue
+            }
+            if line.hasPrefix("#") { continue }
+
+            guard let current = metadata else { continue }
+            metadata = nil
+
+            guard
+                (line.hasPrefix("http://") || line.hasPrefix("https://")),
+                let streamURL = URL(string: line)
+            else { continue }
+
+            let commaIndex = current.lastIndex(of: ",")
+            let metadataName = commaIndex.map {
+                String(current[current.index(after: $0)...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            } ?? ""
+            let tvgName = m3uAttribute(current, name: "tvg-name")
+            let name = metadataName.isEmpty ? (tvgName ?? "") : metadataName
+            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+
+            result.append(
+                AppleM3uEntry(
+                    name: name,
+                    streamURL: streamURL,
+                    tvgId: m3uAttribute(current, name: "tvg-id"),
+                    tvgName: tvgName,
+                    logoURL: m3uAttribute(current, name: "tvg-logo"),
+                    groupTitle: m3uAttribute(current, name: "group-title")
+                )
+            )
+        }
+
+        guard !result.isEmpty else {
+            throw ProviderCatalogError.providerUnavailable
+        }
+
+        return result
+    }
+
+    private func m3uAttribute(_ line: String, name: String) -> String? {
+        let escaped = NSRegularExpression.escapedPattern(for: name)
+        let patterns = [
+            "(?:^|\\s)\(escaped)\\s*=\\s*[\"']([^\"']*)[\"']",
+            "(?:^|\\s)\(escaped)\\s*=\\s*([^\\s,]+)",
+        ]
+
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(
+                pattern: pattern,
+                options: [.caseInsensitive]
+            ) else { continue }
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard
+                let match = regex.firstMatch(in: line, range: range),
+                match.numberOfRanges > 1,
+                let valueRange = Range(match.range(at: 1), in: line)
+            else { continue }
+
+            let value = String(line[valueRange])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty { return value }
+        }
+
+        return nil
+    }
+
+    private func mapM3uCatalog(
+        playlist: ProviderPlaylistDTO,
+        entries: [AppleM3uEntry]
+    ) -> ProviderCatalogDTO {
+        var categoryNames: [String] = []
+        var seenNames = Set<String>()
+        for entry in entries {
+            guard let group = entry.groupTitle?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                !group.isEmpty
+            else { continue }
+
+            let normalized = group
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .lowercased()
+            if seenNames.insert(normalized).inserted {
+                categoryNames.append(group)
+            }
+        }
+
+        let categoryPairs = categoryNames.enumerated().map { index, name in
+            ("m3u-group-\(index)", name)
+        }
+        let categories = Dictionary(uniqueKeysWithValues: categoryPairs)
+        let categoryIdByName = Dictionary(
+            uniqueKeysWithValues: categoryPairs.map { id, name in
+                (
+                    name
+                        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                        .lowercased(),
+                    id
+                )
+            }
+        )
+
+        var usedIds = Set<String>()
+        let channels = entries.enumerated().map { index, entry -> ProviderLiveChannelDTO in
+            let baseId = entry.tvgId?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfBlank ?? "m3u-\(index)"
+            var id = baseId
+            var duplicateIndex = 2
+            while !usedIds.insert(id).inserted {
+                id = "\(baseId)-\(duplicateIndex)"
+                duplicateIndex += 1
+            }
+
+            let categoryId = entry.groupTitle
+                .map {
+                    $0.folding(
+                        options: [.diacriticInsensitive, .caseInsensitive],
+                        locale: .current
+                    ).lowercased()
+                }
+                .flatMap { categoryIdByName[$0] }
+
+            return ProviderLiveChannelDTO(
+                id: id,
+                playlistId: playlist.id,
+                name: entry.name,
+                categoryId: categoryId,
+                logoUrl: entry.logoURL,
+                streamUrl: entry.streamURL,
+                epgId: entry.tvgId
+            )
+        }
+
+        return ProviderCatalogDTO(
+            playlistId: playlist.id,
+            playlistName: playlist.name,
+            liveChannels: channels,
+            liveCategories: categories,
+            movieCategories: [:],
+            seriesCategories: [:],
+            movies: [],
+            series: []
+        )
+    }
+
     func loadCatalog(applyParentalFilters: Bool = true) async throws -> ProviderCatalogDTO {
         let playlists: [ProviderPlaylistDTO] = try await supabaseGet(
             path: "/rest/v1/player_playlists?select=id,name,provider_type,secret_status,is_enabled,priority&order=priority.asc,updated_at.desc"
@@ -1476,18 +1667,54 @@ actor SupabaseProviderCatalogService {
         }
 
         let secret = try await loadPlaylistSecret(playlistId: playlist.id)
-        guard secret.providerType == "xtream" else {
-            // M3U playlists currently provide Live content only in the shared product model.
+        if secret.providerType == "m3u" {
+            guard let m3uURL = secret.m3uURL else {
+                throw ProviderCatalogError.invalidSecret
+            }
+            let entries = try await loadM3uEntries(url: m3uURL)
+            let catalog = mapM3uCatalog(playlist: playlist, entries: entries)
+
+            let locks: ProfileContentLocksDTO?
+            if let profileId = PlayerProfileSelectionStore.shared.activeProfileId {
+                locks = try? await SupabaseParentalService.shared.contentLocks(profileId: profileId)
+            } else {
+                locks = nil
+            }
+
+            guard applyParentalFilters,
+                  locks?.parentalEnabled == true,
+                  locks?.isChild == true
+            else {
+                return catalog
+            }
+
+            let blockedCategories = Set(locks?.lockedCategoryKeys ?? [])
+            let blockedContent = Set(locks?.lockedContentKeys ?? [])
+            let filtered = catalog.liveChannels.filter { channel in
+                let contentKey = "live:" + channel.id
+                let categoryKey = channel.categoryId.map { "live:" + $0 }
+                let adultCategory = channel.categoryId
+                    .flatMap { catalog.liveCategories[$0] }
+                    .map(isAdultCategoryName) ?? false
+                return !blockedContent.contains(contentKey)
+                    && !(categoryKey.map(blockedCategories.contains) ?? false)
+                    && !adultCategory
+            }
+
             return ProviderCatalogDTO(
-                playlistId: playlist.id,
-                playlistName: playlist.name,
-                liveChannels: [],
-                liveCategories: [:],
+                playlistId: catalog.playlistId,
+                playlistName: catalog.playlistName,
+                liveChannels: filtered,
+                liveCategories: catalog.liveCategories,
                 movieCategories: [:],
                 seriesCategories: [:],
                 movies: [],
                 series: []
             )
+        }
+
+        guard secret.providerType == "xtream" else {
+            throw ProviderCatalogError.invalidSecret
         }
 
         guard
