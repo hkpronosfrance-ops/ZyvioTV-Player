@@ -42,9 +42,157 @@
     let parentalSettings = null;
     let contentLocks = null;
     let pendingPinAction = null;
+    let pendingPinVerifier = null;
+    let parentalRuntime = null;
+    let runtimeBlocked = false;
+    let runtimeExceptionUntilMs = 0;
     let activePlayback = null;
 
     const PROFILE_STORAGE_KEY = "zyviotv.tizen.profile.v1";
+    const DEVICE_UID_STORAGE_KEY = "zyviotv.tizen.device_uid.v1";
+    const RUNTIME_CACHE_PREFIX = "zyviotv.tizen.parental_runtime.v1.";
+
+    function stableDeviceUid() {
+        try {
+            const existing = localStorage.getItem(DEVICE_UID_STORAGE_KEY);
+            if (existing) return existing;
+            const random = window.crypto?.getRandomValues
+                ? Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
+                    .map((value) => value.toString(16).padStart(2, "0"))
+                    .join("")
+                : Math.random().toString(36).slice(2) + Date.now().toString(36);
+            const uid = "tizen-" + random.slice(0, 48);
+            localStorage.setItem(DEVICE_UID_STORAGE_KEY, uid);
+            return uid;
+        } catch (_) {
+            return "tizen-session";
+        }
+    }
+
+    const deviceUid = stableDeviceUid();
+
+    function runtimeCacheKey(profileId) {
+        return RUNTIME_CACHE_PREFIX + String(profileId || "");
+    }
+
+    function utcDayKey(epochMs) {
+        const date = new Date(Number(epochMs || 0));
+        return [
+            date.getUTCFullYear(),
+            String(date.getUTCMonth() + 1).padStart(2, "0"),
+            String(date.getUTCDate()).padStart(2, "0"),
+        ].join("-");
+    }
+
+    function saveRuntimeCache(profileId, state) {
+        if (!profileId || !state?.server_now_epoch_ms) return;
+        const previous = loadRuntimeCache(profileId);
+        const serverNow = Number(state.server_now_epoch_ms);
+        const day = utcDayKey(serverNow);
+        const consumed = previous?.usageDayUtc === day
+            ? Math.max(Number(previous.consumedSeconds || 0), Number(state.consumed_seconds || 0))
+            : Math.max(0, Number(state.consumed_seconds || 0));
+        const payload = {
+            parentalEnabled: Boolean(state.parental_enabled),
+            isChild: Boolean(state.is_child),
+            scheduleEnabled: Boolean(state.schedule_enabled),
+            scheduleWindows: Array.isArray(state.schedule_windows) ? state.schedule_windows : [],
+            trustedEpochMs: serverNow,
+            trustedPerformanceMs: Number(performance.now() || 0),
+            consumedSeconds: consumed,
+            usageDayUtc: day,
+            dailyLimitMinutes: state.daily_limit_minutes == null ? null : Number(state.daily_limit_minutes),
+            weekendLimitMinutes: state.weekend_limit_minutes == null ? null : Number(state.weekend_limit_minutes),
+            warningMinutes: Number(state.warning_minutes || 10),
+        };
+        try { localStorage.setItem(runtimeCacheKey(profileId), JSON.stringify(payload)); } catch (_) {}
+        parentalRuntime = payload;
+    }
+
+    function loadRuntimeCache(profileId) {
+        if (!profileId) return null;
+        try {
+            const raw = localStorage.getItem(runtimeCacheKey(profileId));
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === "object" ? parsed : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function trustedRuntimeNowMs(cache = parentalRuntime) {
+        if (!cache) return 0;
+        const currentPerf = Number(performance.now() || 0);
+        const anchorPerf = Number(cache.trustedPerformanceMs || 0);
+        const delta = currentPerf >= anchorPerf ? currentPerf - anchorPerf : 0;
+        return Number(cache.trustedEpochMs || 0) + delta;
+    }
+
+    function effectiveRuntimeLimitMinutes(cache = parentalRuntime) {
+        if (!cache) return null;
+        const now = new Date(trustedRuntimeNowMs(cache));
+        const day = now.getUTCDay();
+        const weekend = day === 0 || day === 6;
+        return weekend
+            ? (cache.weekendLimitMinutes ?? cache.dailyLimitMinutes)
+            : cache.dailyLimitMinutes;
+    }
+
+    function scheduleAllowsNow(cache = parentalRuntime) {
+        if (!cache?.parentalEnabled || !cache?.isChild || !cache?.scheduleEnabled) return true;
+        const windows = Array.isArray(cache.scheduleWindows) ? cache.scheduleWindows : [];
+        if (!windows.length) return false;
+
+        const now = new Date(trustedRuntimeNowMs(cache));
+        const jsDay = now.getDay();
+        const isoDay = jsDay === 0 ? 7 : jsDay;
+        const previousIsoDay = isoDay === 1 ? 7 : isoDay - 1;
+        const minuteOfDay = now.getHours() * 60 + now.getMinutes();
+
+        const minute = (value) => {
+            const parts = String(value || "").split(":");
+            if (parts.length !== 2) return null;
+            const hour = Number(parts[0]);
+            const min = Number(parts[1]);
+            if (!Number.isInteger(hour) || !Number.isInteger(min) ||
+                hour < 0 || hour > 23 || min < 0 || min > 59) return null;
+            return hour * 60 + min;
+        };
+
+        for (const window of windows) {
+            const days = Array.isArray(window?.days) ? window.days.map(Number) : [];
+            const start = minute(window?.start);
+            const end = minute(window?.end);
+            if (start == null || end == null) continue;
+            if (start === end && days.includes(isoDay)) return true;
+            if (start < end && days.includes(isoDay) && minuteOfDay >= start && minuteOfDay < end) {
+                return true;
+            }
+            if (start > end) {
+                if (days.includes(isoDay) && minuteOfDay >= start) return true;
+                if (days.includes(previousIsoDay) && minuteOfDay < end) return true;
+            }
+        }
+        return false;
+    }
+
+    function updateLocalRuntimeConsumed(seconds) {
+        if (!currentProfile || !parentalRuntime) return;
+        const now = trustedRuntimeNowMs(parentalRuntime);
+        const day = utcDayKey(now);
+        if (parentalRuntime.usageDayUtc !== day) {
+            parentalRuntime.consumedSeconds = 0;
+            parentalRuntime.usageDayUtc = day;
+        }
+        parentalRuntime.consumedSeconds = Math.max(
+            0,
+            Number(parentalRuntime.consumedSeconds || 0) + Math.max(0, Number(seconds || 0))
+        );
+        try {
+            localStorage.setItem(runtimeCacheKey(currentProfile.id), JSON.stringify(parentalRuntime));
+        } catch (_) {}
+    }
 
     function storedProfileId() {
         try { return localStorage.getItem(PROFILE_STORAGE_KEY); } catch (_) { return null; }
@@ -84,7 +232,9 @@
     }
 
     function isLockedItem(kind, item) {
-        if (!isChildProfile() || !contentLocks?.parental_enabled) return false;
+        if (!isChildProfile()) return false;
+        if (isAdultCategoryLabel(item.categoryName || "")) return true;
+        if (!contentLocks?.parental_enabled) return false;
 
         const lockedContent = new Set(contentLocks.locked_content_keys || []);
         const lockedCategories = new Set(contentLocks.locked_category_keys || []);
@@ -93,17 +243,17 @@
 
         if (lockedContent.has(itemContentKey)) return true;
         if (item.categoryId && lockedCategories.has(itemCategoryKey)) return true;
-        if (isAdultCategoryLabel(item.categoryName || "")) return true;
         return false;
     }
 
     function filterForProfile(kind, items) {
-        if (!isChildProfile() || !contentLocks?.parental_enabled) return items;
+        if (!isChildProfile()) return items;
         return items.filter((item) => !isLockedItem(kind, item));
     }
 
-    function showPinPrompt(title, copy, action) {
+    function showPinPrompt(title, copy, action, verifier = null) {
         pendingPinAction = action;
+        pendingPinVerifier = verifier;
         if (pinTitle) pinTitle.textContent = title || "Code PIN requis";
         if (pinCopy) pinCopy.textContent = copy || "Saisissez le code PIN parental à 4 chiffres.";
         if (pinInput) pinInput.value = "";
@@ -114,6 +264,7 @@
 
     function closePinPrompt() {
         pendingPinAction = null;
+        pendingPinVerifier = null;
         if (pinInput) pinInput.value = "";
         setPinStatus("");
         if (pinScreen) pinScreen.hidden = true;
@@ -128,6 +279,18 @@
 
         setPinStatus("Vérification…");
         try {
+            if (typeof pendingPinVerifier === "function") {
+                const verification = await pendingPinVerifier(pin);
+                if (verification?.ok) {
+                    const action = pendingPinAction;
+                    closePinPrompt();
+                    if (typeof action === "function") await action();
+                    return;
+                }
+                setPinStatus(verification?.message || "Code PIN non vérifié.");
+                return;
+            }
+
             const result = await window.ZyvioCloud.verifyParentalPin(currentSession, pin);
             if (result?.verified) {
                 const action = pendingPinAction;
@@ -196,12 +359,26 @@
         persistProfileId(profile.id);
         setProfileStatus("Chargement de " + profile.name + "…");
 
-        [favorites, watchProgress, parentalSettings, contentLocks] = await Promise.all([
-            window.ZyvioCloud.listFavorites(currentSession, profile.id),
-            window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
-            window.ZyvioCloud.getParentalSettings(currentSession),
-            window.ZyvioCloud.getProfileContentLocks(currentSession, profile.id),
-        ]);
+        const [loadedFavorites, loadedProgress, loadedParental, loadedLocks, loadedRuntime] =
+            await Promise.all([
+                window.ZyvioCloud.listFavorites(currentSession, profile.id),
+                window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
+                window.ZyvioCloud.getParentalSettings(currentSession),
+                window.ZyvioCloud.getProfileContentLocks(currentSession, profile.id),
+                window.ZyvioCloud.getParentalRuntimeState(currentSession, profile.id, "")
+                    .catch(() => null),
+            ]);
+        favorites = loadedFavorites;
+        watchProgress = loadedProgress;
+        parentalSettings = loadedParental;
+        contentLocks = loadedLocks;
+        if (loadedRuntime) {
+            saveRuntimeCache(profile.id, loadedRuntime);
+        } else {
+            parentalRuntime = loadRuntimeCache(profile.id);
+        }
+        runtimeExceptionUntilMs = Number(loadedRuntime?.exception_until_epoch_ms || 0);
+        runtimeBlocked = false;
 
         if (profileScreen) profileScreen.hidden = true;
         showApp();
@@ -421,8 +598,214 @@
         }
     }
 
+    function activeContentKey(metadata = activePlayback) {
+        if (!metadata) return "";
+        return contentKey(metadata.contentType || "content", metadata.contentId || "");
+    }
+
+    function runtimeExceptionActive() {
+        const now = trustedRuntimeNowMs(parentalRuntime);
+        return runtimeExceptionUntilMs > 0 && now > 0 && now < runtimeExceptionUntilMs;
+    }
+
+    function localRuntimeBlockReason() {
+        if (!isChildProfile() || !parentalRuntime?.parentalEnabled || runtimeExceptionActive()) {
+            return null;
+        }
+
+        if (!scheduleAllowsNow(parentalRuntime)) return "Pas maintenant";
+
+        const limit = effectiveRuntimeLimitMinutes(parentalRuntime);
+        const consumed = Number(parentalRuntime.consumedSeconds || 0);
+        if (limit != null && consumed >= Number(limit) * 60) {
+            return "Temps d’écran atteint";
+        }
+        return null;
+    }
+
+    async function refreshParentalRuntime(contentKeyValue) {
+        if (!currentSession || !currentProfile || !isChildProfile()) {
+            runtimeBlocked = false;
+            return null;
+        }
+
+        try {
+            const state = await window.ZyvioCloud.getParentalRuntimeState(
+                currentSession,
+                currentProfile.id,
+                contentKeyValue || ""
+            );
+            saveRuntimeCache(currentProfile.id, state);
+            runtimeExceptionUntilMs = Number(state?.exception_until_epoch_ms || 0);
+            return state;
+        } catch (_) {
+            parentalRuntime = loadRuntimeCache(currentProfile.id);
+            return null;
+        }
+    }
+
+    function runtimeExceptionVerifier(contentKeyValue) {
+        return async (pin) => {
+            try {
+                const result = await window.ZyvioCloud.grantParentalException(
+                    currentSession,
+                    currentProfile.id,
+                    pin,
+                    contentKeyValue
+                );
+                if (result?.success) {
+                    const expires = Date.parse(result.expires_at || "");
+                    runtimeExceptionUntilMs = Number.isFinite(expires)
+                        ? expires
+                        : trustedRuntimeNowMs(parentalRuntime) + 30 * 60 * 1000;
+                    runtimeBlocked = false;
+                    return { ok: true };
+                }
+
+                const reason = result?.reason;
+                const message = reason === "blocked"
+                    ? "Trop de tentatives. Réessayez dans quelques minutes."
+                    : reason === "pin_not_configured"
+                        ? "Aucun code PIN parental n’est configuré."
+                        : reason === "pin_invalid"
+                            ? "Code PIN incorrect."
+                            : "Impossible d’autoriser cette lecture.";
+                return { ok: false, message };
+            } catch (_) {
+                return { ok: false, message: "Impossible de vérifier l’exception parentale." };
+            }
+        };
+    }
+
+    function promptRuntimeException(
+        reason,
+        contentKeyValue,
+        onGranted,
+        resumeExistingPlayback = true
+    ) {
+        if (resumeExistingPlayback) player?.pause();
+        runtimeBlocked = true;
+        showPinPrompt(
+            reason || "Lecture bloquée",
+            "Saisissez le PIN parental pour continuer ce contenu pendant 30 minutes.",
+            async () => {
+                runtimeBlocked = false;
+                if (resumeExistingPlayback) player?.resume();
+                if (typeof onGranted === "function") await onGranted();
+            },
+            runtimeExceptionVerifier(contentKeyValue)
+        );
+    }
+
+    async function canStartPlayback(metadata, onGranted) {
+        if (!isChildProfile() || !parentalSettings?.enabled) return true;
+
+        const key = activeContentKey(metadata);
+        const state = await refreshParentalRuntime(key);
+        if (state?.blocked_by_time && !runtimeExceptionActive()) {
+            promptRuntimeException("Temps d’écran atteint", key, onGranted, false);
+            return false;
+        }
+
+        const reason = localRuntimeBlockReason();
+        if (reason) {
+            promptRuntimeException(reason, key, onGranted, false);
+            return false;
+        }
+        return true;
+    }
+
+    async function finishParentalPlayback() {
+        if (!currentSession || !currentProfile || !activePlayback) return;
+        const key = activeContentKey(activePlayback);
+        try {
+            await window.ZyvioCloud.parentalHeartbeat(
+                currentSession,
+                currentProfile.id,
+                deviceUid,
+                false,
+                key,
+                Number(parentalRuntime?.consumedSeconds || 0)
+            );
+        } catch (_) {}
+        if (runtimeExceptionUntilMs > 0) {
+            try {
+                await window.ZyvioCloud.endParentalException(
+                    currentSession,
+                    currentProfile.id,
+                    key
+                );
+            } catch (_) {}
+        }
+        runtimeExceptionUntilMs = 0;
+        runtimeBlocked = false;
+    }
+
+    async function parentalRuntimeTick() {
+        if (!currentProfile || !isChildProfile() || !parentalSettings?.enabled) return;
+
+        parentalRuntime = parentalRuntime || loadRuntimeCache(currentProfile.id);
+        const reasonBefore = localRuntimeBlockReason();
+        if (reasonBefore && activePlayback && !runtimeBlocked) {
+            promptRuntimeException(reasonBefore, activeContentKey(activePlayback));
+            return;
+        }
+
+        if (!activePlayback) return;
+
+        const key = activeContentKey(activePlayback);
+        const playing = !runtimeBlocked;
+        try {
+            const heartbeat = await window.ZyvioCloud.parentalHeartbeat(
+                currentSession,
+                currentProfile.id,
+                deviceUid,
+                playing,
+                key,
+                Number(parentalRuntime?.consumedSeconds || 0)
+            );
+
+            if (parentalRuntime) {
+                const trustedNow = trustedRuntimeNowMs(parentalRuntime);
+                const day = utcDayKey(trustedNow);
+                if (parentalRuntime.usageDayUtc !== day) {
+                    parentalRuntime.usageDayUtc = day;
+                    parentalRuntime.consumedSeconds = 0;
+                }
+                parentalRuntime.consumedSeconds = Math.max(
+                    Number(parentalRuntime.consumedSeconds || 0),
+                    Number(heartbeat?.consumed_seconds || 0)
+                );
+                try {
+                    localStorage.setItem(
+                        runtimeCacheKey(currentProfile.id),
+                        JSON.stringify(parentalRuntime)
+                    );
+                } catch (_) {}
+            }
+
+            if (heartbeat?.exception_until) {
+                const expires = Date.parse(heartbeat.exception_until);
+                if (Number.isFinite(expires)) runtimeExceptionUntilMs = expires;
+            }
+
+            if (heartbeat?.blocked_by_time && !runtimeExceptionActive()) {
+                promptRuntimeException("Temps d’écran atteint", key);
+                return;
+            }
+        } catch (_) {
+            if (playing) updateLocalRuntimeConsumed(30);
+        }
+
+        const reasonAfter = localRuntimeBlockReason();
+        if (reasonAfter && !runtimeBlocked) {
+            promptRuntimeException(reasonAfter, key);
+        }
+    }
+
     async function syncActivePlayback() {
         if (!activePlayback || !currentSession || !currentProfile || !currentPlaylist) return;
+        if (activePlayback.trackProgress === false) return;
 
         const positionMs = player.getPositionMs();
         const durationMs = player.getDurationMs();
@@ -475,8 +858,15 @@
 
     async function startTrackedPlayback(url, metadata) {
         await syncActivePlayback();
+        await finishParentalPlayback();
+        const allowed = await canStartPlayback(
+            metadata,
+            async () => startTrackedPlayback(url, metadata)
+        );
+        if (!allowed) return false;
         await player.play(url);
-        activePlayback = metadata;
+        activePlayback = { ...metadata, trackProgress: true };
+        runtimeBlocked = false;
         const previous = progressFor(metadata.contentType, metadata.contentId);
         const resumeMs = Number(previous?.position_ms || 0);
         const completed = Boolean(previous?.completed);
@@ -486,6 +876,7 @@
         } else {
             setStatus("Lecture : " + metadata.title);
         }
+        return true;
     }
 
     function renderEpisodes(seriesItem, detail) {
@@ -694,7 +1085,23 @@
             return;
         }
         try {
+            await syncActivePlayback();
+            await finishParentalPlayback();
+            const metadata = {
+                contentType: "live",
+                contentId: channel.id,
+                title: channel.name,
+                artworkUrl: channel.logo || null,
+                trackProgress: false,
+            };
+            const allowed = await canStartPlayback(
+                metadata,
+                async () => playChannel(channel)
+            );
+            if (!allowed) return;
             await player.play(channel.streamUrl);
+            activePlayback = metadata;
+            runtimeBlocked = false;
             let epgSuffix = "";
             if (providerConfig?.type === "xtream") {
                 try {
@@ -881,6 +1288,7 @@
         if (event.key === "Backspace" || event.key === "Escape") {
             event.preventDefault();
             syncActivePlayback();
+            finishParentalPlayback();
             activePlayback = null;
             player?.stop();
             setStatus("Retour");
@@ -962,7 +1370,7 @@
         }
 
         if (target.dataset.action === "sign-out") {
-            if (isChildProfile() && parentalSettings?.enabled) {
+            if (isChildProfile()) {
                 showPinPrompt(
                     "Déconnexion protégée",
                     "Le code PIN parental est requis pour quitter le profil Enfant.",
@@ -1051,7 +1459,7 @@
         }
 
         if (target.dataset.section === "profiles") {
-            if (isChildProfile() && parentalSettings?.enabled) {
+            if (isChildProfile()) {
                 showPinPrompt(
                     "Quitter le profil Enfant",
                     "Le code PIN parental est requis pour changer de profil.",
@@ -1064,7 +1472,7 @@
         }
 
         if (target.dataset.section === "more") {
-            if (isChildProfile() && parentalSettings?.enabled) {
+            if (isChildProfile()) {
                 showPinPrompt(
                     "Zone protégée",
                     "Le code PIN parental est requis pour ouvrir les réglages du compte.",
@@ -1118,6 +1526,9 @@
     window.addEventListener("load", () => {
         registerRemoteKeys();
         restoreAccount();
-        setInterval(() => { syncActivePlayback(); }, 30_000);
+        setInterval(() => {
+            syncActivePlayback();
+            parentalRuntimeTick();
+        }, 30_000);
     });
 })();
