@@ -189,6 +189,20 @@ private struct AccountView: View {
                     }
                     .buttonStyle(.bordered)
 
+                    NavigationLink {
+                        GlobalSearchView()
+                    } label: {
+                        Label("Recherche", systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(.bordered)
+
+                    NavigationLink {
+                        LibraryView()
+                    } label: {
+                        Label("Bibliothèque", systemImage: "books.vertical.fill")
+                    }
+                    .buttonStyle(.bordered)
+
                     Button(role: .destructive) {
                         Task { await signOut() }
                     } label: {
@@ -219,6 +233,549 @@ private struct AccountView: View {
 }
 
 
+
+
+private enum SearchPlaybackTarget: Identifiable {
+    case live(ProviderLiveChannelDTO)
+    case movie(ProviderMovieDTO, SyncedWatchProgressDTO?)
+
+    var id: String {
+        switch self {
+        case .live(let item):
+            return "live:" + item.id
+        case .movie(let item, _):
+            return "movie:" + item.id
+        }
+    }
+}
+
+private struct GlobalSearchView: View {
+    @State private var query = ""
+    @State private var catalog: ProviderCatalogDTO?
+    @State private var favorites: [SyncedFavoriteDTO] = []
+    @State private var progress: [SyncedWatchProgressDTO] = []
+    @State private var loading = true
+    @State private var errorMessage: String?
+    @State private var playbackTarget: SearchPlaybackTarget?
+
+    private var normalizedQuery: String {
+        normalized(query)
+    }
+
+    private var liveResults: [ProviderLiveChannelDTO] {
+        guard let catalog, !normalizedQuery.isEmpty else { return [] }
+        return catalog.liveChannels
+            .filter { normalized($0.name).contains(normalizedQuery) }
+            .prefix(30)
+            .map { $0 }
+    }
+
+    private var movieResults: [ProviderMovieDTO] {
+        guard let catalog, !normalizedQuery.isEmpty else { return [] }
+        return catalog.movies
+            .filter { normalized($0.title).contains(normalizedQuery) }
+            .prefix(30)
+            .map { $0 }
+    }
+
+    private var seriesResults: [ProviderSeriesDTO] {
+        guard let catalog, !normalizedQuery.isEmpty else { return [] }
+        return catalog.series
+            .filter { normalized($0.title).contains(normalizedQuery) }
+            .prefix(30)
+            .map { $0 }
+    }
+
+    var body: some View {
+        Group {
+            if loading {
+                ProgressView("Chargement du catalogue…")
+                    .tint(.red)
+            } else if let errorMessage {
+                ContentUnavailableView {
+                    Label("Recherche indisponible", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(errorMessage)
+                } actions: {
+                    Button("Réessayer") { Task { await reload() } }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                }
+            } else {
+                List {
+                    if normalizedQuery.isEmpty {
+                        ContentUnavailableView(
+                            "Rechercher dans ZYVIOTV",
+                            systemImage: "magnifyingglass",
+                            description: Text("Chaînes, films et séries.")
+                        )
+                        .listRowBackground(Color.clear)
+                    } else if liveResults.isEmpty && movieResults.isEmpty && seriesResults.isEmpty {
+                        ContentUnavailableView.search(text: query)
+                            .listRowBackground(Color.clear)
+                    } else {
+                        if !liveResults.isEmpty {
+                            Section("Chaînes") {
+                                ForEach(liveResults) { channel in
+                                    searchRow(
+                                        title: channel.name,
+                                        subtitle: "TV en direct",
+                                        artwork: channel.logoUrl,
+                                        systemImage: "tv.fill",
+                                        favorite: isFavorite(
+                                            playlistId: channel.playlistId,
+                                            type: "live",
+                                            contentId: channel.id
+                                        ),
+                                        onFavorite: {
+                                            Task {
+                                                await toggleFavorite(
+                                                    playlistId: channel.playlistId,
+                                                    type: "live",
+                                                    contentId: channel.id,
+                                                    title: channel.name,
+                                                    artwork: channel.logoUrl
+                                                )
+                                            }
+                                        },
+                                        onOpen: {
+                                            playbackTarget = .live(channel)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if !movieResults.isEmpty {
+                            Section("Films") {
+                                ForEach(movieResults) { movie in
+                                    searchRow(
+                                        title: movie.title,
+                                        subtitle: "Film",
+                                        artwork: movie.posterUrl,
+                                        systemImage: "film.fill",
+                                        favorite: isFavorite(
+                                            playlistId: movie.playlistId,
+                                            type: "movie",
+                                            contentId: movie.id
+                                        ),
+                                        onFavorite: {
+                                            Task {
+                                                await toggleFavorite(
+                                                    playlistId: movie.playlistId,
+                                                    type: "movie",
+                                                    contentId: movie.id,
+                                                    title: movie.title,
+                                                    artwork: movie.posterUrl
+                                                )
+                                            }
+                                        },
+                                        onOpen: {
+                                            playbackTarget = .movie(
+                                                movie,
+                                                progress.first {
+                                                    $0.playlistId == movie.playlistId &&
+                                                    $0.contentType == "movie" &&
+                                                    $0.contentId == movie.id
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if !seriesResults.isEmpty {
+                            Section("Séries") {
+                                ForEach(seriesResults) { series in
+                                    HStack(spacing: 12) {
+                                        SearchArtwork(
+                                            urlString: series.posterUrl,
+                                            systemImage: "rectangle.stack.fill"
+                                        )
+                                        .frame(width: 46, height: 64)
+
+                                        NavigationLink {
+                                            SeriesDetailView(series: series)
+                                        } label: {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(series.title)
+                                                    .foregroundStyle(.primary)
+                                                Text("Série")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+
+                                        Spacer()
+
+                                        Button {
+                                            Task {
+                                                await toggleFavorite(
+                                                    playlistId: series.playlistId,
+                                                    type: "series",
+                                                    contentId: series.id,
+                                                    title: series.title,
+                                                    artwork: series.posterUrl
+                                                )
+                                            }
+                                        } label: {
+                                            Image(
+                                                systemName: isFavorite(
+                                                    playlistId: series.playlistId,
+                                                    type: "series",
+                                                    contentId: series.id
+                                                ) ? "heart.fill" : "heart"
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .foregroundStyle(.red)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .background(Color.black)
+            }
+        }
+        .navigationTitle("Recherche")
+        .searchable(text: $query, prompt: "Chaîne, film ou série")
+        .task { await reload() }
+        .fullScreenCover(item: $playbackTarget) { target in
+            switch target {
+            case .live(let channel):
+                SearchLivePlayer(channel: channel)
+            case .movie(let movie, let existingProgress):
+                MoviePlayerScreen(
+                    movie: movie,
+                    existingProgress: existingProgress,
+                    onProgressSaved: { updated in
+                        if let index = progress.firstIndex(where: { $0.id == updated.id }) {
+                            progress[index] = updated
+                        } else {
+                            progress.insert(updated, at: 0)
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func searchRow(
+        title: String,
+        subtitle: String,
+        artwork: String?,
+        systemImage: String,
+        favorite: Bool,
+        onFavorite: @escaping () -> Void,
+        onOpen: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 12) {
+            SearchArtwork(urlString: artwork, systemImage: systemImage)
+                .frame(width: 52, height: 52)
+
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onFavorite) {
+                Image(systemName: favorite ? "heart.fill" : "heart")
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @MainActor
+    private func reload() async {
+        loading = true
+        errorMessage = nil
+        do {
+            async let catalogTask = SupabaseProviderCatalogService.shared.loadCatalog()
+            async let favoritesTask = SupabaseLibrarySyncService.shared.listFavorites()
+            async let progressTask = SupabaseLibrarySyncService.shared.listWatchProgress(limit: 200)
+
+            catalog = try await catalogTask
+            favorites = try await favoritesTask
+            progress = try await progressTask
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        loading = false
+    }
+
+    @MainActor
+    private func toggleFavorite(
+        playlistId: String,
+        type: String,
+        contentId: String,
+        title: String,
+        artwork: String?
+    ) async {
+        let value = SyncedFavoriteDTO(
+            playlistId: playlistId,
+            contentType: type,
+            contentId: contentId,
+            title: title,
+            artworkUrl: artwork
+        )
+
+        do {
+            if let index = favorites.firstIndex(where: { $0.id == value.id }) {
+                try await SupabaseLibrarySyncService.shared.removeFavorite(value)
+                favorites.remove(at: index)
+            } else {
+                try await SupabaseLibrarySyncService.shared.upsertFavorite(value)
+                favorites.insert(value, at: 0)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func isFavorite(playlistId: String, type: String, contentId: String) -> Bool {
+        favorites.contains {
+            $0.playlistId == playlistId &&
+            $0.contentType == type &&
+            $0.contentId == contentId
+        }
+    }
+
+    private func normalized(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private struct SearchArtwork: View {
+    let urlString: String?
+    let systemImage: String
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.07))
+
+            if let urlString, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().scaledToFit()
+                    } else {
+                        Image(systemName: systemImage)
+                            .foregroundStyle(.red)
+                    }
+                }
+                .padding(4)
+            } else {
+                Image(systemName: systemImage)
+                    .foregroundStyle(.red)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct SearchLivePlayer: View {
+    let channel: ProviderLiveChannelDTO
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var errorMessage: String?
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            ParentalProtectedPlayerView(
+                title: channel.name,
+                streamURL: channel.streamUrl,
+                resumePositionSeconds: 0,
+                playbackKind: "live",
+                onError: { errorMessage = $0 }
+            )
+            .ignoresSafeArea()
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .padding(12)
+                    .background(.black.opacity(0.65))
+                    .clipShape(Circle())
+            }
+            .foregroundStyle(.white)
+            .padding(18)
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .padding(16)
+                    .background(Color.black.opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(18)
+            }
+        }
+    }
+}
+
+private struct LibraryView: View {
+    @State private var favorites: [SyncedFavoriteDTO] = []
+    @State private var progress: [SyncedWatchProgressDTO] = []
+    @State private var loading = true
+    @State private var errorMessage: String?
+
+    private var continueWatching: [SyncedWatchProgressDTO] {
+        progress.filter { !$0.completed && $0.positionMs > 0 }
+    }
+
+    var body: some View {
+        List {
+            if loading {
+                HStack {
+                    Spacer()
+                    ProgressView("Chargement…")
+                    Spacer()
+                }
+            } else if let errorMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                    Button("Réessayer") { Task { await reload() } }
+                }
+            } else {
+                Section("Favoris") {
+                    if favorites.isEmpty {
+                        Text("Aucun favori.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(favorites) { item in
+                            LibraryRow(
+                                title: item.title,
+                                subtitle: libraryTypeLabel(item.contentType),
+                                artworkUrl: item.artworkUrl,
+                                progress: nil
+                            )
+                        }
+                    }
+                }
+
+                Section("Continuer") {
+                    if continueWatching.isEmpty {
+                        Text("Aucune lecture à reprendre.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(continueWatching) { item in
+                            LibraryRow(
+                                title: item.title,
+                                subtitle: progressSubtitle(item),
+                                artworkUrl: item.artworkUrl,
+                                progress: progressFraction(item)
+                            )
+                        }
+                    }
+                }
+
+                Section("Historique") {
+                    if progress.isEmpty {
+                        Text("Aucun historique.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(progress) { item in
+                            LibraryRow(
+                                title: item.title,
+                                subtitle: progressSubtitle(item),
+                                artworkUrl: item.artworkUrl,
+                                progress: progressFraction(item)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.black)
+        .navigationTitle("Bibliothèque")
+        .refreshable { await reload() }
+        .task { await reload() }
+    }
+
+    @MainActor
+    private func reload() async {
+        loading = true
+        errorMessage = nil
+        do {
+            async let favoritesTask = SupabaseLibrarySyncService.shared.listFavorites()
+            async let progressTask = SupabaseLibrarySyncService.shared.listWatchProgress(limit: 200)
+            favorites = try await favoritesTask
+            progress = try await progressTask
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        loading = false
+    }
+
+    private func progressFraction(_ item: SyncedWatchProgressDTO) -> Double? {
+        guard let duration = item.durationMs, duration > 0 else { return nil }
+        return min(max(Double(item.positionMs) / Double(duration), 0), 1)
+    }
+
+    private func progressSubtitle(_ item: SyncedWatchProgressDTO) -> String {
+        if let season = item.seasonNumber, let episode = item.episodeNumber {
+            return "S\(season) E\(episode)" + (item.completed ? " · Vu" : "")
+        }
+        return item.completed ? "Vu" : libraryTypeLabel(item.contentType)
+    }
+
+    private func libraryTypeLabel(_ type: String) -> String {
+        switch type {
+        case "live": return "Chaîne TV"
+        case "movie": return "Film"
+        case "series": return "Série"
+        case "episode": return "Épisode"
+        default: return type.capitalized
+        }
+    }
+}
+
+private struct LibraryRow: View {
+    let title: String
+    let subtitle: String
+    let artworkUrl: String?
+    let progress: Double?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SearchArtwork(
+                urlString: artworkUrl,
+                systemImage: "play.rectangle.fill"
+            )
+            .frame(width: 50, height: 58)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .lineLimit(2)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let progress {
+                    ProgressView(value: progress)
+                        .tint(.red)
+                }
+            }
+        }
+    }
+}
 
 private struct PlaylistSettingsView: View {
     let onSignedOut: () -> Void
