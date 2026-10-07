@@ -265,6 +265,24 @@ struct ProviderSeriesDTO: Identifiable, Hashable {
     let addedAtEpochSeconds: Int64?
 }
 
+
+struct ProviderSeriesEpisodeDTO: Identifiable, Hashable {
+    let id: String
+    let season: Int
+    let number: Int
+    let title: String
+    let synopsis: String?
+    let streamUrl: URL
+}
+
+struct ProviderSeriesDetailDTO {
+    let title: String?
+    let year: String?
+    let synopsis: String?
+    let genres: [String]
+    let episodes: [ProviderSeriesEpisodeDTO]
+}
+
 struct ProviderCatalogDTO {
     let playlistId: String
     let playlistName: String
@@ -278,6 +296,129 @@ actor SupabaseProviderCatalogService {
     private let baseURL = URL(string: "https://nvpuftuluguawdxonmlc.supabase.co")!
     private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
     private let sessionStore = AuthSessionStore()
+
+    func loadSeriesDetail(
+        playlistId: String,
+        seriesId: String
+    ) async throws -> ProviderSeriesDetailDTO {
+        let secret = try await loadPlaylistSecret(playlistId: playlistId)
+        guard
+            secret.providerType == "xtream",
+            let serverURL = secret.serverURL,
+            let username = secret.username,
+            let password = secret.password
+        else {
+            throw ProviderCatalogError.invalidSecret
+        }
+
+        guard var components = URLComponents(
+            url: serverURL.appendingPathComponent("player_api.php"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw ProviderCatalogError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "username", value: username),
+            URLQueryItem(name: "password", value: password),
+            URLQueryItem(name: "action", value: "get_series_info"),
+            URLQueryItem(name: "series_id", value: seriesId),
+        ]
+
+        guard let url = components.url else {
+            throw ProviderCatalogError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("ZYVIOTV-Player/0.1", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let httpResponse = response as? HTTPURLResponse,
+            (200...299).contains(httpResponse.statusCode),
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            throw ProviderCatalogError.providerUnavailable
+        }
+
+        let info = root["info"] as? [String: Any]
+        let episodesObject = root["episodes"] as? [String: Any] ?? [:]
+        var episodes: [ProviderSeriesEpisodeDTO] = []
+
+        for (seasonKey, rawValue) in episodesObject {
+            guard
+                let season = Int(seasonKey),
+                let array = rawValue as? [[String: Any]]
+            else {
+                continue
+            }
+
+            for (index, item) in array.enumerated() {
+                guard
+                    let episodeId = stringValue(item["id"]) ?? stringValue(item["stream_id"])
+                else {
+                    continue
+                }
+
+                let number =
+                    Int(stringValue(item["episode_num"]) ?? "") ??
+                    (item["episode_num"] as? NSNumber)?.intValue ??
+                    index + 1
+                let title = cleanString(item["title"]) ?? "Épisode \(number)"
+                let extensionValue = cleanString(item["container_extension"]) ?? "mp4"
+                let episodeInfo = item["info"] as? [String: Any]
+
+                guard let streamURL = mediaURL(
+                    serverURL: serverURL,
+                    kind: "series",
+                    username: username,
+                    password: password,
+                    id: episodeId,
+                    extensionValue: extensionValue
+                ) else {
+                    continue
+                }
+
+                episodes.append(
+                    ProviderSeriesEpisodeDTO(
+                        id: episodeId,
+                        season: season,
+                        number: number,
+                        title: title,
+                        synopsis: cleanString(episodeInfo?["plot"]),
+                        streamUrl: streamURL
+                    )
+                )
+            }
+        }
+
+        episodes.sort {
+            if $0.season == $1.season {
+                return $0.number < $1.number
+            }
+            return $0.season < $1.season
+        }
+
+        let releaseDate = cleanString(info?["releaseDate"])
+        let year = releaseDate.flatMap {
+            $0.count >= 4 ? String($0.prefix(4)) : nil
+        }
+        let genres = (cleanString(info?["genre"]) ?? "")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        return ProviderSeriesDetailDTO(
+            title: cleanString(info?["name"]),
+            year: year,
+            synopsis: cleanString(info?["plot"]),
+            genres: genres,
+            episodes: episodes
+        )
+    }
 
     func loadCatalog() async throws -> ProviderCatalogDTO {
         let playlists: [ProviderPlaylistDTO] = try await supabaseGet(
