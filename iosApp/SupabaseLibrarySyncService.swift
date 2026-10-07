@@ -1271,12 +1271,12 @@ actor SupabaseProviderCatalogService {
             )
         }
 
-        let locks: ProfileContentLocksDTO? = {
-            guard let profileId = PlayerProfileSelectionStore.shared.activeProfileId else {
-                return nil
-            }
-            return try? await SupabaseParentalService.shared.contentLocks(profileId: profileId)
-        }()
+        let locks: ProfileContentLocksDTO?
+        if let profileId = PlayerProfileSelectionStore.shared.activeProfileId {
+            locks = try? await SupabaseParentalService.shared.contentLocks(profileId: profileId)
+        } else {
+            locks = nil
+        }
 
         let blockedCategories = Set(locks?.lockedCategoryKeys ?? [])
         let blockedContent = Set(locks?.lockedContentKeys ?? [])
