@@ -108,7 +108,15 @@ struct RootView: View {
 
 private struct AppleSystemGateContainer<Content: View>: View {
     let onSignedOut: () -> Void
-    @ViewBuilder let content: () -> Content
+    private let content: () -> Content
+
+    init(
+        onSignedOut: @escaping () -> Void,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.onSignedOut = onSignedOut
+        self.content = content
+    }
 
     @State private var loading = true
     @State private var state: AppleSystemGateState = .normal
