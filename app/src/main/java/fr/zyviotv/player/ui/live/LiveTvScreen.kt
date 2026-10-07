@@ -254,11 +254,16 @@ private fun MobileLiveLayout(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        LiveHeader(onOpenGuide)
+        LiveHeader(onOpenGuide = onOpenGuide, isTelevision = false)
         Spacer(Modifier.height(16.dp))
         CategoryRow(categories, selectedCategory, onCategorySelected, false, lockedCategories)
         Spacer(Modifier.height(16.dp))
-        PlayerPanel(selectedChannel, onTuneChannel, isOffline)
+        PlayerPanel(
+            channel = selectedChannel,
+            onTuneChannel = onTuneChannel,
+            isOffline = isOffline,
+            isTelevision = false,
+        )
         Spacer(Modifier.height(18.dp))
         ChannelList(
             channels = channels,
@@ -286,7 +291,7 @@ private fun LargeLiveLayout(
     onOpenGuide: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
-        LiveHeader(onOpenGuide)
+        LiveHeader(onOpenGuide = onOpenGuide, isTelevision = isTelevision)
         Spacer(Modifier.height(14.dp))
         CategoryRow(categories, selectedCategory, onCategorySelected, isTelevision, lockedCategories)
         Spacer(Modifier.height(18.dp))
@@ -315,14 +320,22 @@ private fun LargeLiveLayout(
                     .fillMaxHeight()
                     .weight(1f),
             ) {
-                PlayerPanel(selectedChannel, onTuneChannel, isOffline)
+                PlayerPanel(
+                    channel = selectedChannel,
+                    onTuneChannel = onTuneChannel,
+                    isOffline = isOffline,
+                    isTelevision = isTelevision,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun LiveHeader(onOpenGuide: () -> Unit) {
+private fun LiveHeader(
+    onOpenGuide: () -> Unit,
+    isTelevision: Boolean,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -344,7 +357,13 @@ private fun LiveHeader(onOpenGuide: () -> Unit) {
                 color = ZyvioTextSecondary,
             )
         }
-        TextButton(onClick = onOpenGuide) {
+        TextButton(
+            modifier = Modifier.tvFocusEffect(
+                enabled = isTelevision,
+                cornerRadiusDp = 12,
+            ),
+            onClick = onOpenGuide,
+        ) {
             Text("Guide TV")
         }
     }
@@ -399,6 +418,7 @@ private fun PlayerPanel(
     channel: LiveChannelUi?,
     onTuneChannel: (LiveChannelUi) -> Unit,
     isOffline: Boolean,
+    isTelevision: Boolean,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -409,7 +429,7 @@ private fun PlayerPanel(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(280.dp)
+                    .height(if (isTelevision) 360.dp else 280.dp)
                     .background(ZyvioSurface2, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -465,6 +485,10 @@ private fun PlayerPanel(
                 Spacer(Modifier.height(16.dp))
                 Button(
                     enabled = !isOffline,
+                    modifier = Modifier.tvFocusEffect(
+                        enabled = isTelevision,
+                        cornerRadiusDp = 12,
+                    ),
                     onClick = { onTuneChannel(it) },
                 ) {
                     Text(if (isOffline) "Hors connexion" else "Regarder")
