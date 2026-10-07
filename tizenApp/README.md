@@ -84,3 +84,19 @@ The Samsung client now also supports:
 - completion detection near the end of content
 
 Provider credentials and stream URLs are never written to library rows.
+
+
+## Profiles + actionable home library
+
+The Samsung client now also supports:
+- account profile picker after sign-in when multiple profiles exist
+- device-local remembered profile selection
+- explicit Profiles navigation entry for switching profile
+- profile-scoped Favorites / Continue Watching / Recent history shelves
+- actionable movie and episode resume cards
+- actionable movie/series favorites
+- no empty synced shelves
+- up to 20 items per home shelf
+- fixed catalog-card activation for remote/Enter clicks
+
+Child-profile parental enforcement remains a dedicated follow-up phase; this phase only establishes correct profile selection and scoped library data.
