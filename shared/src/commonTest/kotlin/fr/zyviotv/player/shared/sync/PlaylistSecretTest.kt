@@ -21,6 +21,19 @@ class PlaylistSecretTest {
     }
 
     @Test
+    fun m3uToStringRedactsOptionalXmlTvSource() {
+        val secret = PlaylistSecret.M3u(
+            url = "https://example.invalid/list.m3u",
+            xmlTvUrl = "https://example.invalid/guide.xml",
+        )
+
+        val rendered = secret.toString()
+        assertFalse(rendered.contains("guide.xml"))
+        assertFalse(rendered.contains("list.m3u"))
+        assertTrue(rendered.contains("[REDACTED]"))
+    }
+
+    @Test
     fun m3uToStringNeverLeaksUrl() {
         val secret = PlaylistSecret.M3u(
             url = "https://provider.example/get.php?username=a&password=b",
