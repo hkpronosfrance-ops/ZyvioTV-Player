@@ -417,7 +417,6 @@ actor SupabaseProfileService {
         case invalidURL
         case invalidResponse
         case server
-        case reauthRequired
 
         var errorDescription: String? {
             switch self {
