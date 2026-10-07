@@ -23,7 +23,7 @@ struct RootView: View {
             }
         }
         .task {
-            isAuthenticated = await SupabaseAuthService.shared.hasStoredSession
+            isAuthenticated = await SupabaseAuthService.shared.restoreSession()
             isCheckingSession = false
         }
     }
