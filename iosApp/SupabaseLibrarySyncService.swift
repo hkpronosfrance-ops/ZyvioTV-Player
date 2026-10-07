@@ -48,6 +48,158 @@ struct SyncedWatchProgressDTO: Codable, Identifiable {
     }
 }
 
+struct PlayerProfileDTO: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let avatarKey: String
+    let profileType: String
+    let maxAge: Int?
+    let isPrimary: Bool
+
+    var isChild: Bool { profileType == "child" }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case avatarKey = "avatar_key"
+        case profileType = "profile_type"
+        case maxAge = "max_age"
+        case isPrimary = "is_primary"
+    }
+}
+
+final class PlayerProfileSelectionStore {
+    static let shared = PlayerProfileSelectionStore()
+
+    private let defaults = UserDefaults.standard
+    private let key = "zyviotv.active_profile_id"
+
+    var activeProfileId: String? {
+        defaults.string(forKey: key)
+    }
+
+    func select(profileId: String) {
+        defaults.set(profileId, forKey: key)
+    }
+
+    func clear() {
+        defaults.removeObject(forKey: key)
+    }
+}
+
+actor SupabaseProfileService {
+    static let shared = SupabaseProfileService()
+
+    private let baseURL = URL(string: "https://nvpuftuluguawdxonmlc.supabase.co")!
+    private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
+    private let sessionStore = AuthSessionStore()
+
+    func ensurePrimaryProfile() async throws -> String {
+        let data = try await request(
+            path: "/rest/v1/rpc/player_ensure_primary_profile",
+            method: "POST",
+            payload: [:]
+        )
+        if let value = try? JSONDecoder().decode(String.self, from: data) {
+            return value
+        }
+        guard let value = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"\n\r "))
+            .nilIfBlank
+        else {
+            throw ProfileError.invalidResponse
+        }
+        return value
+    }
+
+    func listProfiles() async throws -> [PlayerProfileDTO] {
+        try await get(
+            path: "/rest/v1/player_profiles?select=id,name,avatar_key,profile_type,max_age,is_primary&order=is_primary.desc,created_at.asc"
+        )
+    }
+
+    func resolveActiveProfile() async throws -> PlayerProfileDTO {
+        _ = try await ensurePrimaryProfile()
+        let profiles = try await listProfiles()
+        guard !profiles.isEmpty else {
+            throw ProfileError.noProfile
+        }
+
+        if let storedId = PlayerProfileSelectionStore.shared.activeProfileId,
+           let stored = profiles.first(where: { $0.id == storedId }) {
+            return stored
+        }
+
+        let fallback = profiles.first(where: { $0.isPrimary }) ?? profiles[0]
+        PlayerProfileSelectionStore.shared.select(profileId: fallback.id)
+        return fallback
+    }
+
+    private func request(
+        path: String,
+        method: String,
+        payload: Any? = nil
+    ) async throws -> Data {
+        guard let session = sessionStore.load() else {
+            throw ProfileError.noSession
+        }
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw ProfileError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        if let payload {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ProfileError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw ProfileError.server
+        }
+        return data
+    }
+
+    private func get<T: Decodable>(path: String) async throws -> T {
+        let data = try await request(path: path, method: "GET")
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    enum ProfileError: LocalizedError {
+        case noSession
+        case noProfile
+        case invalidURL
+        case invalidResponse
+        case noProfile
+        case server
+
+        var errorDescription: String? {
+            switch self {
+            case .noSession:
+                return "Session absente."
+            case .noProfile:
+                return "Aucun profil actif."
+            case .invalidURL:
+                return "Configuration serveur invalide."
+            case .invalidResponse:
+                return "Réponse serveur invalide."
+            case .noProfile:
+                return "Aucun profil disponible."
+            case .server:
+                return "Impossible de charger les profils."
+            }
+        }
+    }
+}
+
 actor SupabaseLibrarySyncService {
     static let shared = SupabaseLibrarySyncService()
 
@@ -56,22 +208,26 @@ actor SupabaseLibrarySyncService {
     private let sessionStore = AuthSessionStore()
 
     func listFavorites() async throws -> [SyncedFavoriteDTO] {
-        try await get(
-            path: "/rest/v1/player_favorites?select=playlist_id,content_type,content_id,title,artwork_url&order=updated_at.desc"
+        let profileId = try activeProfileId()
+        return try await get(
+            path: "/rest/v1/player_favorites?profile_id=eq.\(encoded(profileId))&select=playlist_id,content_type,content_id,title,artwork_url&order=updated_at.desc"
         )
     }
 
     func listWatchProgress(limit: Int = 50) async throws -> [SyncedWatchProgressDTO] {
+        let profileId = try activeProfileId()
         let safeLimit = min(max(limit, 1), 200)
         return try await get(
-            path: "/rest/v1/player_watch_progress?select=playlist_id,content_type,content_id,title,series_id,season_number,episode_number,artwork_url,position_ms,duration_ms,completed&order=last_watched_at.desc&limit=\(safeLimit)"
+            path: "/rest/v1/player_watch_progress?profile_id=eq.\(encoded(profileId))&select=playlist_id,content_type,content_id,title,series_id,season_number,episode_number,artwork_url,position_ms,duration_ms,completed&order=last_watched_at.desc&limit=\(safeLimit)"
         )
     }
 
     func upsertFavorite(_ favorite: SyncedFavoriteDTO) async throws {
         let userId = try await currentUserId()
+        let profileId = try activeProfileId()
         let payload: [String: Any] = [
             "user_id": userId,
+            "profile_id": profileId,
             "playlist_id": favorite.playlistId,
             "content_type": favorite.contentType,
             "content_id": favorite.contentId,
@@ -80,7 +236,7 @@ actor SupabaseLibrarySyncService {
             "updated_at": ISO8601DateFormatter().string(from: Date())
         ]
         try await mutate(
-            path: "/rest/v1/player_favorites?on_conflict=user_id,playlist_id,content_type,content_id",
+            path: "/rest/v1/player_favorites?on_conflict=user_id,profile_id,playlist_id,content_type,content_id",
             method: "POST",
             payload: [payload],
             preferUpsert: true
@@ -88,17 +244,20 @@ actor SupabaseLibrarySyncService {
     }
 
     func removeFavorite(_ favorite: SyncedFavoriteDTO) async throws {
+        let profileId = try activeProfileId()
         try await mutate(
-            path: "/rest/v1/player_favorites?playlist_id=eq.\(encoded(favorite.playlistId))&content_type=eq.\(encoded(favorite.contentType))&content_id=eq.\(encoded(favorite.contentId))",
+            path: "/rest/v1/player_favorites?profile_id=eq.\(encoded(profileId))&playlist_id=eq.\(encoded(favorite.playlistId))&content_type=eq.\(encoded(favorite.contentType))&content_id=eq.\(encoded(favorite.contentId))",
             method: "DELETE"
         )
     }
 
     func upsertWatchProgress(_ progress: SyncedWatchProgressDTO) async throws {
         let userId = try await currentUserId()
+        let profileId = try activeProfileId()
         let now = ISO8601DateFormatter().string(from: Date())
         let payload: [String: Any] = [
             "user_id": userId,
+            "profile_id": profileId,
             "playlist_id": progress.playlistId,
             "content_type": progress.contentType,
             "content_id": progress.contentId,
@@ -114,7 +273,7 @@ actor SupabaseLibrarySyncService {
             "updated_at": now
         ]
         try await mutate(
-            path: "/rest/v1/player_watch_progress?on_conflict=user_id,playlist_id,content_type,content_id",
+            path: "/rest/v1/player_watch_progress?on_conflict=user_id,profile_id,playlist_id,content_type,content_id",
             method: "POST",
             payload: [payload],
             preferUpsert: true
@@ -122,8 +281,9 @@ actor SupabaseLibrarySyncService {
     }
 
     func removeWatchProgress(_ progress: SyncedWatchProgressDTO) async throws {
+        let profileId = try activeProfileId()
         try await mutate(
-            path: "/rest/v1/player_watch_progress?playlist_id=eq.\(encoded(progress.playlistId))&content_type=eq.\(encoded(progress.contentType))&content_id=eq.\(encoded(progress.contentId))",
+            path: "/rest/v1/player_watch_progress?profile_id=eq.\(encoded(profileId))&playlist_id=eq.\(encoded(progress.playlistId))&content_type=eq.\(encoded(progress.contentType))&content_id=eq.\(encoded(progress.contentId))",
             method: "DELETE"
         )
     }
@@ -132,6 +292,13 @@ actor SupabaseLibrarySyncService {
         struct CurrentUser: Decodable { let id: String }
         let user: CurrentUser = try await get(path: "/auth/v1/user")
         return user.id
+    }
+
+    private func activeProfileId() throws -> String {
+        guard let profileId = PlayerProfileSelectionStore.shared.activeProfileId else {
+            throw LibrarySyncError.noProfile
+        }
+        return profileId
     }
 
     private func mutate(
