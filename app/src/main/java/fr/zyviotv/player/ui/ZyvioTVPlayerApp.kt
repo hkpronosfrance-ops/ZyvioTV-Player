@@ -65,6 +65,7 @@ import fr.zyviotv.player.data.system.SystemStateRepository
 import fr.zyviotv.player.data.catalog.AndroidXtreamSeriesDetailLoader
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
+import fr.zyviotv.player.data.epg.AndroidXmlTvGuideLoader
 import fr.zyviotv.player.data.epg.AndroidXtreamGuideLoader
 import fr.zyviotv.player.data.epg.GuideLoadResult
 import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
@@ -732,25 +733,36 @@ fun ZyvioTVPlayerApp(
                         return@LaunchedEffect
                     }
 
-                val xtream = secret as? PlaylistSecret.Xtream
-                if (xtream == null) {
-                    guideState = EpgGuideState.Error(
-                        "Le guide EPG réel est actuellement disponible pour les playlists Xtream.",
-                    )
-                    return@LaunchedEffect
-                }
-
                 val nowEpochSeconds = System.currentTimeMillis() / 1000L
-                val result = AndroidXtreamGuideLoader(
-                    credentials = XtreamCredentials(
-                        serverUrl = xtream.serverUrl,
-                        username = xtream.username,
-                        password = xtream.password,
-                    ),
-                ).load(
-                    channels = readyProvider.snapshot.liveChannels,
-                    window = EpgWindow.around(nowEpochSeconds),
-                )
+                val window = EpgWindow.around(nowEpochSeconds)
+                val result = when (secret) {
+                    is PlaylistSecret.Xtream -> AndroidXtreamGuideLoader(
+                        credentials = XtreamCredentials(
+                            serverUrl = secret.serverUrl,
+                            username = secret.username,
+                            password = secret.password,
+                        ),
+                    ).load(
+                        channels = readyProvider.snapshot.liveChannels,
+                        window = window,
+                    )
+
+                    is PlaylistSecret.M3u -> {
+                        val xmlTvUrl = secret.xmlTvUrl
+                        if (xmlTvUrl.isNullOrBlank()) {
+                            guideState = EpgGuideState.Error(
+                                "Ajoutez une URL XMLTV à cette playlist M3U pour afficher le guide TV.",
+                            )
+                            return@LaunchedEffect
+                        }
+                        AndroidXmlTvGuideLoader(
+                            xmlTvUrl = xmlTvUrl,
+                        ).load(
+                            channels = readyProvider.snapshot.liveChannels,
+                            window = window,
+                        )
+                    }
+                }
 
                 guideState = when (result) {
                     is GuideLoadResult.Failure -> EpgGuideState.Error(result.message)
