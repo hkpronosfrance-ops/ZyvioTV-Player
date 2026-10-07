@@ -864,7 +864,7 @@
     } catch (_) {}
   }
 
-  document.addEventListener("keydown", (event) => {
+  document.addEventListener("keydown", async (event) => {
     const directions = {
       ArrowLeft: "left",
       ArrowRight: "right",
@@ -895,7 +895,13 @@
     }
     if (event.key === "MediaStop") {
       event.preventDefault();
-      stopPlayback();
+      await stopPlayback();
+      return;
+    }
+
+    if (event.key === "ColorF0Red" || event.keyCode === 403) {
+      event.preventDefault();
+      await toggleFavoriteForFocused();
       return;
     }
 
@@ -911,7 +917,7 @@
     if (event.keyCode === 461 || event.key === "Escape" || event.key === "Backspace") {
       event.preventDefault();
 
-      if (stopPlayback()) return;
+      if (await stopPlayback()) return;
 
       if (livePanel && !livePanel.hidden) {
         livePanel.hidden = true;
@@ -934,6 +940,17 @@
         return;
       }
 
+      if (profileScreen && !profileScreen.hidden) {
+        if (currentProfile) {
+          profileScreen.hidden = true;
+          showApp();
+          renderHomeShelves();
+        } else {
+          exitApp();
+        }
+        return;
+      }
+
       if (authScreen && !authScreen.hidden) {
         exitApp();
         return;
@@ -950,14 +967,114 @@
   });
 
   document.addEventListener("click", async (event) => {
-    const target = event.target.closest("[data-section], [data-action], [data-channel-id], [data-catalog-kind]");
+    const target = event.target.closest("[data-section], [data-action], [data-channel-id], [data-catalog-kind], [data-profile-id], [data-home-kind]");
     if (!target) return;
+
+    if (target.dataset.profileId) {
+      try {
+        await selectProfile(target.dataset.profileId);
+      } catch (_) {
+        setProfileStatus("Impossible de charger ce profil.");
+      }
+      return;
+    }
+
+    if (target.dataset.homeKind === "continue" || target.dataset.homeKind === "history") {
+      const progress = watchProgress.find(
+        (item) => String(item.content_id) === String(target.dataset.homeId)
+      );
+      if (progress) {
+        try { await resolveProgressPlayback(progress); }
+        catch (_) { setStatus("Contenu indisponible."); }
+      }
+      return;
+    }
+
+    if (target.dataset.homeKind === "recent-live") {
+      if (!liveChannels.length) await loadProviderLive();
+      const channel = liveChannels.find(
+        (item) => String(item.id) === String(target.dataset.homeId)
+      );
+      if (channel) await playChannel(channel);
+      else setStatus("Chaîne indisponible.");
+      return;
+    }
+
+    if (target.dataset.homeKind === "favorite") {
+      const item = favorites.find(
+        (entry) => String(entry.content_id) === String(target.dataset.homeId)
+      );
+      if (!item) return;
+
+      if (item.content_type === "movie") {
+        if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
+        const movie = movies.find((entry) => entry.id === String(item.content_id));
+        if (movie) {
+          await playCatalogStream(movie.streamUrl, {
+            contentType: "movie",
+            contentId: movie.id,
+            title: movie.title,
+            artworkUrl: movie.poster || null,
+          });
+        }
+      } else if (item.content_type === "series") {
+        if (!series.length) series = await window.ZyvioProvider.loadSeries(providerConfig);
+        const seriesItem = series.find((entry) => entry.id === String(item.content_id));
+        if (seriesItem) {
+          try {
+            const info = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id);
+            renderEpisodes(seriesItem, info);
+          } catch (_) {
+            setStatus("Détails de série indisponibles.");
+          }
+        }
+      } else if (item.content_type === "live") {
+        if (!liveChannels.length) await loadProviderLive();
+        const channel = liveChannels.find((entry) => entry.id === String(item.content_id));
+        if (channel) await playChannel(channel);
+      }
+      return;
+    }
 
     if (target.dataset.channelId) {
       const channel = liveChannels.find(
         (item) => String(item.id) === String(target.dataset.channelId)
       );
       await playChannel(channel);
+      return;
+    }
+
+    if (target.dataset.catalogKind === "favorite") {
+      const type = target.dataset.favoriteType;
+      const id = target.dataset.catalogId;
+
+      if (type === "movie") {
+        if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
+        const movie = movies.find((item) => item.id === id);
+        if (movie) {
+          await playCatalogStream(movie.streamUrl, {
+            contentType: "movie",
+            contentId: movie.id,
+            title: movie.title,
+            artworkUrl: movie.poster || null,
+          });
+        }
+      } else if (type === "series") {
+        if (!series.length) series = await window.ZyvioProvider.loadSeries(providerConfig);
+        const seriesItem = series.find((item) => item.id === id);
+        if (seriesItem) {
+          try {
+            const info = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id);
+            renderEpisodes(seriesItem, info);
+          } catch (_) {
+            setStatus("Détails de série indisponibles.");
+          }
+        }
+      } else if (type === "live") {
+        if (!liveChannels.length) await loadProviderLive();
+        const channel = liveChannels.find((item) => item.id === id);
+        if (channel) await playChannel(channel);
+      }
       return;
     }
 
@@ -1018,5 +1135,10 @@
     }
   });
 
-  window.addEventListener("load", restoreAccount);
+  window.addEventListener("load", () => {
+    restoreAccount();
+    setInterval(() => {
+      syncActivePlayback();
+    }, 30_000);
+  });
 })();
