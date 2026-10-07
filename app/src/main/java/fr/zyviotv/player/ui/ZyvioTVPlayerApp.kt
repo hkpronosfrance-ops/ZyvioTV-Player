@@ -681,6 +681,13 @@ fun ZyvioTVPlayerApp(
                     return@LaunchedEffect
                 }
 
+                if (readyProvider.isOffline) {
+                    guideState = EpgGuideState.Error(
+                        "Le guide TV nécessite une connexion Internet. Votre catalogue local reste disponible.",
+                    )
+                    return@LaunchedEffect
+                }
+
                 guideState = EpgGuideState.Loading
                 val repository = SupabaseCloudSyncRepository(
                     sessionStore = SecureSessionStore(context.applicationContext),
