@@ -92,6 +92,7 @@ fun SeriesDetailScreen(
     profile: DeviceProfile,
     state: SeriesDetailState,
     onRetry: () -> Unit = {},
+    isOffline: Boolean = false,
     onPlayEpisode: (EpisodeDetailUi) -> Unit = {},
     onToggleFavorite: (SeriesDetailUi) -> Unit = {},
 ) {
@@ -101,6 +102,7 @@ fun SeriesDetailScreen(
         is SeriesDetailState.Ready -> SeriesDetailReady(
             profile = profile,
             series = state.series,
+            isOffline = isOffline,
             onPlayEpisode = onPlayEpisode,
             onToggleFavorite = onToggleFavorite,
         )
@@ -111,6 +113,7 @@ fun SeriesDetailScreen(
 private fun SeriesDetailReady(
     profile: DeviceProfile,
     series: SeriesDetailUi,
+    isOffline: Boolean,
     onPlayEpisode: (EpisodeDetailUi) -> Unit,
     onToggleFavorite: (SeriesDetailUi) -> Unit,
 ) {
@@ -197,9 +200,19 @@ private fun SeriesDetailReady(
 
         Spacer(Modifier.height(18.dp))
 
+        if (isOffline) {
+            Text(
+                text = "Hors connexion : les informations disponibles restent consultables. Lecture des épisodes et modification des favoris nécessitent Internet.",
+                color = ZyvioTextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(10.dp))
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             currentEpisode?.let { episode ->
                 Button(
+                    enabled = !isOffline,
                     modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 12),
                     onClick = { onPlayEpisode(episode) },
                 ) {
@@ -216,6 +229,7 @@ private fun SeriesDetailReady(
             }
 
             OutlinedButton(
+                enabled = !isOffline,
                 modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 12),
                 onClick = { onToggleFavorite(series) },
             ) {
