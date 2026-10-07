@@ -612,6 +612,26 @@ fun ZyvioTVPlayerApp(
                             }
                         }
                     },
+                    onSupport = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://zyviotv.fr"),
+                                ),
+                            )
+                        }
+                    },
+                    onSignOut = {
+                        scope.launch {
+                            fr.zyviotv.player.data.auth.SupabaseAuthRepository(
+                                SecureSessionStore(appContext),
+                            ).signOut()
+                            navController.navigate("auth") {
+                                popUpTo("update-gate") { inclusive = true }
+                            }
+                        }
+                    },
                 )
             }
         }
