@@ -167,7 +167,7 @@ private struct SeriesCard: View {
     }
 }
 
-private struct SeriesDetailView: View {
+struct SeriesDetailView: View {
     let series: ProviderSeriesDTO
 
     @State private var detail: ProviderSeriesDetailDTO?

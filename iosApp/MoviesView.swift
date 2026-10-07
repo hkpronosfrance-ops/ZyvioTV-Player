@@ -160,7 +160,7 @@ private struct MovieCard: View {
     }
 }
 
-private struct MoviePlayerScreen: View {
+struct MoviePlayerScreen: View {
     let movie: ProviderMovieDTO
     let existingProgress: SyncedWatchProgressDTO?
     let onProgressSaved: (SyncedWatchProgressDTO) -> Void
