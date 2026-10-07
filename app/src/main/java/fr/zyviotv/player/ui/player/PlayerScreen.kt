@@ -118,6 +118,8 @@ fun PlayerScreen(
     onSeekForward: () -> Unit = {},
     onRetry: () -> Unit = {},
     onNext: () -> Unit = {},
+    onResumePlayback: () -> Unit = {},
+    onRestartFromBeginning: () -> Unit = {},
     onOpenTracks: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
@@ -171,6 +173,52 @@ fun PlayerScreen(
                             true
                         }
 
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                            if (state.metadata.kind != PlaybackKind.Live && state.panel == PlayerPanel.None) {
+                                onSeekBack()
+                                controlsVisible = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (state.metadata.kind != PlaybackKind.Live && state.panel == PlayerPanel.None) {
+                                onSeekForward()
+                                controlsVisible = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                            if (
+                                state.metadata.kind == PlaybackKind.Live &&
+                                !controlsVisible &&
+                                state.panel == PlayerPanel.None
+                            ) {
+                                onChannelUp()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (
+                                state.metadata.kind == PlaybackKind.Live &&
+                                !controlsVisible &&
+                                state.panel == PlayerPanel.None
+                            ) {
+                                onChannelDown()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
                         AndroidKeyEvent.KEYCODE_CHANNEL_UP -> {
                             if (state.metadata.kind == PlaybackKind.Live) {
                                 onChannelUp()
@@ -222,7 +270,11 @@ fun PlayerScreen(
             state.playbackState == PlaybackState.Error -> ErrorOverlay(
                 profile = profile,
                 message = state.errorMessage ?: "Flux indisponible",
-                nextLabel = if (state.metadata.kind == PlaybackKind.Live) "Chaîne suivante" else "Épisode suivant",
+                nextLabel = when (state.metadata.kind) {
+                    PlaybackKind.Live -> "Chaîne suivante"
+                    PlaybackKind.Episode -> "Épisode suivant"
+                    PlaybackKind.Movie -> null
+                },
                 onRetry = onRetry,
                 onNext = onNext,
                 onBack = onBack,
@@ -264,6 +316,8 @@ fun PlayerScreen(
                 profile = profile,
                 title = state.metadata.title,
                 timeline = state.timeline,
+                onRestartFromBeginning = onRestartFromBeginning,
+                onResumePlayback = onResumePlayback,
             )
             PlayerPanel.ChannelNumber -> ChannelNumberPanel(
                 profile = profile,
@@ -366,11 +420,16 @@ private fun PlayerControlsOverlay(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedButton(
-                modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 999),
-                onClick = onSeekBack,
-            ) {
-                Icon(Icons.Default.FastRewind, contentDescription = null)
+            if (state.metadata.kind != PlaybackKind.Live) {
+                OutlinedButton(
+                    modifier = Modifier.tvFocusEffect(
+                        profile == DeviceProfile.Television,
+                        cornerRadiusDp = 999,
+                    ),
+                    onClick = onSeekBack,
+                ) {
+                    Icon(Icons.Default.FastRewind, contentDescription = null)
+                }
             }
 
             Button(
@@ -383,11 +442,16 @@ private fun PlayerControlsOverlay(
                 )
             }
 
-            OutlinedButton(
-                modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 999),
-                onClick = onSeekForward,
-            ) {
-                Icon(Icons.Default.FastForward, contentDescription = null)
+            if (state.metadata.kind != PlaybackKind.Live) {
+                OutlinedButton(
+                    modifier = Modifier.tvFocusEffect(
+                        profile == DeviceProfile.Television,
+                        cornerRadiusDp = 999,
+                    ),
+                    onClick = onSeekForward,
+                ) {
+                    Icon(Icons.Default.FastForward, contentDescription = null)
+                }
             }
         }
 
@@ -523,7 +587,7 @@ private fun BufferingOverlay(title: String) {
 private fun ErrorOverlay(
     profile: DeviceProfile,
     message: String,
-    nextLabel: String,
+    nextLabel: String?,
     onRetry: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
@@ -561,13 +625,18 @@ private fun ErrorOverlay(
                     Spacer(Modifier.width(6.dp))
                     Text("Réessayer")
                 }
-                OutlinedButton(
-                    modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
-                    onClick = onNext,
-                ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(nextLabel)
+                if (nextLabel != null) {
+                    OutlinedButton(
+                        modifier = Modifier.tvFocusEffect(
+                            profile == DeviceProfile.Television,
+                            cornerRadiusDp = 10,
+                        ),
+                        onClick = onNext,
+                    ) {
+                        Icon(Icons.Default.SkipNext, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(nextLabel)
+                    }
                 }
                 OutlinedButton(
                     modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
@@ -730,6 +799,8 @@ private fun ResumePanel(
     profile: DeviceProfile,
     title: String,
     timeline: PlayerTimelineUi,
+    onRestartFromBeginning: () -> Unit,
+    onResumePlayback: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -767,8 +838,24 @@ private fun ResumePanel(
                 }
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = {}) { Text("Depuis le début") }
-                    Button(onClick = {}) { Text("Reprendre") }
+                    OutlinedButton(
+                        modifier = Modifier.tvFocusEffect(
+                            profile == DeviceProfile.Television,
+                            cornerRadiusDp = 10,
+                        ),
+                        onClick = onRestartFromBeginning,
+                    ) {
+                        Text("Depuis le début")
+                    }
+                    Button(
+                        modifier = Modifier.tvFocusEffect(
+                            profile == DeviceProfile.Television,
+                            cornerRadiusDp = 10,
+                        ),
+                        onClick = onResumePlayback,
+                    ) {
+                        Text("Reprendre")
+                    }
                 }
             }
         }

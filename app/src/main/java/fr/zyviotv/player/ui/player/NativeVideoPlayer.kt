@@ -52,6 +52,7 @@ fun NativeVideoPlayer(
     subtitlesEnabled: Boolean = true,
     playbackQuality: String = "Auto",
     showNativeControls: Boolean = true,
+    autoPlay: Boolean = true,
     command: NativePlayerCommand = NativePlayerCommand.None,
     commandToken: Long = 0L,
 ) {
@@ -76,7 +77,7 @@ fun NativeVideoPlayer(
                 seekTo(request.resumePositionMs)
             }
             prepare()
-            playWhenReady = true
+            playWhenReady = autoPlay
         }
     }
 
@@ -104,6 +105,12 @@ fun NativeVideoPlayer(
             .build()
     }
 
+    LaunchedEffect(player, autoPlay) {
+        if (autoPlay && player.playbackState != Player.STATE_ENDED) {
+            player.play()
+        }
+    }
+
     LaunchedEffect(player, commandToken) {
         when (command) {
             NativePlayerCommand.None -> Unit
@@ -119,6 +126,10 @@ fun NativeVideoPlayer(
                 val duration = player.duration.takeIf { it > 0L && it != C.TIME_UNSET }
                 val target = player.currentPosition + SEEK_STEP_MS
                 player.seekTo(if (duration != null) target.coerceAtMost(duration) else target)
+            }
+            NativePlayerCommand.RestartFromBeginning -> {
+                player.seekTo(0L)
+                player.play()
             }
             NativePlayerCommand.Retry -> {
                 val position = player.currentPosition.coerceAtLeast(0L)
@@ -329,6 +340,7 @@ enum class NativePlayerCommand {
     Play,
     SeekBack10,
     SeekForward10,
+    RestartFromBeginning,
     Retry,
 }
 
