@@ -736,6 +736,13 @@ fun ZyvioTVPlayerApp(
                 val nowEpochSeconds = System.currentTimeMillis() / 1000L
                 val window = EpgWindow.around(nowEpochSeconds)
                 val result = when (secret) {
+                    null -> {
+                        guideState = EpgGuideState.Error(
+                            "La configuration sécurisée de cette playlist est absente.",
+                        )
+                        return@LaunchedEffect
+                    }
+
                     is PlaylistSecret.Xtream -> AndroidXtreamGuideLoader(
                         credentials = XtreamCredentials(
                             serverUrl = secret.serverUrl,
