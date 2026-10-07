@@ -1248,7 +1248,7 @@ private final class AppleXmlTvParserDelegate: NSObject, XMLParserDelegate {
     ) {
         if elementName == "programme" {
             guard acceptedCount < maxProgrammes else {
-                parser.abortParsing()
+                activeChannel = nil
                 return
             }
 
