@@ -6,6 +6,7 @@
       this.video = videoElement;
       this.usingAvPlay = Boolean(window.webapis?.avplay);
       this.currentUrl = null;
+      this.paused = false;
     }
 
     async play(url) {
@@ -21,6 +22,7 @@
           avplay.prepareAsync(resolve, () => reject(new Error("Lecture impossible.")));
         });
         avplay.play();
+        this.paused = false;
         return;
       }
 
@@ -28,22 +30,46 @@
       this.video.src = url;
       this.video.hidden = false;
       await this.video.play();
+      this.paused = false;
     }
 
     pause() {
+      if (!this.currentUrl) return;
       if (this.usingAvPlay) {
         try { window.webapis.avplay.pause(); } catch (_) {}
       } else if (this.video) {
         this.video.pause();
       }
+      this.paused = true;
     }
 
     resume() {
+      if (!this.currentUrl) return;
       if (this.usingAvPlay) {
         try { window.webapis.avplay.play(); } catch (_) {}
       } else if (this.video) {
         this.video.play().catch(() => {});
       }
+      this.paused = false;
+    }
+
+    togglePause() {
+      if (!this.currentUrl) return false;
+      if (this.paused) this.resume(); else this.pause();
+      return true;
+    }
+
+    seekByMs(deltaMs) {
+      if (!this.currentUrl) return false;
+      const duration = this.getDurationMs();
+      const current = this.getPositionMs();
+      const upper = duration > 0 ? duration : Number.MAX_SAFE_INTEGER;
+      this.seekToMs(Math.max(0, Math.min(upper, current + Number(deltaMs || 0))));
+      return true;
+    }
+
+    isActive() {
+      return Boolean(this.currentUrl);
     }
 
     getPositionMs() {
@@ -82,6 +108,7 @@
         this.video.hidden = true;
       }
       this.currentUrl = null;
+      this.paused = false;
     }
   }
 
