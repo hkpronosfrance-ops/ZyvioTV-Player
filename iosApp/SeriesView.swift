@@ -435,10 +435,11 @@ private struct EpisodePlayerScreen: View {
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
 
-            NativeVideoPlayerView(
+            ParentalProtectedPlayerView(
                 title: series.title + " — S\(episode.season) E\(episode.number)",
                 streamURL: episode.streamUrl,
                 resumePositionSeconds: resumeSeconds,
+                playbackKind: "episode",
                 onPositionChanged: { position, duration in
                     saveProgress(
                         positionSeconds: position,

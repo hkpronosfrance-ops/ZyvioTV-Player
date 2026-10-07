@@ -484,6 +484,206 @@ struct ProviderCatalogDTO {
     let series: [ProviderSeriesDTO]
 }
 
+
+struct ParentalRuntimeStateDTO: Decodable {
+    let serverNowEpochMs: Int64?
+    let parentalEnabled: Bool
+    let isChild: Bool
+    let consumedSeconds: Int
+    let limitMinutes: Int?
+    let dailyLimitMinutes: Int?
+    let weekendLimitMinutes: Int?
+    let warningMinutes: Int
+    let scheduleEnabled: Bool
+    let scheduleWindows: [[String: AnyCodableValue]]
+    let exceptionUntilEpochMs: Int64?
+    let blockedByTime: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case serverNowEpochMs = "server_now_epoch_ms"
+        case parentalEnabled = "parental_enabled"
+        case isChild = "is_child"
+        case consumedSeconds = "consumed_seconds"
+        case limitMinutes = "limit_minutes"
+        case dailyLimitMinutes = "daily_limit_minutes"
+        case weekendLimitMinutes = "weekend_limit_minutes"
+        case warningMinutes = "warning_minutes"
+        case scheduleEnabled = "schedule_enabled"
+        case scheduleWindows = "schedule_windows"
+        case exceptionUntilEpochMs = "exception_until_epoch_ms"
+        case blockedByTime = "blocked_by_time"
+    }
+}
+
+struct ScreenTimeHeartbeatDTO: Decodable {
+    let consumedSeconds: Int
+    let limitMinutes: Int?
+    let warningMinutes: Int
+    let blockedByTime: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case consumedSeconds = "consumed_seconds"
+        case limitMinutes = "limit_minutes"
+        case warningMinutes = "warning_minutes"
+        case blockedByTime = "blocked_by_time"
+    }
+}
+
+struct ParentalExceptionDTO: Decodable {
+    let success: Bool
+    let reason: String?
+    let expiresAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case reason
+        case expiresAt = "expires_at"
+    }
+}
+
+enum AnyCodableValue: Decodable {
+    case string(String)
+    case int(Int)
+    case array([AnyCodableValue])
+    case bool(Bool)
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() { self = .null }
+        else if let value = try? container.decode(String.self) { self = .string(value) }
+        else if let value = try? container.decode(Int.self) { self = .int(value) }
+        else if let value = try? container.decode(Bool.self) { self = .bool(value) }
+        else if let value = try? container.decode([AnyCodableValue].self) { self = .array(value) }
+        else { self = .null }
+    }
+}
+
+final class AppleDeviceIdentityStore {
+    static let shared = AppleDeviceIdentityStore()
+    private let key = "zyviotv.apple.device_uid"
+
+    var deviceUid: String {
+        if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
+            return existing
+        }
+        let value = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(value, forKey: key)
+        return value
+    }
+}
+
+actor SupabaseParentalService {
+    static let shared = SupabaseParentalService()
+
+    private let baseURL = URL(string: "https://nvpuftuluguawdxonmlc.supabase.co")!
+    private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
+    private let sessionStore = AuthSessionStore()
+
+    func runtimeState(profileId: String, contentKey: String) async throws -> ParentalRuntimeStateDTO {
+        try await rpc(
+            name: "player_parental_runtime_state",
+            body: [
+                "p_profile_id": profileId,
+                "p_content_key": contentKey,
+            ]
+        )
+    }
+
+    func heartbeat(
+        profileId: String,
+        deviceUid: String,
+        playing: Bool,
+        contentKey: String,
+        localConsumedSeconds: Int
+    ) async throws -> ScreenTimeHeartbeatDTO {
+        try await rpc(
+            name: "player_parental_screen_time_heartbeat_v2",
+            body: [
+                "p_profile_id": profileId,
+                "p_device_uid": deviceUid,
+                "p_playing": playing,
+                "p_content_key": contentKey,
+                "p_local_consumed_seconds": max(localConsumedSeconds, 0),
+            ]
+        )
+    }
+
+    func grantException(
+        profileId: String,
+        pin: String,
+        contentKey: String
+    ) async throws -> ParentalExceptionDTO {
+        try await rpc(
+            name: "player_parental_grant_exception",
+            body: [
+                "p_profile_id": profileId,
+                "p_pin": pin,
+                "p_content_key": contentKey,
+            ]
+        )
+    }
+
+    func endException(profileId: String, contentKey: String) async {
+        let _: EmptyResponse? = try? await rpc(
+            name: "player_parental_end_exception",
+            body: [
+                "p_profile_id": profileId,
+                "p_content_key": contentKey,
+            ]
+        )
+    }
+
+    private func rpc<T: Decodable>(name: String, body: [String: Any]) async throws -> T {
+        guard let session = sessionStore.load() else {
+            throw ParentalError.noSession
+        }
+        guard let url = URL(string: "/rest/v1/rpc/\(name)", relativeTo: baseURL) else {
+            throw ParentalError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ParentalError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw ParentalError.server
+        }
+
+        if T.self == EmptyResponse.self, data.isEmpty {
+            return EmptyResponse() as! T
+        }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    struct EmptyResponse: Decodable {}
+
+    enum ParentalError: LocalizedError {
+        case noSession
+        case invalidURL
+        case invalidResponse
+        case server
+
+        var errorDescription: String? {
+            switch self {
+            case .noSession: return "Session absente."
+            case .invalidURL: return "Configuration serveur invalide."
+            case .invalidResponse: return "Réponse serveur invalide."
+            case .server: return "Impossible de vérifier le contrôle parental."
+            }
+        }
+    }
+}
+
 actor SupabaseProviderCatalogService {
     static let shared = SupabaseProviderCatalogService()
 
