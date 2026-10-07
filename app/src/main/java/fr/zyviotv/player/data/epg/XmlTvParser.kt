@@ -15,6 +15,9 @@ object XmlTvParser {
         window: EpgWindow,
         maxProgrammes: Int = 500,
     ): List<EpgProgramme> {
+        if (maxProgrammes <= 0 || channelId.isBlank()) return emptyList()
+
+        val normalizedChannelId = channelId.trim()
         val parser = XmlPullParserFactory.newInstance().newPullParser()
         parser.setInput(input, "UTF-8")
 
@@ -27,7 +30,7 @@ object XmlTvParser {
                 val startRaw = parser.getAttributeValue(null, "start")
                 val stopRaw = parser.getAttributeValue(null, "stop")
 
-                if (programmeChannel == channelId && startRaw != null && stopRaw != null) {
+                if (programmeChannel?.trim() == normalizedChannelId && startRaw != null && stopRaw != null) {
                     val start = parseXmlTvTime(startRaw)
                     val stop = parseXmlTvTime(stopRaw)
 
@@ -38,8 +41,8 @@ object XmlTvParser {
                     while (!(inner == XmlPullParser.END_TAG && parser.name == "programme")) {
                         if (inner == XmlPullParser.START_TAG) {
                             when (parser.name) {
-                                "title" -> title = parser.nextText()
-                                "desc" -> description = parser.nextText()
+                                "title" -> title = parser.nextText().trim()
+                                "desc" -> description = parser.nextText().trim()
                             }
                         }
                         inner = parser.next()
@@ -47,7 +50,7 @@ object XmlTvParser {
 
                     if (start != null && stop != null && stop > start) {
                         val programme = EpgProgramme(
-                            channelId = channelId,
+                            channelId = normalizedChannelId,
                             title = title.ifBlank { "Programme TV" },
                             description = description?.takeIf(String::isNotBlank),
                             startEpochSeconds = start,
@@ -60,14 +63,23 @@ object XmlTvParser {
             event = parser.next()
         }
 
-        return programmes.sortedBy { it.startEpochSeconds }
+        return programmes
+            .distinctBy {
+                Triple(it.startEpochSeconds, it.endEpochSeconds, it.title)
+            }
+            .sortedBy { it.startEpochSeconds }
     }
 
     private fun parseXmlTvTime(raw: String): Long? {
-        val normalized = raw.trim()
+        val normalized = raw
+            .trim()
+            .replace(Regex("""(\d{12,14})([+-]\d{4})$"""), "$1 $2")
+
         val candidates = listOf(
             "yyyyMMddHHmmss Z",
             "yyyyMMddHHmm Z",
+            "yyyyMMddHHmmssX",
+            "yyyyMMddHHmmX",
         )
 
         for (pattern in candidates) {
