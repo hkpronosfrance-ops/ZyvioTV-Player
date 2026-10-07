@@ -52,9 +52,12 @@ sealed interface PlaylistSecret {
 
     data class M3u(
         val url: String,
+        val xmlTvUrl: String? = null,
     ) : PlaylistSecret {
         override val providerType: String = "m3u"
-        override fun toString(): String = "M3u(url=[REDACTED])"
+        override fun toString(): String =
+            "M3u(url=[REDACTED], xmlTvUrl=" +
+                if (xmlTvUrl.isNullOrBlank()) "null)" else "[REDACTED])"
     }
 }
 
