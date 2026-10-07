@@ -17,16 +17,23 @@ struct RootView: View {
                 }
             } else if isAuthenticated {
                 if let activeProfile {
-                    PlaylistBootstrapView(
-                        profile: activeProfile,
+                    AppleSystemGateContainer(
                         onSignedOut: {
                             isAuthenticated = false
                             self.activeProfile = nil
-                        },
-                        onSwitchProfile: {
-                            self.activeProfile = nil
                         }
-                    )
+                    ) {
+                        PlaylistBootstrapView(
+                            profile: activeProfile,
+                            onSignedOut: {
+                                isAuthenticated = false
+                                self.activeProfile = nil
+                            },
+                            onSwitchProfile: {
+                                self.activeProfile = nil
+                            }
+                        )
+                    }
                     .id(activeProfile.id)
                 } else {
                     ProfilePickerView(
@@ -97,6 +104,118 @@ struct RootView: View {
     }
 }
 
+
+
+private struct AppleSystemGateContainer<Content: View>: View {
+    let onSignedOut: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    @State private var loading = true
+    @State private var state: AppleSystemGateState = .normal
+    @State private var ignoredPlannedMaintenance = false
+
+    var body: some View {
+        Group {
+            if loading {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    ProgressView("Vérification du service…")
+                        .tint(.red)
+                }
+            } else {
+                switch state {
+                case .normal:
+                    content()
+                case .plannedMaintenance(let message):
+                    if ignoredPlannedMaintenance {
+                        content()
+                    } else {
+                        systemStateView(
+                            title: "Maintenance programmée",
+                            message: message ?? "Une maintenance est prévue prochainement. Vous pouvez continuer à utiliser ZYVIOTV.",
+                            blocking: false
+                        )
+                    }
+                case .blockingMaintenance(let message):
+                    systemStateView(
+                        title: "Maintenance en cours",
+                        message: message ?? "Le service est momentanément indisponible pendant la maintenance.",
+                        blocking: true
+                    )
+                case .accountSuspended(let message):
+                    systemStateView(
+                        title: "Compte suspendu",
+                        message: message ?? "L’accès au service est actuellement suspendu pour ce compte.",
+                        blocking: true
+                    )
+                }
+            }
+        }
+        .task { await reload() }
+    }
+
+    @ViewBuilder
+    private func systemStateView(
+        title: String,
+        message: String,
+        blocking: Bool
+    ) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                Image(systemName: blocking ? "exclamationmark.octagon.fill" : "wrench.and.screwdriver.fill")
+                    .font(.system(size: 46))
+                    .foregroundStyle(.red)
+
+                Text(title)
+                    .font(.largeTitle.bold())
+
+                Text(message)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                if !blocking {
+                    Button("Continuer") {
+                        ignoredPlannedMaintenance = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                } else {
+                    Button("Réessayer") {
+                        Task { await reload() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+
+                    Button("Se déconnecter", role: .destructive) {
+                        Task {
+                            await SupabaseAuthService.shared.signOut()
+                            onSignedOut()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: 560)
+        }
+    }
+
+    @MainActor
+    private func reload() async {
+        loading = true
+        async let stateTask = SupabaseSystemStateService.shared.loadState()
+        async let registrationTask: Void = registerDeviceSafely()
+        state = await stateTask
+        _ = await registrationTask
+        loading = false
+    }
+
+    private func registerDeviceSafely() async {
+        try? await SupabaseDeviceService.shared.registerCurrentDevice()
+    }
+}
 
 private struct PlaylistBootstrapView: View {
     let profile: PlayerProfileDTO
