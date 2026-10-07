@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.cache.CachedCatalog
+import fr.zyviotv.player.data.cache.OfflineContentCache
 import fr.zyviotv.player.data.catalog.AndroidXtreamCatalogLoader
 import fr.zyviotv.player.data.catalog.M3uCatalogMapper
 import fr.zyviotv.player.data.m3u.AndroidM3uClient
@@ -67,6 +69,9 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
         ProfilePreferences(applicationContext)
     }
     val m3uClient = remember { AndroidM3uClient() }
+    val offlineCache = remember(applicationContext) {
+        OfflineContentCache(applicationContext)
+    }
 
     val state = remember {
         mutableStateOf<ProviderCatalogState>(ProviderCatalogState.Loading)
@@ -76,10 +81,21 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
     LaunchedEffect(reloadToken) {
         state.value = ProviderCatalogState.Loading
 
+        val profileId = profilePreferences.selectedProfileId()
         val playlists = repository.listPlaylists().getOrElse {
-            state.value = ProviderCatalogState.Error(
-                "Impossible de récupérer les playlists de votre compte.",
-            )
+            val cached = profileId?.let(offlineCache::loadCatalog)
+            if (cached != null) {
+                state.value = ProviderCatalogState.Ready(
+                    playlistId = cached.playlistId,
+                    playlistName = cached.playlistName,
+                    snapshot = cached.snapshot,
+                    rawSnapshot = cached.snapshot,
+                )
+            } else {
+                state.value = ProviderCatalogState.Error(
+                    "Impossible de récupérer les playlists de votre compte.",
+                )
+            }
             return@LaunchedEffect
         }
 
@@ -114,7 +130,6 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
             m3uClient = m3uClient,
         )
 
-        val profileId = profilePreferences.selectedProfileId()
         val locks = if (profileId != null) {
             parentalRepository.loadContentLocks(profileId).getOrNull()
         } else {
@@ -122,14 +137,40 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
         }
 
         state.value = when (loaded) {
-            is ProviderCatalogState.Ready -> loaded.copy(
-                snapshot = applyParentalCatalogPolicy(
+            is ProviderCatalogState.Ready -> {
+                val filtered = applyParentalCatalogPolicy(
                     snapshot = loaded.snapshot,
                     locks = locks,
-                ),
-                rawSnapshot = loaded.snapshot,
-                contentLocks = locks,
-            )
+                )
+                if (profileId != null) {
+                    offlineCache.saveCatalog(
+                        profileId = profileId,
+                        catalog = CachedCatalog(
+                            playlistId = loaded.playlistId,
+                            playlistName = loaded.playlistName,
+                            snapshot = filtered,
+                        ),
+                    )
+                }
+                loaded.copy(
+                    snapshot = filtered,
+                    rawSnapshot = loaded.snapshot,
+                    contentLocks = locks,
+                )
+            }
+            is ProviderCatalogState.Error -> {
+                val cached = profileId?.let(offlineCache::loadCatalog)
+                if (cached != null) {
+                    ProviderCatalogState.Ready(
+                        playlistId = cached.playlistId,
+                        playlistName = cached.playlistName,
+                        snapshot = cached.snapshot,
+                        rawSnapshot = cached.snapshot,
+                    )
+                } else {
+                    loaded
+                }
+            }
             else -> loaded
         }
     }
