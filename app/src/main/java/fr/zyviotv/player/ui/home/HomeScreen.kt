@@ -83,7 +83,8 @@ fun HomeScreen(
     val filteredProgress = readyLibrary?.snapshot?.progress
         .orEmpty()
         .filter { progress ->
-            !progress.completed &&
+            progress.playlistId == readyProvider?.playlistId &&
+                !progress.completed &&
                 progress.positionMs > 0L &&
                 when (progress.contentType) {
                     ProgressContentType.Movie -> progress.contentId in allowedMovieIds
@@ -107,7 +108,8 @@ fun HomeScreen(
     val filteredFavorites = readyLibrary?.snapshot?.favorites
         .orEmpty()
         .filter { favorite ->
-            when (favorite.contentType) {
+            favorite.playlistId == readyProvider?.playlistId &&
+                when (favorite.contentType) {
                 FavoriteContentType.Live -> favorite.contentId in allowedLiveIds
                 FavoriteContentType.Movie -> favorite.contentId in allowedMovieIds
                 FavoriteContentType.Series -> favorite.contentId in allowedSeriesIds
@@ -226,6 +228,62 @@ fun HomeScreen(
     } ?: newestAdded?.first
         ?: continueItems.firstOrNull()?.title
         ?: recentChannels.firstOrNull()?.name
+    val visibleNextEpisodes = if (heroNextEpisode != null) {
+        nextEpisodes.filterNot {
+            it.seriesId == heroNextEpisode.seriesId &&
+                it.episode.id == heroNextEpisode.episode.id
+        }
+    } else {
+        nextEpisodes
+    }
+
+    val visibleContinueItems = if (
+        heroNextEpisode == null &&
+        newestAdded == null &&
+        continueItems.isNotEmpty()
+    ) {
+        continueItems.drop(1)
+    } else {
+        continueItems
+    }
+
+    val visibleRecentChannels = if (
+        heroNextEpisode == null &&
+        newestAdded == null &&
+        continueItems.isEmpty() &&
+        recentChannels.isNotEmpty()
+    ) {
+        recentChannels.drop(1)
+    } else {
+        recentChannels
+    }
+
+    val visibleRecentMovieItems = if (
+        heroNextEpisode == null &&
+        newestAdded?.third == true &&
+        newestMovie != null
+    ) {
+        recentMovies
+            .filterNot { it.id == newestMovie.id }
+            .take(MAX_HOME_ITEMS)
+            .map { HomeCardUi(title = it.title, poster = true) }
+    } else {
+        recentMovieItems
+    }
+
+    val visibleRecentSeriesItems = if (
+        heroNextEpisode == null &&
+        newestAdded?.third == false &&
+        newestSeries != null
+    ) {
+        recentSeries
+            .filterNot { it.id == newestSeries.id }
+            .take(MAX_HOME_ITEMS)
+            .map { HomeCardUi(title = it.title, poster = true) }
+    } else {
+        recentSeriesItems
+    }
+
     val hasAnyContent =
         nextEpisodes.isNotEmpty() ||
             continueItems.isNotEmpty() ||
@@ -265,6 +323,12 @@ fun HomeScreen(
                     newestAdded != null -> "Découvrir"
                     continueItems.isNotEmpty() -> "Continuer"
                     else -> "Regarder"
+                },
+                eyebrow = when {
+                    heroNextEpisode != null -> "Prochain épisode"
+                    newestAdded != null -> "Nouveauté"
+                    continueItems.isNotEmpty() -> "À reprendre"
+                    else -> "Dernière chaîne"
                 },
                 onAction = {
                     when {
@@ -309,27 +373,27 @@ fun HomeScreen(
             }
 
             else -> {
-                if (continueItems.isNotEmpty()) {
+                if (visibleContinueItems.isNotEmpty()) {
                     HomeSection(
                         title = "Continuer à regarder",
-                        items = continueItems,
+                        items = visibleContinueItems,
                         showAll = filteredProgress.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenContinueWatching,
                     )
                 }
 
-                if (nextEpisodes.isNotEmpty()) {
+                if (visibleNextEpisodes.isNotEmpty()) {
                     HomeNextEpisodesSection(
-                        items = nextEpisodes.take(MAX_HOME_ITEMS),
+                        items = visibleNextEpisodes.take(MAX_HOME_ITEMS),
                         isTelevision = profile == DeviceProfile.Television,
                         onPlay = onPlayNextEpisode,
                     )
                 }
 
-                if (recentChannels.isNotEmpty()) {
+                if (visibleRecentChannels.isNotEmpty()) {
                     HomeRecentChannelsSection(
-                        items = recentChannels,
+                        items = visibleRecentChannels,
                         isTelevision = profile == DeviceProfile.Television,
                         onTune = onTuneRecentChannel,
                     )
@@ -345,20 +409,20 @@ fun HomeScreen(
                     )
                 }
 
-                if (recentMovieItems.isNotEmpty()) {
+                if (visibleRecentMovieItems.isNotEmpty()) {
                     HomeSection(
                         title = "Films récemment ajoutés",
-                        items = recentMovieItems,
+                        items = visibleRecentMovieItems,
                         showAll = recentMovies.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenMovies,
                     )
                 }
 
-                if (recentSeriesItems.isNotEmpty()) {
+                if (visibleRecentSeriesItems.isNotEmpty()) {
                     HomeSection(
                         title = "Séries récemment ajoutées",
-                        items = recentSeriesItems,
+                        items = visibleRecentSeriesItems,
                         showAll = recentSeries.size > MAX_HOME_ITEMS,
                         isTelevision = profile == DeviceProfile.Television,
                         onOpenSection = onOpenSeries,
@@ -424,6 +488,7 @@ private fun Hero(
     title: String,
     subtitle: String,
     actionLabel: String,
+    eyebrow: String = "À la une",
     onAction: () -> Unit,
 ) {
     val heroHeight = when (profile) {
@@ -455,7 +520,7 @@ private fun Hero(
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = "À reprendre",
+                text = eyebrow,
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
