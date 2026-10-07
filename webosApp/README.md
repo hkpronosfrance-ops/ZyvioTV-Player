@@ -72,3 +72,23 @@ The LG webOS client now also supports:
 
 M3U remains Live-only for this phase.
 No database migration is required.
+
+
+## Profiles + synced library home
+
+The LG webOS client now also supports:
+- account profile creation/restore through the existing primary-profile RPC
+- profile picker and device-local remembered profile selection
+- profile-scoped favorites
+- movie/episode watch progress
+- resume from saved position
+- profile-scoped live history
+- Home shelves for Continue Watching, Recent Channels, Favorites and Recently Watched
+- direct playback from synced Home cards
+- red-key favorite toggle for movies, series and live channels
+- 30-second progress synchronization while playing
+- collision-safe library matching using playlist + content type + content id
+
+No database migration is required; existing profile/library tables and RLS policies are reused.
+
+Parental enforcement remains a dedicated follow-up webOS phase.
