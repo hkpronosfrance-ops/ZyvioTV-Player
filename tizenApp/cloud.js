@@ -254,6 +254,104 @@
     });
   }
 
+
+  async function registerDevice(session, device) {
+    const user = await currentUser(session);
+    const now = new Date().toISOString();
+    await request(
+      "/rest/v1/player_devices?on_conflict=user_id,device_uid",
+      session,
+      {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: [{
+          user_id: user.id,
+          device_uid: device.deviceUid,
+          display_name: device.displayName,
+          platform: "tizen",
+          app_version: device.appVersion || null,
+          last_seen_at: now,
+          updated_at: now,
+        }],
+      }
+    );
+  }
+
+  async function listDevices(session) {
+    const rows = await request(
+      "/rest/v1/player_devices" +
+      "?select=id,device_uid,display_name,platform,app_version,last_seen_at" +
+      "&order=last_seen_at.desc",
+      session
+    );
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  async function renameDevice(session, deviceId, displayName) {
+    const clean = String(displayName || "").trim();
+    if (!clean) throw new Error("Nom d’appareil invalide.");
+    await request(
+      "/rest/v1/player_devices?id=eq." + encodeURIComponent(deviceId),
+      session,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: {
+          display_name: clean,
+          updated_at: new Date().toISOString(),
+        },
+      }
+    );
+  }
+
+  async function deleteDevice(session, deviceId) {
+    await request(
+      "/rest/v1/player_devices?id=eq." + encodeURIComponent(deviceId),
+      session,
+      { method: "DELETE" }
+    );
+  }
+
+  async function getSystemState(session) {
+    const [accountRows, serviceRows] = await Promise.all([
+      request(
+        "/rest/v1/player_account_status?select=status,message&limit=1",
+        session
+      ).catch(() => []),
+      request(
+        "/rest/v1/player_service_state" +
+        "?platform=eq.tizen&select=blocking,maintenance_message&limit=1",
+        session
+      ).catch(() => []),
+    ]);
+
+    const account = Array.isArray(accountRows) ? accountRows[0] : null;
+    if (account?.status === "suspended") {
+      return {
+        type: "account_suspended",
+        message: account.message || null,
+        blocking: true,
+      };
+    }
+
+    const service = Array.isArray(serviceRows) ? serviceRows[0] : null;
+    if (service?.blocking) {
+      return {
+        type: "maintenance_blocking",
+        message: service.maintenance_message || null,
+        blocking: true,
+      };
+    }
+    if (service?.maintenance_message) {
+      return {
+        type: "maintenance_planned",
+        message: service.maintenance_message,
+        blocking: false,
+      };
+    }
+    return { type: "normal", message: null, blocking: false };
+  }
+
   async function listPlaylists(session) {
     const rows = await request(
       "/rest/v1/player_playlists" +
@@ -340,6 +438,11 @@
     parentalHeartbeat,
     grantParentalException,
     endParentalException,
+    registerDevice,
+    listDevices,
+    renameDevice,
+    deleteDevice,
+    getSystemState,
     listPlaylists,
     getPlaylistSecret,
     providerConfigFromSecret,

@@ -7,6 +7,18 @@
     const authScreen = document.getElementById("auth-screen");
     const appShell = document.getElementById("app-shell");
     const profileScreen = document.getElementById("profile-screen");
+    const systemScreen = document.getElementById("system-screen");
+    const systemTitle = document.getElementById("system-title");
+    const systemCopy = document.getElementById("system-copy");
+    const systemContinue = document.getElementById("system-continue");
+    const systemSignout = document.getElementById("system-signout");
+    const deviceEditScreen = document.getElementById("device-edit-screen");
+    const deviceNameInput = document.getElementById("device-name-input");
+    const deviceEditStatus = document.getElementById("device-edit-status");
+    const morePanel = document.getElementById("more-panel");
+    const devicesPanel = document.getElementById("devices-panel");
+    const devicesGrid = document.getElementById("devices-grid");
+    const devicesCount = document.getElementById("devices-count");
     const profileGrid = document.getElementById("profile-grid");
     const profileStatus = document.getElementById("profile-status");
     const pinScreen = document.getElementById("pin-screen");
@@ -50,6 +62,10 @@
     let runtimeBlocked = false;
     let runtimeExceptionUntilMs = 0;
     let activePlayback = null;
+    let devices = [];
+    let systemState = { type: "normal", message: null, blocking: false };
+    let plannedMaintenanceDismissed = false;
+    let editingDeviceId = null;
 
     const PROFILE_STORAGE_KEY = "zyviotv.tizen.profile.v1";
     const DEVICE_UID_STORAGE_KEY = "zyviotv.tizen.device_uid.v1";
@@ -73,6 +89,22 @@
     }
 
     const deviceUid = stableDeviceUid();
+
+    function tizenAppVersion() {
+        try {
+            return window.tizen?.application?.getAppInfo?.().version || "0.1.0";
+        } catch (_) {
+            return "0.1.0";
+        }
+    }
+
+    function tizenDeviceName() {
+        try {
+            const model = window.webapis?.productinfo?.getModel?.();
+            if (model) return "Samsung TV " + model;
+        } catch (_) {}
+        return "Samsung TV";
+    }
 
     function runtimeCacheKey(profileId) {
         return RUNTIME_CACHE_PREFIX + String(profileId || "");
@@ -404,6 +436,7 @@
     function showAuth() {
         if (authScreen) authScreen.hidden = false;
         if (profileScreen) profileScreen.hidden = true;
+        if (systemScreen) systemScreen.hidden = true;
         if (appShell) appShell.hidden = true;
         providerConfig = null;
         liveChannels = [];
@@ -416,6 +449,171 @@
         if (profileScreen) profileScreen.hidden = true;
         if (appShell) appShell.hidden = false;
         setTimeout(() => focusables()[0]?.focus(), 0);
+    }
+
+    function hideSecondaryPanels() {
+        if (morePanel) morePanel.hidden = true;
+        if (devicesPanel) devicesPanel.hidden = true;
+    }
+
+    function showSystemState(state) {
+        systemState = state || { type: "normal", message: null, blocking: false };
+        if (!systemScreen) return true;
+
+        if (systemState.type === "normal") {
+            systemScreen.hidden = true;
+            return true;
+        }
+
+        if (systemState.type === "maintenance_planned" && plannedMaintenanceDismissed) {
+            systemScreen.hidden = true;
+            return true;
+        }
+
+        if (systemTitle) {
+            systemTitle.textContent =
+                systemState.type === "account_suspended" ? "Compte suspendu" :
+                systemState.type === "maintenance_blocking" ? "Maintenance en cours" :
+                "Maintenance programmée";
+        }
+        if (systemCopy) {
+            systemCopy.textContent = systemState.message ||
+                (systemState.type === "account_suspended"
+                    ? "L’accès au service est actuellement suspendu pour ce compte."
+                    : systemState.type === "maintenance_blocking"
+                        ? "Le service est momentanément indisponible pendant la maintenance."
+                        : "Une maintenance est prévue prochainement. Vous pouvez continuer à utiliser ZYVIOTV.");
+        }
+        if (systemContinue) systemContinue.hidden = systemState.type !== "maintenance_planned";
+        if (systemSignout) systemSignout.hidden = !systemState.blocking;
+
+        systemScreen.hidden = false;
+        setTimeout(() => systemScreen.querySelector("[data-focusable]:not([hidden])")?.focus(), 0);
+        return !systemState.blocking;
+    }
+
+    async function refreshSystemState() {
+        if (!currentSession) return true;
+        try {
+            const state = await window.ZyvioCloud.getSystemState(currentSession);
+            return showSystemState(state);
+        } catch (_) {
+            return true;
+        }
+    }
+
+    async function registerCurrentDevice() {
+        if (!currentSession) return;
+        try {
+            await window.ZyvioCloud.registerDevice(currentSession, {
+                deviceUid,
+                displayName: tizenDeviceName(),
+                appVersion: tizenAppVersion(),
+            });
+        } catch (_) {}
+    }
+
+    function renderDevices() {
+        if (!devicesGrid || !devicesPanel) return;
+        devicesPanel.hidden = false;
+        if (morePanel) morePanel.hidden = true;
+        if (catalogPanel) catalogPanel.hidden = true;
+        if (devicesCount) {
+            devicesCount.textContent = devices.length + " appareil" + (devices.length > 1 ? "s" : "");
+        }
+        devicesGrid.replaceChildren();
+
+        devices.forEach((device) => {
+            const button = document.createElement("button");
+            button.className = "catalog-card device-card";
+            button.dataset.focusable = "";
+            button.dataset.deviceId = device.id;
+            if (device.device_uid === deviceUid) button.classList.add("current");
+
+            const strong = document.createElement("strong");
+            strong.textContent = device.display_name || "Appareil";
+
+            const small = document.createElement("small");
+            const platform = device.platform === "tizen" ? "Samsung TV" : device.platform;
+            small.textContent = platform + (device.app_version ? " · v" + device.app_version : "");
+
+            button.append(strong, small);
+            devicesGrid.append(button);
+        });
+
+        setStatus("Touche rouge : déconnecter un autre appareil.");
+        setTimeout(() => devicesGrid.querySelector("[data-focusable]")?.focus(), 0);
+    }
+
+    function setDeviceEditStatus(message) {
+        if (deviceEditStatus) deviceEditStatus.textContent = message || "";
+    }
+
+    function openDeviceRename(device) {
+        if (!deviceEditScreen || !deviceNameInput || !device) return;
+        editingDeviceId = device.id;
+        deviceNameInput.value = device.display_name || "";
+        setDeviceEditStatus("");
+        deviceEditScreen.hidden = false;
+        setTimeout(() => deviceNameInput.focus(), 0);
+    }
+
+    function closeDeviceRename() {
+        editingDeviceId = null;
+        if (deviceNameInput) deviceNameInput.value = "";
+        setDeviceEditStatus("");
+        if (deviceEditScreen) deviceEditScreen.hidden = true;
+    }
+
+    async function saveDeviceRename() {
+        if (!editingDeviceId || !currentSession) return;
+        const clean = String(deviceNameInput?.value || "").trim();
+        if (!clean) {
+            setDeviceEditStatus("Le nom de l’appareil ne peut pas être vide.");
+            return;
+        }
+        setDeviceEditStatus("Enregistrement…");
+        try {
+            await window.ZyvioCloud.renameDevice(currentSession, editingDeviceId, clean);
+            devices = devices.map((item) =>
+                item.id === editingDeviceId ? { ...item, display_name: clean } : item
+            );
+            closeDeviceRename();
+            renderDevices();
+            setStatus("Appareil renommé.");
+        } catch (_) {
+            setDeviceEditStatus("Impossible de renommer cet appareil.");
+        }
+    }
+
+    async function loadDevices() {
+        if (!currentSession) return;
+        setStatus("Chargement des appareils…");
+        try {
+            devices = await window.ZyvioCloud.listDevices(currentSession);
+            renderDevices();
+        } catch (_) {
+            setStatus("Impossible de charger les appareils.");
+        }
+    }
+
+    async function disconnectFocusedDevice() {
+        const target = document.activeElement?.closest?.("[data-device-id]");
+        if (!target || !currentSession) return;
+        const device = devices.find((item) => item.id === target.dataset.deviceId);
+        if (!device) return;
+        if (device.device_uid === deviceUid) {
+            setStatus("Impossible de déconnecter cet appareil depuis lui-même.");
+            return;
+        }
+        try {
+            await window.ZyvioCloud.deleteDevice(currentSession, device.id);
+            devices = devices.filter((item) => item.id !== device.id);
+            renderDevices();
+            setStatus("Appareil déconnecté.");
+        } catch (_) {
+            setStatus("Impossible de déconnecter cet appareil.");
+        }
     }
 
     async function restoreProviderFromAccount(session) {
@@ -468,6 +666,9 @@
                 showAuth();
                 return;
             }
+            await registerCurrentDevice();
+            const allowed = await refreshSystemState();
+            if (!allowed) return;
             await restoreProviderFromAccount(currentSession);
         } catch (_) {
             currentSession = null;
@@ -490,6 +691,12 @@
         try {
             currentSession = await window.ZyvioAuth.signIn(email, password);
             if (passwordInput) passwordInput.value = "";
+            await registerCurrentDevice();
+            const allowed = await refreshSystemState();
+            if (!allowed) {
+                setAuthStatus("");
+                return;
+            }
             await restoreProviderFromAccount(currentSession);
             setAuthStatus("");
         } catch (error) {
@@ -503,6 +710,8 @@
         setStatus("Déconnexion…");
         await window.ZyvioAuth.signOut();
         currentSession = null;
+        devices = [];
+        hideSecondaryPanels();
         showAuth();
         setAuthStatus("Vous êtes déconnecté.");
     }
@@ -1298,6 +1507,7 @@
     }
 
     function activateSection(section) {
+        if (section !== "more") hideSecondaryPanels();
         document.querySelectorAll(".nav-item").forEach((item) => {
             item.classList.toggle("active", item.dataset.section === section);
         });
@@ -1312,7 +1522,7 @@
             more: "Plus",
         };
 
-        setStatus((labels[section] || section) + " — intégration des données réelles à connecter.");
+        setStatus(labels[section] || section);
     }
 
     function registerRemoteKeys() {
@@ -1352,7 +1562,11 @@
 
         if (event.key === "ColorF0Red" || event.keyCode === 403) {
             event.preventDefault();
-            toggleFavoriteForFocused();
+            if (document.activeElement?.closest?.("[data-device-id]")) {
+                disconnectFocusedDevice();
+            } else {
+                toggleFavoriteForFocused();
+            }
             return;
         }
 
@@ -1373,6 +1587,10 @@
 
         if (event.key === "Backspace" || event.key === "Escape") {
             event.preventDefault();
+            if (deviceEditScreen && !deviceEditScreen.hidden) {
+                closeDeviceRename();
+                return;
+            }
             syncActivePlayback();
             finishParentalPlayback();
             activePlayback = null;
@@ -1383,9 +1601,15 @@
 
     document.addEventListener("click", async (event) => {
         const target = event.target.closest(
-            "[data-section], [data-action], [data-catalog-kind], [data-profile-id], [data-home-kind]"
+            "[data-section], [data-action], [data-catalog-kind], [data-profile-id], [data-home-kind], [data-device-id]"
         );
         if (!target) return;
+
+        if (target.dataset.deviceId) {
+            const device = devices.find((item) => item.id === target.dataset.deviceId);
+            if (device) openDeviceRename(device);
+            return;
+        }
 
         if (target.dataset.profileId) {
             selectProfile(target.dataset.profileId).catch(() => {
@@ -1460,6 +1684,28 @@
 
         if (target.dataset.action === "cancel-pin") {
             closePinPrompt();
+            return;
+        }
+
+        if (target.dataset.action === "system-continue") {
+            plannedMaintenanceDismissed = true;
+            if (systemScreen) systemScreen.hidden = true;
+            if (!currentProfile) await restoreProviderFromAccount(currentSession);
+            return;
+        }
+
+        if (target.dataset.action === "open-devices") {
+            await loadDevices();
+            return;
+        }
+
+        if (target.dataset.action === "save-device-name") {
+            await saveDeviceRename();
+            return;
+        }
+
+        if (target.dataset.action === "cancel-device-name") {
+            closeDeviceRename();
             return;
         }
 
@@ -1583,22 +1829,22 @@
         }
 
         if (target.dataset.section === "more") {
+            const openMore = async () => {
+                hideCatalog();
+                activateSection("more");
+                if (devicesPanel) devicesPanel.hidden = true;
+                if (morePanel) morePanel.hidden = false;
+                setStatus("Plus");
+                setTimeout(() => morePanel?.querySelector("[data-focusable]")?.focus(), 0);
+            };
             if (isChildProfile()) {
                 showPinPrompt(
                     "Zone protégée",
                     "Le code PIN parental est requis pour ouvrir les réglages du compte.",
-                    async () => {
-                        hideCatalog();
-                        activateSection("more");
-                        setStatus("Plus — appuyez de nouveau pour vous déconnecter.");
-                        target.dataset.action = "sign-out";
-                    }
+                    openMore
                 );
             } else {
-                hideCatalog();
-                activateSection("more");
-                setStatus("Plus — appuyez de nouveau pour vous déconnecter.");
-                target.dataset.action = "sign-out";
+                await openMore();
             }
             return;
         }
