@@ -5,6 +5,19 @@
     constructor(videoElement) {
       this.video = videoElement;
       this.currentUrl = null;
+      this.buffering = false;
+
+      if (this.video) {
+        ["waiting", "stalled"].forEach((eventName) => {
+          this.video.addEventListener(eventName, () => { this.buffering = true; });
+        });
+        ["playing", "canplay", "canplaythrough"].forEach((eventName) => {
+          this.video.addEventListener(eventName, () => { this.buffering = false; });
+        });
+        ["ended", "emptied", "error"].forEach((eventName) => {
+          this.video.addEventListener(eventName, () => { this.buffering = false; });
+        });
+      }
     }
 
     async play(url) {
@@ -13,6 +26,7 @@
       this.currentUrl = url;
       this.video.src = url;
       this.video.hidden = false;
+      this.buffering = true;
       await this.video.play();
     }
 
@@ -36,6 +50,18 @@
         : 0;
     }
 
+    isActive() {
+      return Boolean(this.currentUrl);
+    }
+
+    isPlaying() {
+      if (!this.video || !this.currentUrl) return false;
+      return !this.video.paused &&
+        !this.video.ended &&
+        !this.buffering &&
+        this.video.readyState >= 3;
+    }
+
     seekToMs(positionMs) {
       if (!this.video) return;
       const safe = Math.max(0, Number(positionMs || 0));
@@ -49,6 +75,7 @@
       this.video.load();
       this.video.hidden = true;
       this.currentUrl = null;
+      this.buffering = false;
     }
   }
 

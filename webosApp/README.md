@@ -112,3 +112,23 @@ The LG webOS client now also supports:
 No database migration is required.
 
 Screen-time limits, schedules and temporary PIN exceptions remain a dedicated follow-up webOS phase.
+
+
+## Advanced parental runtime
+
+The LG webOS client now also supports:
+- server-backed Child screen-time runtime state
+- synchronized 30-second parental heartbeat
+- weekday daily limits
+- separate weekend limits
+- allowed viewing schedules, including overnight windows
+- temporary PIN exception for up to 30 minutes or until the content ends
+- server-time anchored runtime cache with restart fallback
+- local conservative runtime fallback when the backend is temporarily unavailable
+- playback blocked before starting when schedule/time limits apply
+- runtime blocking while content is already playing
+- explicit exception termination when playback stops or content changes
+- stable per-TV runtime device UID
+- true HTML5 playback-state reporting: paused, ended and buffering time do not count as screen time
+
+No database migration is required; the existing parental runtime RPCs are reused.
