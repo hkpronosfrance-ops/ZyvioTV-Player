@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.cache.CachedLibrary
+import fr.zyviotv.player.data.cache.OfflineContentCache
 import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.data.settings.ProfileRepository
 import fr.zyviotv.player.data.sync.SupabaseLibrarySyncRepository
@@ -201,22 +203,47 @@ fun rememberLibrarySession(): LibrarySession {
     val profilePreferences = remember(appContext) {
         ProfilePreferences(appContext)
     }
+    val offlineCache = remember(appContext) { OfflineContentCache(appContext) }
     val state = remember { mutableStateOf<LibraryState>(LibraryState.Loading) }
     var reloadToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(reloadToken) {
         state.value = LibraryState.Loading
 
+        val selectedProfileId = profilePreferences.selectedProfileId()
         val primaryProfileId = profileRepository.ensurePrimaryProfile().getOrElse {
-            state.value = LibraryState.Error("Impossible de préparer votre profil.")
+            val cached = selectedProfileId?.let(offlineCache::loadLibrary)
+            if (cached != null) {
+                state.value = LibraryState.Ready(
+                    LibrarySnapshot(
+                        profileId = cached.profileId,
+                        favorites = cached.favorites,
+                        progress = cached.progress,
+                        liveHistory = cached.liveHistory,
+                    ),
+                )
+            } else {
+                state.value = LibraryState.Error("Impossible de préparer votre profil.")
+            }
             return@LaunchedEffect
         }
         val profiles = profileRepository.listProfiles().getOrElse {
-            state.value = LibraryState.Error("Impossible de charger vos profils.")
+            val cached = selectedProfileId?.let(offlineCache::loadLibrary)
+            if (cached != null) {
+                state.value = LibraryState.Ready(
+                    LibrarySnapshot(
+                        profileId = cached.profileId,
+                        favorites = cached.favorites,
+                        progress = cached.progress,
+                        liveHistory = cached.liveHistory,
+                    ),
+                )
+            } else {
+                state.value = LibraryState.Error("Impossible de charger vos profils.")
+            }
             return@LaunchedEffect
         }
 
-        val selectedProfileId = profilePreferences.selectedProfileId()
         val defaultProfileId = profilePreferences.defaultProfileId()
         val activeProfileId = profiles.firstOrNull { it.id == selectedProfileId }?.id
             ?: profiles.firstOrNull { it.id == defaultProfileId }?.id
@@ -246,14 +273,21 @@ fun rememberLibrarySession(): LibrarySession {
             return@LaunchedEffect
         }
 
-        state.value = LibraryState.Ready(
-            LibrarySnapshot(
-                profileId = activeProfileId,
-                favorites = favorites,
-                progress = progress,
-                liveHistory = liveHistory,
+        val snapshot = LibrarySnapshot(
+            profileId = activeProfileId,
+            favorites = favorites,
+            progress = progress,
+            liveHistory = liveHistory,
+        )
+        offlineCache.saveLibrary(
+            CachedLibrary(
+                profileId = snapshot.profileId,
+                favorites = snapshot.favorites,
+                progress = snapshot.progress,
+                liveHistory = snapshot.liveHistory,
             ),
         )
+        state.value = LibraryState.Ready(snapshot)
     }
 
     return remember(state, repository) {
