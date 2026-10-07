@@ -92,3 +92,23 @@ The LG webOS client now also supports:
 No database migration is required; existing profile/library tables and RLS policies are reused.
 
 Parental enforcement remains a dedicated follow-up webOS phase.
+
+
+## Child profile parental enforcement
+
+The LG webOS client now also supports:
+- account parental settings and profile lock retrieval
+- secure parental PIN verification through the existing backend RPC
+- adult-labelled categories/content hidden on Child profiles
+- explicit locked content hidden on Child profiles
+- explicit locked categories hidden on Child profiles
+- Child-safe filtering for Live, Movies, Series, Favorites, Continue Watching and Recently Watched
+- PIN-gated exit from a Child profile
+- PIN-gated access to Profiles and More
+- PIN-gated sign-out from a Child profile
+- library actions and provider reloads reapply Child filtering
+- profile switches clear cached catalogs to prevent cross-profile leakage
+
+No database migration is required.
+
+Screen-time limits, schedules and temporary PIN exceptions remain a dedicated follow-up webOS phase.
