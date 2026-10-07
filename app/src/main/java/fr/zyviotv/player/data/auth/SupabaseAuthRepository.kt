@@ -146,6 +146,8 @@ class SupabaseAuthRepository(
                 body = JSONObject()
                     .put("refresh_token", stored.refreshToken)
                     .toString(),
+                connectTimeoutMs = SESSION_VERIFY_TIMEOUT_MS,
+                readTimeoutMs = SESSION_VERIFY_TIMEOUT_MS,
             )
         }.getOrElse {
             return@withContext SessionRestoreResult.NetworkUnavailable
@@ -220,12 +222,14 @@ class SupabaseAuthRepository(
         method: String,
         body: String,
         bearerToken: String? = null,
+        connectTimeoutMs: Int = DEFAULT_NETWORK_TIMEOUT_MS,
+        readTimeoutMs: Int = DEFAULT_NETWORK_TIMEOUT_MS,
     ): HttpResponse {
         val connection = (URL(BuildConfig.SUPABASE_URL + path).openConnection() as HttpURLConnection)
         try {
             connection.requestMethod = method
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 15_000
+            connection.connectTimeout = connectTimeoutMs
+            connection.readTimeout = readTimeoutMs
             connection.doInput = true
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json")
@@ -288,6 +292,7 @@ class SupabaseAuthRepository(
 
     private companion object {
         const val SESSION_EXPIRY_SAFETY_SECONDS = 60L
-        const val SESSION_VERIFY_TIMEOUT_MS = 5_000
+        const val SESSION_VERIFY_TIMEOUT_MS = 2_000
+        const val DEFAULT_NETWORK_TIMEOUT_MS = 15_000
     }
 }
