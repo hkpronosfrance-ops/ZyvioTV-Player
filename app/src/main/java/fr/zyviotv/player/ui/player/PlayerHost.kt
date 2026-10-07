@@ -10,7 +10,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import fr.zyviotv.player.data.settings.OnboardingSetupPreferences
 import fr.zyviotv.player.data.settings.PlayerPreferences
+import fr.zyviotv.player.data.settings.ProfilePreferences
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
 import fr.zyviotv.player.shared.playback.PlaybackRequest
@@ -42,8 +44,35 @@ fun PlayerHost(
     val playerPreferences = remember(context.applicationContext) {
         PlayerPreferences(context.applicationContext)
     }
+    val profilePreferences = remember(context.applicationContext) {
+        ProfilePreferences(context.applicationContext)
+    }
+    val setupPreferences = remember(context.applicationContext) {
+        OnboardingSetupPreferences(context.applicationContext)
+    }
+    val activeProfileId = profilePreferences.selectedProfileId()
+    val profileMediaPreferences = remember(activeProfileId, effectiveKey(request.streamUrl)) {
+        activeProfileId?.let(setupPreferences::profile)
+    }
+    val devicePreferences = remember(effectiveKey(request.streamUrl)) {
+        setupPreferences.device()
+    }
     val preferenceSnapshot = remember(effectiveKey(request.streamUrl)) {
         playerPreferences.read()
+    }
+    val initialAudioLanguage = when (profileMediaPreferences?.audioLanguage) {
+        "Français" -> "fr"
+        "Original", "Auto", null -> preferenceSnapshot.preferredAudioLanguage
+        else -> preferenceSnapshot.preferredAudioLanguage
+    }
+    val initialSubtitleLanguage = when (profileMediaPreferences?.subtitleLanguage) {
+        "Français" -> "fr"
+        "Auto", "Désactivés", null -> preferenceSnapshot.preferredSubtitleLanguage
+        else -> preferenceSnapshot.preferredSubtitleLanguage
+    }
+    val initialSubtitlesEnabled = when (profileMediaPreferences?.subtitleLanguage) {
+        "Désactivés" -> false
+        else -> preferenceSnapshot.subtitlesEnabled
     }
 
     val effectiveRequest = remember(request) {
@@ -66,13 +95,13 @@ fun PlayerHost(
     var panel by remember(effectiveRequest.streamUrl) { mutableStateOf(PlayerPanel.None) }
     var tracks by remember(effectiveRequest.streamUrl) { mutableStateOf(NativeTrackCatalog()) }
     var selectedAudioLanguage by remember(effectiveRequest.streamUrl) {
-        mutableStateOf(preferenceSnapshot.preferredAudioLanguage)
+        mutableStateOf(initialAudioLanguage)
     }
     var selectedSubtitleLanguage by remember(effectiveRequest.streamUrl) {
-        mutableStateOf(preferenceSnapshot.preferredSubtitleLanguage)
+        mutableStateOf(initialSubtitleLanguage)
     }
     var subtitlesEnabled by remember(effectiveRequest.streamUrl) {
-        mutableStateOf(preferenceSnapshot.subtitlesEnabled)
+        mutableStateOf(initialSubtitlesEnabled)
     }
     var command by remember { mutableStateOf(NativePlayerCommand.None) }
     var commandToken by remember { mutableLongStateOf(0L) }
@@ -225,6 +254,7 @@ fun PlayerHost(
                 selectedAudioLanguage = selectedAudioLanguage,
                 selectedSubtitleLanguage = selectedSubtitleLanguage,
                 subtitlesEnabled = subtitlesEnabled,
+                playbackQuality = devicePreferences.playbackQuality,
                 showNativeControls = false,
                 command = command,
                 commandToken = commandToken,
