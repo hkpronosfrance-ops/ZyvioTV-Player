@@ -36,3 +36,23 @@ Remaining integration includes:
 - model-year compatibility testing
 - packaging/signing for LG Seller Lounge
 - physical LG TV/emulator QA
+
+
+## Account + secure provider restoration
+
+The LG webOS client now also supports:
+- Supabase email/password sign-in
+- persistent app-local Supabase session with refresh
+- cold-start session restoration
+- sign-out
+- restoration of the highest-priority enabled configured playlist
+- provider-secret retrieval only through `player_get_playlist_secret`
+- Xtream/M3U provider configuration kept in memory only
+- real Live TV grid backed by the restored account playlist
+- direct live playback from remote-focusable channel cards
+- LG Back behavior that stops playback before leaving the app
+- media Play/Pause/Stop handling
+
+Provider credentials and stream URLs are never written to UI status or local account storage.
+
+No database migration is required.
