@@ -256,6 +256,15 @@ struct ProviderMovieDTO: Identifiable, Hashable {
     let addedAtEpochSeconds: Int64?
 }
 
+struct ProviderLiveChannelDTO: Identifiable, Hashable {
+    let id: String
+    let playlistId: String
+    let name: String
+    let categoryId: String?
+    let logoUrl: String?
+    let streamUrl: URL
+}
+
 struct ProviderSeriesDTO: Identifiable, Hashable {
     let id: String
     let playlistId: String
@@ -283,9 +292,27 @@ struct ProviderSeriesDetailDTO {
     let episodes: [ProviderSeriesEpisodeDTO]
 }
 
+struct ProviderEpgProgrammeDTO: Identifiable, Hashable {
+    var id: String { "\(channelId):\(startEpochSeconds):\(endEpochSeconds):\(title)" }
+
+    let channelId: String
+    let title: String
+    let description: String?
+    let startEpochSeconds: Int64
+    let endEpochSeconds: Int64
+}
+
+struct ProviderGuideChannelDTO: Identifiable {
+    var id: String { channel.id }
+    let channel: ProviderLiveChannelDTO
+    let programmes: [ProviderEpgProgrammeDTO]
+}
+
 struct ProviderCatalogDTO {
     let playlistId: String
     let playlistName: String
+    let liveChannels: [ProviderLiveChannelDTO]
+    let liveCategories: [String: String]
     let movies: [ProviderMovieDTO]
     let series: [ProviderSeriesDTO]
 }
@@ -296,6 +323,128 @@ actor SupabaseProviderCatalogService {
     private let baseURL = URL(string: "https://nvpuftuluguawdxonmlc.supabase.co")!
     private let publishableKey = "sb_publishable_Qr5CcSZRUsi1oATqvnJb_A_5cBla4SC"
     private let sessionStore = AuthSessionStore()
+
+    func loadGuide(
+        playlistId: String,
+        channels: [ProviderLiveChannelDTO],
+        maxChannels: Int = 50
+    ) async throws -> [ProviderGuideChannelDTO] {
+        let secret = try await loadPlaylistSecret(playlistId: playlistId)
+        guard
+            secret.providerType == "xtream",
+            let serverURL = secret.serverURL,
+            let username = secret.username,
+            let password = secret.password
+        else {
+            throw ProviderCatalogError.invalidSecret
+        }
+
+        var result: [ProviderGuideChannelDTO] = []
+        for channel in channels.prefix(max(1, min(maxChannels, 50))) {
+            let programmes = (try? await loadShortEpg(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                channelId: channel.id
+            )) ?? []
+            result.append(
+                ProviderGuideChannelDTO(
+                    channel: channel,
+                    programmes: programmes
+                )
+            )
+        }
+        return result
+    }
+
+    private func loadShortEpg(
+        serverURL: URL,
+        username: String,
+        password: String,
+        channelId: String
+    ) async throws -> [ProviderEpgProgrammeDTO] {
+        guard var components = URLComponents(
+            url: serverURL.appendingPathComponent("player_api.php"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw ProviderCatalogError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "username", value: username),
+            URLQueryItem(name: "password", value: password),
+            URLQueryItem(name: "action", value: "get_short_epg"),
+            URLQueryItem(name: "stream_id", value: channelId),
+            URLQueryItem(name: "limit", value: "100"),
+        ]
+
+        guard let url = components.url else {
+            throw ProviderCatalogError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("ZYVIOTV-Player/0.1", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let httpResponse = response as? HTTPURLResponse,
+            (200...299).contains(httpResponse.statusCode),
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let items = root["epg_listings"] as? [[String: Any]]
+        else {
+            throw ProviderCatalogError.providerUnavailable
+        }
+
+        let now = Int64(Date().timeIntervalSince1970)
+        let from = now - 3 * 60 * 60
+        let to = now + 6 * 60 * 60
+
+        return items.compactMap { item in
+            guard
+                let start = epochSeconds(item["start_timestamp"]),
+                let end = epochSeconds(item["stop_timestamp"]),
+                end > start,
+                end > from,
+                start < to
+            else {
+                return nil
+            }
+
+            return ProviderEpgProgrammeDTO(
+                channelId: channelId,
+                title: decodeMaybeBase64(cleanString(item["title"]) ?? "").ifBlank("Programme TV"),
+                description: decodeMaybeBase64(cleanString(item["description"]) ?? "").nilIfBlank,
+                startEpochSeconds: start,
+                endEpochSeconds: end
+            )
+        }
+        .reduce(into: [ProviderEpgProgrammeDTO]()) { acc, item in
+            if !acc.contains(where: {
+                $0.startEpochSeconds == item.startEpochSeconds &&
+                $0.endEpochSeconds == item.endEpochSeconds &&
+                $0.title == item.title
+            }) {
+                acc.append(item)
+            }
+        }
+        .sorted { $0.startEpochSeconds < $1.startEpochSeconds }
+    }
+
+    private func decodeMaybeBase64(_ value: String) -> String {
+        guard !value.isEmpty,
+              let data = Data(base64Encoded: value),
+              let decoded = String(data: data, encoding: .utf8),
+              decoded.unicodeScalars.allSatisfy({
+                  $0.value == 9 || $0.value == 10 || $0.value == 13 || $0.value >= 32
+              })
+        else {
+            return value
+        }
+        return decoded
+    }
 
     func loadSeriesDetail(
         playlistId: String,
@@ -437,6 +586,8 @@ actor SupabaseProviderCatalogService {
             return ProviderCatalogDTO(
                 playlistId: playlist.id,
                 playlistName: playlist.name,
+                liveChannels: [],
+                liveCategories: [:],
                 movies: [],
                 series: []
             )
@@ -450,6 +601,18 @@ actor SupabaseProviderCatalogService {
             throw ProviderCatalogError.invalidSecret
         }
 
+        async let liveCategoryPayload = providerArray(
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            action: "get_live_categories"
+        )
+        async let livePayload = providerArray(
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            action: "get_live_streams"
+        )
         async let moviePayload = providerArray(
             serverURL: serverURL,
             username: username,
@@ -462,6 +625,44 @@ actor SupabaseProviderCatalogService {
             password: password,
             action: "get_series"
         )
+
+        let liveCategories = Dictionary(
+            uniqueKeysWithValues: try await liveCategoryPayload.compactMap { item -> (String, String)? in
+                guard
+                    let id = stringValue(item["category_id"]),
+                    let name = cleanString(item["category_name"])
+                else {
+                    return nil
+                }
+                return (id, name)
+            }
+        )
+
+        let liveChannels = try await livePayload.compactMap { item -> ProviderLiveChannelDTO? in
+            guard
+                let id = stringValue(item["stream_id"]),
+                let name = cleanString(item["name"]),
+                let streamURL = mediaURL(
+                    serverURL: serverURL,
+                    kind: "live",
+                    username: username,
+                    password: password,
+                    id: id,
+                    extensionValue: "ts"
+                )
+            else {
+                return nil
+            }
+
+            return ProviderLiveChannelDTO(
+                id: id,
+                playlistId: playlist.id,
+                name: name,
+                categoryId: cleanString(item["category_id"]),
+                logoUrl: cleanString(item["stream_icon"]),
+                streamUrl: streamURL
+            )
+        }
 
         let movies = try await moviePayload.compactMap { item -> ProviderMovieDTO? in
             guard
@@ -515,6 +716,8 @@ actor SupabaseProviderCatalogService {
         return ProviderCatalogDTO(
             playlistId: playlist.id,
             playlistName: playlist.name,
+            liveChannels: liveChannels,
+            liveCategories: liveCategories,
             movies: movies.sorted {
                 ($0.addedAtEpochSeconds ?? 0) > ($1.addedAtEpochSeconds ?? 0)
             },
@@ -713,5 +916,17 @@ actor SupabaseProviderCatalogService {
                 return "Impossible de récupérer vos playlists."
             }
         }
+    }
+}
+
+
+private extension String {
+    func ifBlank(_ fallback: String) -> String {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : self
+    }
+
+    var nilIfBlank: String? {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 }
