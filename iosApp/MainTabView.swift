@@ -651,18 +651,24 @@ private struct ParentalSettingsView: View {
             .lowercased()
         guard query.count >= 2 else { return [] }
 
-        let live = catalog.liveChannels.lazy
-            .filter { normalized($0.name).contains(query) }
-            .prefix(40)
-            .map { LockEditorItem(key: "live:" + $0.id, name: $0.name, kind: "Chaîne TV") }
-        let movies = catalog.movies.lazy
-            .filter { normalized($0.title).contains(query) }
-            .prefix(40)
-            .map { LockEditorItem(key: "movie:" + $0.id, name: $0.title, kind: "Film") }
-        let series = catalog.series.lazy
-            .filter { normalized($0.title).contains(query) }
-            .prefix(40)
-            .map { LockEditorItem(key: "series:" + $0.id, name: $0.title, kind: "Série") }
+        let live = Array(
+            catalog.liveChannels.lazy
+                .filter { normalized($0.name).contains(query) }
+                .prefix(40)
+                .map { LockEditorItem(key: "live:" + $0.id, name: $0.name, kind: "Chaîne TV") }
+        )
+        let movies = Array(
+            catalog.movies.lazy
+                .filter { normalized($0.title).contains(query) }
+                .prefix(40)
+                .map { LockEditorItem(key: "movie:" + $0.id, name: $0.title, kind: "Film") }
+        )
+        let series = Array(
+            catalog.series.lazy
+                .filter { normalized($0.title).contains(query) }
+                .prefix(40)
+                .map { LockEditorItem(key: "series:" + $0.id, name: $0.title, kind: "Série") }
+        )
 
         return Array((live + movies + series).prefix(80))
     }
