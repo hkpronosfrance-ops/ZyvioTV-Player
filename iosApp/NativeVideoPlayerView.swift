@@ -124,10 +124,18 @@ struct ParentalProtectedPlayerView: View {
             localConsumedSeconds = max(state.consumedSeconds, 0)
 
             if state.parentalEnabled && state.isChild {
-                if state.blockedByTime {
+                let exceptionActive: Bool
+                if let exceptionUntil = state.exceptionUntilEpochMs,
+                   let serverNow = state.serverNowEpochMs {
+                    exceptionActive = exceptionUntil > serverNow
+                } else {
+                    exceptionActive = false
+                }
+
+                if !exceptionActive && state.blockedByTime {
                     blockTitle = "Temps d’écran atteint"
                     isBlocked = true
-                } else if !isScheduleAllowed(state) {
+                } else if !exceptionActive && !isScheduleAllowed(state) {
                     blockTitle = "Pas maintenant"
                     isBlocked = true
                 }
