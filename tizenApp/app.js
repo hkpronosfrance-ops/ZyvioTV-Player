@@ -16,6 +16,8 @@
     const pinStatus = document.getElementById("pin-status");
     const continueShelf = document.getElementById("continue-shelf");
     const continueCards = document.getElementById("continue-cards");
+    const recentChannelsShelf = document.getElementById("recent-channels-shelf");
+    const recentChannelCards = document.getElementById("recent-channel-cards");
     const favoritesShelf = document.getElementById("favorites-shelf");
     const favoriteCards = document.getElementById("favorite-cards");
     const historyShelf = document.getElementById("history-shelf");
@@ -39,6 +41,7 @@
     let currentPlaylist = null;
     let favorites = [];
     let watchProgress = [];
+    let liveHistory = [];
     let parentalSettings = null;
     let contentLocks = null;
     let pendingPinAction = null;
@@ -359,17 +362,25 @@
         persistProfileId(profile.id);
         setProfileStatus("Chargement de " + profile.name + "…");
 
-        const [loadedFavorites, loadedProgress, loadedParental, loadedLocks, loadedRuntime] =
-            await Promise.all([
-                window.ZyvioCloud.listFavorites(currentSession, profile.id),
-                window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
-                window.ZyvioCloud.getParentalSettings(currentSession),
-                window.ZyvioCloud.getProfileContentLocks(currentSession, profile.id),
-                window.ZyvioCloud.getParentalRuntimeState(currentSession, profile.id, "")
-                    .catch(() => null),
-            ]);
+        const [
+            loadedFavorites,
+            loadedProgress,
+            loadedLiveHistory,
+            loadedParental,
+            loadedLocks,
+            loadedRuntime,
+        ] = await Promise.all([
+            window.ZyvioCloud.listFavorites(currentSession, profile.id),
+            window.ZyvioCloud.listWatchProgress(currentSession, profile.id, 100),
+            window.ZyvioCloud.listLiveHistory(currentSession, profile.id, 50),
+            window.ZyvioCloud.getParentalSettings(currentSession),
+            window.ZyvioCloud.getProfileContentLocks(currentSession, profile.id),
+            window.ZyvioCloud.getParentalRuntimeState(currentSession, profile.id, "")
+                .catch(() => null),
+        ]);
         favorites = loadedFavorites;
         watchProgress = loadedProgress;
+        liveHistory = loadedLiveHistory;
         parentalSettings = loadedParental;
         contentLocks = loadedLocks;
         if (loadedRuntime) {
@@ -424,6 +435,7 @@
         episodes = [];
         favorites = [];
         watchProgress = [];
+        liveHistory = [];
 
         const preferredId = storedProfileId();
         const preferred = profiles.find((item) => item.id === preferredId);
@@ -547,22 +559,36 @@
 
     async function toggleFavoriteForFocused() {
         const target = document.activeElement?.closest?.("[data-catalog-kind]");
-        if (!target || !currentSession || !currentProfile || !currentPlaylist) return;
+        if (!currentSession || !currentProfile || !currentPlaylist) return;
 
-        const kind = target.dataset.catalogKind;
-        if (kind !== "movie" && kind !== "series") return;
+        let kind = target?.dataset.catalogKind || "";
+        let source = null;
 
-        const source = kind === "movie"
-            ? movies.find((item) => item.id === target.dataset.catalogId)
-            : series.find((item) => item.id === target.dataset.catalogId);
-        if (!source) return;
+        if (kind === "movie") {
+            source = movies.find((item) => item.id === target.dataset.catalogId);
+        } else if (kind === "series") {
+            source = series.find((item) => item.id === target.dataset.catalogId);
+        } else if (kind === "live") {
+            source = liveChannels.find((item) => item.id === target.dataset.catalogId);
+        } else if (activePlayback?.contentType === "live") {
+            kind = "live";
+            source = liveChannels.find((item) => item.id === activePlayback.contentId) || {
+                id: activePlayback.contentId,
+                name: activePlayback.title,
+                logo: activePlayback.artworkUrl || null,
+            };
+        }
 
+        if (!source || !["movie", "series", "live"].includes(kind)) return;
+
+        const title = kind === "live" ? source.name : source.title;
+        const artwork = kind === "live" ? source.logo : source.poster;
         const payload = {
             playlistId: currentPlaylist.id,
             contentType: kind,
             contentId: source.id,
-            title: source.title,
-            artworkUrl: source.poster || null,
+            title,
+            artworkUrl: artwork || null,
         };
 
         try {
@@ -576,7 +602,7 @@
                     (item) => favoriteKey(item.content_type, item.content_id) !==
                         favoriteKey(kind, source.id)
                 );
-                setStatus(source.title + " retiré des favoris.");
+                setStatus(title + " retiré des favoris.");
             } else {
                 await window.ZyvioCloud.upsertFavorite(
                     currentSession,
@@ -590,9 +616,10 @@
                     title: payload.title,
                     artwork_url: payload.artworkUrl,
                 });
-                setStatus(source.title + " ajouté aux favoris.");
+                setStatus(title + " ajouté aux favoris.");
             }
-            target.classList.toggle("favorite", isFavorite(kind, source.id));
+            if (target) target.classList.toggle("favorite", isFavorite(kind, source.id));
+            renderHomeShelves();
         } catch (_) {
             setStatus("Impossible de synchroniser le favori.");
         }
@@ -963,7 +990,31 @@
         });
         if (continueShelf) continueShelf.hidden = resumable.length === 0;
 
-        const favoriteItems = favorites.slice(0, 20);
+        const recentChannels = liveHistory
+            .filter((item) => {
+                if (!isChildProfile()) return true;
+                return liveChannels.some((channel) => channel.id === String(item.channel_id));
+            })
+            .slice(0, 20);
+        clearHomeContainer(recentChannelCards);
+        recentChannels.forEach((item) => {
+            recentChannelCards.append(createHomeCard(
+                {
+                    id: item.channel_id,
+                    title: item.channel_name,
+                },
+                "recent-live",
+                "TV en direct"
+            ));
+        });
+        if (recentChannelsShelf) recentChannelsShelf.hidden = recentChannels.length === 0;
+
+        const favoriteItems = favorites
+            .filter((item) => {
+                if (!isChildProfile() || item.content_type !== "live") return true;
+                return liveChannels.some((channel) => channel.id === String(item.content_id));
+            })
+            .slice(0, 20);
         clearHomeContainer(favoriteCards);
         favoriteItems.forEach((item) => {
             const label = item.content_type === "movie" ? "Film" :
@@ -1067,6 +1118,7 @@
                 "live",
                 await window.ZyvioProvider.loadLive(providerConfig)
             );
+            renderHomeShelves();
             setStatus(liveChannels.length + " chaînes chargées.");
             return liveChannels;
         } catch (error) {
@@ -1102,6 +1154,29 @@
             await player.play(channel.streamUrl);
             activePlayback = metadata;
             runtimeBlocked = false;
+            try {
+                await window.ZyvioCloud.recordLiveHistory(
+                    currentSession,
+                    currentProfile.id,
+                    {
+                        playlistId: currentPlaylist.id,
+                        channelId: channel.id,
+                        channelName: channel.name,
+                        logoUrl: channel.logo || null,
+                    }
+                );
+                liveHistory = liveHistory.filter(
+                    (item) => String(item.channel_id) !== String(channel.id)
+                );
+                liveHistory.unshift({
+                    playlist_id: currentPlaylist.id,
+                    channel_id: String(channel.id),
+                    channel_name: channel.name,
+                    logo_url: channel.logo || null,
+                    last_watched_at: new Date().toISOString(),
+                });
+                renderHomeShelves();
+            } catch (_) {}
             let epgSuffix = "";
             if (providerConfig?.type === "xtream") {
                 try {
@@ -1318,6 +1393,19 @@
             return;
         }
 
+        if (target.dataset.homeKind === "recent-live") {
+            if (!liveChannels.length) await loadProviderLive();
+            const channel = liveChannels.find(
+                (entry) => String(entry.id) === String(target.dataset.homeId)
+            );
+            if (channel) {
+                playChannel(channel);
+            } else {
+                setStatus("Chaîne indisponible.");
+            }
+            return;
+        }
+
         if (target.dataset.homeKind === "favorite") {
             const item = favorites.find(
                 (entry) => String(entry.content_id) === String(target.dataset.homeId)
@@ -1342,6 +1430,13 @@
                             .then((info) => renderEpisodes(seriesItem, info))
                             .catch(() => setStatus("Détails de série indisponibles."));
                     }
+                } else if (item.content_type === "live") {
+                    if (!liveChannels.length) await loadProviderLive();
+                    const channel = liveChannels.find(
+                        (entry) => entry.id === String(item.content_id)
+                    );
+                    if (channel) playChannel(channel);
+                    else setStatus("Chaîne indisponible.");
                 }
             }
             return;
@@ -1447,6 +1542,11 @@
                         .then((info) => renderEpisodes(item, info))
                         .catch(() => setStatus("Détails de série indisponibles."));
                 }
+            } else if (type === "live") {
+                if (!liveChannels.length) await loadProviderLive();
+                const channel = liveChannels.find((item) => item.id === id);
+                if (channel) playChannel(channel);
+                else setStatus("Chaîne indisponible.");
             }
             return;
         }
