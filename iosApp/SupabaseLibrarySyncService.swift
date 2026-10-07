@@ -590,6 +590,12 @@ struct ParentalWriteDTO: Decodable {
     let reason: String?
 }
 
+struct ParentalScheduleWindowDTO: Codable, Hashable {
+    let days: [Int]
+    let start: String
+    let end: String
+}
+
 struct ProfileParentalSettingsDTO: Decodable {
     let profileId: String
     let profileName: String
@@ -601,6 +607,7 @@ struct ProfileParentalSettingsDTO: Decodable {
     let weekendLimitMinutes: Int?
     let warningMinutes: Int
     let scheduleEnabled: Bool
+    let scheduleWindows: [ParentalScheduleWindowDTO]
 
     enum CodingKeys: String, CodingKey {
         case profileId = "profile_id"
@@ -613,6 +620,7 @@ struct ProfileParentalSettingsDTO: Decodable {
         case weekendLimitMinutes = "weekend_limit_minutes"
         case warningMinutes = "warning_minutes"
         case scheduleEnabled = "schedule_enabled"
+        case scheduleWindows = "schedule_windows"
     }
 }
 
@@ -658,7 +666,8 @@ actor SupabaseParentalService {
         dailyLimitMinutes: Int?,
         weekendLimitMinutes: Int?,
         warningMinutes: Int,
-        scheduleEnabled: Bool
+        scheduleEnabled: Bool,
+        scheduleWindows: [ParentalScheduleWindowDTO]
     ) async throws -> ParentalWriteDTO {
         try await rpc(
             name: "player_update_profile_parental_settings",
@@ -671,7 +680,13 @@ actor SupabaseParentalService {
                 "p_weekend_limit_minutes": weekendLimitMinutes ?? NSNull(),
                 "p_warning_minutes": warningMinutes,
                 "p_schedule_enabled": scheduleEnabled,
-                "p_schedule_windows": [],
+                "p_schedule_windows": scheduleWindows.map {
+                    [
+                        "days": $0.days,
+                        "start": $0.start,
+                        "end": $0.end,
+                    ] as [String: Any]
+                },
             ]
         )
     }
