@@ -3,8 +3,6 @@ package fr.zyviotv.player.data.epg
 import fr.zyviotv.player.shared.epg.EpgProgramme
 import fr.zyviotv.player.shared.epg.EpgWindow
 import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.Locale
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
@@ -31,8 +29,8 @@ object XmlTvParser {
                 val stopRaw = parser.getAttributeValue(null, "stop")
 
                 if (programmeChannel?.trim() == normalizedChannelId && startRaw != null && stopRaw != null) {
-                    val start = parseXmlTvTime(startRaw)
-                    val stop = parseXmlTvTime(stopRaw)
+                    val start = EpgTimeParsing.xmlTvEpochSeconds(startRaw)
+                    val stop = EpgTimeParsing.xmlTvEpochSeconds(stopRaw)
 
                     var title = ""
                     var description: String? = null
@@ -70,28 +68,5 @@ object XmlTvParser {
             .sortedBy { it.startEpochSeconds }
     }
 
-    private fun parseXmlTvTime(raw: String): Long? {
-        val normalized = raw
-            .trim()
-            .replace(Regex("""(\d{12,14})([+-]\d{4})$"""), "$1 $2")
 
-        val candidates = listOf(
-            "yyyyMMddHHmmss Z",
-            "yyyyMMddHHmm Z",
-            "yyyyMMddHHmmssX",
-            "yyyyMMddHHmmX",
-        )
-
-        for (pattern in candidates) {
-            try {
-                val formatter = SimpleDateFormat(pattern, Locale.US).apply {
-                    isLenient = false
-                }
-                return formatter.parse(normalized)?.time?.div(1000L)
-            } catch (_: Exception) {
-                Unit
-            }
-        }
-        return null
-    }
 }
