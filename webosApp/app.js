@@ -12,6 +12,10 @@
   const liveGrid = document.getElementById("live-grid");
   const liveCount = document.getElementById("live-count");
   const accountPanel = document.getElementById("account-panel");
+  const catalogPanel = document.getElementById("catalog-panel");
+  const catalogTitle = document.getElementById("catalog-title");
+  const catalogCount = document.getElementById("catalog-count");
+  const catalogGrid = document.getElementById("catalog-grid");
   const video = document.getElementById("tv-player");
   const player = window.ZyvioPlayer?.create(video);
 
@@ -19,6 +23,9 @@
   let currentPlaylist = null;
   let providerConfig = null;
   let liveChannels = [];
+  let movies = [];
+  let series = [];
+  let episodes = [];
   let activeSection = "home";
   let activePlayback = null;
 
@@ -41,7 +48,11 @@
     providerConfig = null;
     currentPlaylist = null;
     liveChannels = [];
+    movies = [];
+    series = [];
+    episodes = [];
     if (liveGrid) liveGrid.replaceChildren();
+    if (catalogGrid) catalogGrid.replaceChildren();
     if (livePanel) livePanel.hidden = true;
     if (accountPanel) accountPanel.hidden = true;
     if (appShell) appShell.hidden = true;
@@ -100,6 +111,7 @@
 
   function hidePanels() {
     if (livePanel) livePanel.hidden = true;
+    if (catalogPanel) catalogPanel.hidden = true;
     if (accountPanel) accountPanel.hidden = true;
   }
 
@@ -125,6 +137,16 @@
       return;
     }
 
+    if (section === "movies") {
+      loadMovies();
+      return;
+    }
+
+    if (section === "series") {
+      loadSeries();
+      return;
+    }
+
     if (section === "more") {
       if (accountPanel) accountPanel.hidden = false;
       setStatus("Plus");
@@ -132,13 +154,12 @@
       return;
     }
 
-    const label = {
-      movies: "Films",
-      series: "Séries",
-      favorites: "Favoris",
-    }[section] || section;
+    if (section === "favorites") {
+      setStatus("Favoris — disponible dans une prochaine phase webOS.");
+      return;
+    }
 
-    setStatus(label + " — disponible dans une prochaine phase webOS.");
+    setStatus(section);
   }
 
   async function restoreProvider(session) {
@@ -147,6 +168,9 @@
     currentPlaylist = restored.playlist;
     providerConfig = restored.providerConfig;
     liveChannels = [];
+    movies = [];
+    series = [];
+    episodes = [];
 
     if (!providerConfig) {
       setStatus("Aucune playlist active configurée sur ce compte.");
@@ -261,12 +285,140 @@
     }
   }
 
+  function renderCatalog(title, entries, kind) {
+    if (!catalogPanel || !catalogGrid) return;
+    hidePanels();
+    catalogPanel.hidden = false;
+    if (catalogTitle) catalogTitle.textContent = title;
+    if (catalogCount) {
+      catalogCount.textContent = entries.length + " élément" + (entries.length > 1 ? "s" : "");
+    }
+    catalogGrid.replaceChildren();
+
+    entries.slice(0, 80).forEach((entry) => {
+      const button = document.createElement("button");
+      button.className = "catalog-card";
+      button.dataset.focusable = "";
+      button.dataset.catalogKind = kind;
+      button.dataset.catalogId = entry.id;
+
+      const strong = document.createElement("strong");
+      strong.textContent = entry.title || entry.name || "Contenu";
+
+      const small = document.createElement("small");
+      if (kind === "episode") {
+        small.textContent = "S" + entry.season + "E" + entry.number;
+      } else {
+        small.textContent = entry.categoryName || "";
+      }
+
+      button.append(strong, small);
+      catalogGrid.append(button);
+    });
+
+    setTimeout(() => catalogGrid.querySelector("[data-focusable]")?.focus(), 0);
+  }
+
+  async function loadMovies() {
+    if (!providerConfig) {
+      setStatus("Aucun fournisseur configuré.");
+      return [];
+    }
+    if (providerConfig.type !== "xtream") {
+      renderCatalog("Films", [], "movie");
+      setStatus("Films indisponibles pour cette playlist M3U.");
+      return [];
+    }
+    if (movies.length) {
+      renderCatalog("Films", movies, "movie");
+      setStatus(movies.length + " films chargés.");
+      return movies;
+    }
+
+    setStatus("Chargement des films…");
+    try {
+      movies = await window.ZyvioProvider.loadMovies(providerConfig);
+      renderCatalog("Films", movies, "movie");
+      setStatus(movies.length + " films chargés.");
+      return movies;
+    } catch (error) {
+      hidePanels();
+      setStatus(error?.message || "Impossible de charger les films.");
+      return [];
+    }
+  }
+
+  async function loadSeries() {
+    if (!providerConfig) {
+      setStatus("Aucun fournisseur configuré.");
+      return [];
+    }
+    if (providerConfig.type !== "xtream") {
+      renderCatalog("Séries", [], "series");
+      setStatus("Séries indisponibles pour cette playlist M3U.");
+      return [];
+    }
+    if (series.length) {
+      renderCatalog("Séries", series, "series");
+      setStatus(series.length + " séries chargées.");
+      return series;
+    }
+
+    setStatus("Chargement des séries…");
+    try {
+      series = await window.ZyvioProvider.loadSeries(providerConfig);
+      renderCatalog("Séries", series, "series");
+      setStatus(series.length + " séries chargées.");
+      return series;
+    } catch (error) {
+      hidePanels();
+      setStatus(error?.message || "Impossible de charger les séries.");
+      return [];
+    }
+  }
+
+  function renderEpisodes(seriesItem, info) {
+    episodes = [];
+    Object.entries(info?.episodesBySeason || {}).forEach(([seasonKey, values]) => {
+      (Array.isArray(values) ? values : []).forEach((episode) => {
+        episodes.push({
+          ...episode,
+          season: Number(episode.season || seasonKey || 0),
+          seriesId: seriesItem.id,
+          seriesTitle: seriesItem.title,
+        });
+      });
+    });
+    episodes.sort((a, b) => a.season - b.season || a.number - b.number);
+    renderCatalog(seriesItem.title, episodes, "episode");
+  }
+
+  async function playCatalogStream(streamUrl, metadata) {
+    try {
+      await player.play(streamUrl);
+      activePlayback = metadata;
+      setStatus("Lecture : " + metadata.title);
+    } catch (_) {
+      activePlayback = null;
+      setStatus("Contenu indisponible.");
+    }
+  }
+
   async function playChannel(channel) {
     if (!channel) return;
     try {
       await player.play(channel.streamUrl);
       activePlayback = { type: "live", id: channel.id, title: channel.name };
-      setStatus("Lecture : " + channel.name);
+      let epgSuffix = "";
+      if (providerConfig?.type === "xtream") {
+        try {
+          const epg = await window.ZyvioProvider.loadXtreamShortEpg(providerConfig, channel.id, 6);
+          const now = Math.floor(Date.now() / 1000);
+          const current = epg.find((item) => item.start <= now && item.end > now);
+          if (current?.title) epgSuffix = " — " + current.title;
+        } catch (_) {}
+      }
+      setStatus("Lecture : " + channel.name + epgSuffix);
     } catch (_) {
       activePlayback = null;
       setStatus("Flux indisponible.");
@@ -348,6 +500,13 @@
         return;
       }
 
+      if (catalogPanel && !catalogPanel.hidden) {
+        catalogPanel.hidden = true;
+        activate("home");
+        setTimeout(() => document.querySelector('[data-section="home"]')?.focus(), 0);
+        return;
+      }
+
       if (accountPanel && !accountPanel.hidden) {
         accountPanel.hidden = true;
         activate("home");
@@ -371,7 +530,7 @@
   });
 
   document.addEventListener("click", async (event) => {
-    const target = event.target.closest("[data-section], [data-action], [data-channel-id]");
+    const target = event.target.closest("[data-section], [data-action], [data-channel-id], [data-catalog-kind]");
     if (!target) return;
 
     if (target.dataset.channelId) {
@@ -379,6 +538,44 @@
         (item) => String(item.id) === String(target.dataset.channelId)
       );
       await playChannel(channel);
+      return;
+    }
+
+    if (target.dataset.catalogKind === "movie") {
+      const movie = movies.find((item) => item.id === target.dataset.catalogId);
+      if (movie) {
+        await playCatalogStream(movie.streamUrl, {
+          type: "movie",
+          id: movie.id,
+          title: movie.title,
+        });
+      }
+      return;
+    }
+
+    if (target.dataset.catalogKind === "series") {
+      const seriesItem = series.find((item) => item.id === target.dataset.catalogId);
+      if (!seriesItem) return;
+      setStatus("Chargement : " + seriesItem.title + "…");
+      try {
+        const info = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id);
+        renderEpisodes(seriesItem, info);
+        setStatus(seriesItem.title + " — " + episodes.length + " épisode(s).");
+      } catch (_) {
+        setStatus("Détails de série indisponibles.");
+      }
+      return;
+    }
+
+    if (target.dataset.catalogKind === "episode") {
+      const episode = episodes.find((item) => item.id === target.dataset.catalogId);
+      if (episode?.streamUrl) {
+        await playCatalogStream(episode.streamUrl, {
+          type: "episode",
+          id: episode.id,
+          title: episode.seriesTitle + " — S" + episode.season + "E" + episode.number,
+        });
+      }
       return;
     }
 
