@@ -1073,7 +1073,7 @@ private struct PlaylistSettingsView: View {
                     }
                 }
             } else if playlists.isEmpty {
-                Text("Aucune playlist configurée.")
+                Text((Locale.current.language.languageCode?.identifier == "fr" ? "Aucune playlist configurée." : "No playlist configured."))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(playlists.sorted(by: { $0.priority < $1.priority })) { playlist in
@@ -1276,15 +1276,15 @@ private struct PlaylistEditView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    TextField("Nom de la playlist", text: $name)
+                    TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Nom de la playlist" : "Playlist name"), text: $name)
                         .textFieldStyle(.roundedBorder)
 
                     Divider()
 
                     if playlist.providerType == "xtream" {
-                        Text("Remplacer les identifiants Xtream")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Remplacer les identifiants Xtream" : "Replace Xtream credentials"))
                             .font(.headline)
-                        Text("Les identifiants actuels ne sont jamais affichés. Laissez ces champs vides pour conserver la source existante.")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Les identifiants actuels ne sont jamais affichés. Laissez ces champs vides pour conserver la source existante." : "Existing credentials are never shown. Leave these fields blank to keep the current source."))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
 
@@ -1303,9 +1303,9 @@ private struct PlaylistEditView: View {
                         SecureField("Mot de passe", text: $password)
                             .textFieldStyle(.roundedBorder)
                     } else {
-                        Text("Remplacer la source M3U / XMLTV")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Remplacer la source M3U / XMLTV" : "Replace M3U / XMLTV source"))
                             .font(.headline)
-                        Text("La source actuelle n’est pas affichée en clair. Laissez l’URL M3U vide pour conserver la source existante.")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "La source actuelle n’est pas affichée en clair. Laissez l’URL M3U vide pour conserver la source existante." : "The current source is not displayed in plain text. Leave the M3U URL blank to keep it."))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
 
@@ -1315,12 +1315,12 @@ private struct PlaylistEditView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        TextField("Nouvelle URL M3U", text: $m3uURL)
+                        TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Nouvelle URL M3U" : "New M3U URL"), text: $m3uURL)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
                             .textFieldStyle(.roundedBorder)
 
-                        TextField("Nouvelle URL XMLTV (optionnelle)", text: $xmlTvURL)
+                        TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Nouvelle URL XMLTV (optionnelle)" : "New XMLTV URL (optional)"), text: $xmlTvURL)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
                             .textFieldStyle(.roundedBorder)
@@ -1351,7 +1351,7 @@ private struct PlaylistEditView: View {
                 .padding(22)
             }
             .background(Color.black)
-            .navigationTitle("Modifier la playlist")
+            .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Modifier la playlist" : "Edit playlist"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Fermer") { dismiss() }
