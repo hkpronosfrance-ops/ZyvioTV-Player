@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackState
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioBase
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
@@ -595,7 +597,7 @@ private fun ErrorOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF05090C)),
+            .background(ZyvioBase),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -660,7 +662,7 @@ private fun UnavailableOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF05090C)),
+            .background(ZyvioBase),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -710,7 +712,7 @@ private fun TracksPanel(
             ),
         color = ZyvioSurface1,
     ) {
-        Column(Modifier.padding(24.dp)) {
+        Column(Modifier.padding(ZyvioSpace.s6)) {
             Text(
                 text = "Audio et sous-titres",
                 style = MaterialTheme.typography.titleLarge,
