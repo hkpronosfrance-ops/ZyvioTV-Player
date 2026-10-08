@@ -20,6 +20,9 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
+      - name: Validate Apple M3U catalog contract
+        run: python3 -m unittest discover -s tests -p 'test_apple_m3u_contract.py' -v
+
       - name: Build iPhone and iPad app
         run: |
           xcodebuild             -project iosApp/ZyvioTVPlayer.xcodeproj             -scheme ZyvioTVPlayer             -configuration Debug             -sdk iphonesimulator             -destination 'generic/platform=iOS Simulator'             CODE_SIGNING_ALLOWED=NO             build
