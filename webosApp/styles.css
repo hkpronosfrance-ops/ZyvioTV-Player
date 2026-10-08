@@ -59,3 +59,29 @@
 :root { --zyvio-bg: #050506; --zyvio-canvas: #0A0A0C; --zyvio-surface-1: #121215; --zyvio-surface-2: #1A1A1F; --zyvio-red: #E0102F; --zyvio-text: #F4F4F6; --zyvio-muted: #A9A9B3; --zyvio-focus: #F4F4F6; }
 :focus-visible, [data-focusable]:focus { outline: 4px solid var(--zyvio-focus); outline-offset: 4px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+
+/* Claude Design D6 — TV component interactions (reference: D6 Design System Final). */
+:root {
+  --zyvio-pressed: #B30C25;
+  --zyvio-red-tint: #2A0A10;
+  --zyvio-focus-ring: #F4F4F6;
+  --zyvio-motion-ease: cubic-bezier(.2, 0, 0, 1);
+}
+button, [data-focusable], .nav, .card, .primary {
+  transition: transform 150ms var(--zyvio-motion-ease), opacity 150ms var(--zyvio-motion-ease);
+}
+button:focus-visible, [data-focusable]:focus, .nav:focus, .card:focus, .primary:focus {
+  outline: 4px solid var(--zyvio-focus-ring);
+  outline-offset: 4px;
+  border-color: var(--zyvio-focus-ring);
+  transform: scale(1.02);
+}
+button:disabled, [data-focusable][aria-disabled="true"] {
+  opacity: .4;
+  cursor: default;
+}
+.primary:active, button:active { transform: scale(.97); }
+.primary:active { background-color: var(--zyvio-pressed); }
+@media (prefers-reduced-motion: reduce) {
+  button:focus-visible, [data-focusable]:focus, .nav:focus, .card:focus, .primary:focus { transform: none !important; }
+}
