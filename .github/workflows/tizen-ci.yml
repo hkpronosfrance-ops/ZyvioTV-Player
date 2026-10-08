@@ -44,6 +44,9 @@ jobs:
       - name: Validate parental playback state
         run: node tizenApp/player.test.cjs
 
+      - name: Validate multi-playlist library isolation
+        run: node tizenApp/multiplaylist.test.cjs
+
       - name: Validate Tizen manifest XML
         run: |
           python - <<'PY'
