@@ -31,7 +31,9 @@ class SeriesAutoNextResolver(
         val currentIndex = episodes.indexOfFirst { episode ->
             episode.id == currentContentId ||
                 (
-                    currentSeason == episode.season &&
+                    currentSeason != null &&
+                        currentEpisode != null &&
+                        currentSeason == episode.season &&
                         currentEpisode == episode.number
                     )
         }

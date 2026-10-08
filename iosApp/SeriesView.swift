@@ -427,11 +427,16 @@ private struct EpisodePlayerScreen: View {
     }
 
     private var nextEpisode: ProviderSeriesEpisodeDTO? {
-        guard let index = allEpisodes.firstIndex(where: { $0.id == episode.id }) else {
+        // Provider order can differ from chronological season/episode order.
+        let ordered = allEpisodes.sorted {
+            if $0.season != $1.season { return $0.season < $1.season }
+            return $0.number < $1.number
+        }
+        guard let index = ordered.firstIndex(where: { $0.id == episode.id }) else {
             return nil
         }
-        let nextIndex = allEpisodes.index(after: index)
-        return nextIndex < allEpisodes.endIndex ? allEpisodes[nextIndex] : nil
+        let nextIndex = ordered.index(after: index)
+        return nextIndex < ordered.endIndex ? ordered[nextIndex] : nil
     }
 
     var body: some View {
