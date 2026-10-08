@@ -1,6 +1,6 @@
 package fr.zyviotv.player.ui.home
 
-import fr.zyviotv.player.data.catalog.AndroidXtreamSeriesDetailLoader
+import fr.zyviotv.player.data.catalog.AndroidSeriesDetailLoader
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
 import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
@@ -8,7 +8,6 @@ import fr.zyviotv.player.shared.catalog.CatalogSeries
 import fr.zyviotv.player.shared.sync.PlaylistSecret
 import fr.zyviotv.player.shared.sync.ProgressContentType
 import fr.zyviotv.player.shared.sync.SyncedWatchProgress
-import fr.zyviotv.player.shared.xtream.XtreamCredentials
 
 data class HomeNextEpisode(
     val playlistId: String,
@@ -36,16 +35,7 @@ class HomeNextEpisodeResolver(
         if (episodeProgress.isEmpty()) return emptyList()
 
         val secret = cloudRepository.getPlaylistSecret(playlistId).getOrNull()
-            as? PlaylistSecret.Xtream
             ?: return emptyList()
-
-        val loader = AndroidXtreamSeriesDetailLoader(
-            XtreamCredentials(
-                serverUrl = secret.serverUrl,
-                username = secret.username,
-                password = secret.password,
-            ),
-        )
 
         val candidateSeriesIds = episodeProgress
             .mapNotNull { it.seriesId }
@@ -60,7 +50,7 @@ class HomeNextEpisodeResolver(
                 // Do not suggest skipping an episode that is still in progress.
                 if (!latestForSeries.completed) continue
 
-                val result = loader.load(seriesId)
+                val result = AndroidSeriesDetailLoader.load(secret, seriesId)
                 val detail = (result as? SeriesDetailLoadResult.Success)?.detail ?: continue
                 val episodes = detail.episodes
                 if (episodes.isEmpty()) continue
