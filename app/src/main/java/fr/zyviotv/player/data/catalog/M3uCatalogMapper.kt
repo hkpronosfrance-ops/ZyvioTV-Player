@@ -68,12 +68,7 @@ object M3uCatalogMapper {
                 }
 
                 Kind.Episode -> {
-                    val identity = parseEpisode(entry.name) ?: EpisodeIdentity(
-                        seriesTitle = entry.name.trim().ifBlank { "Série" },
-                        season = 1,
-                        episode = 1,
-                        episodeTitle = null,
-                    )
+                    val identity = parseEpisode(entry.name) ?: continue
                     val seriesKey = identity.seriesTitle.lowercase()
                     val categoryId = group?.let { ensureCategory(seriesCategories, "m3u-series", it).id }
                     val builder = seriesBuilders.getOrPut(seriesKey) {
@@ -134,12 +129,12 @@ object M3uCatalogMapper {
     private fun classify(entry: M3uEntry): Kind {
         if (parseEpisode(entry.name) != null) return Kind.Episode
         val group = normalize(entry.groupTitle)
-        if (SERIES_TOKENS.any(group::contains)) return Kind.Episode
+        // A category label alone does not establish a season or episode.
         if (MOVIE_TOKENS.any(group::contains)) return Kind.Movie
         if (LIVE_TOKENS.any(group::contains)) return Kind.Live
 
         val url = entry.streamUrl.lowercase()
-        if ("/series/" in url) return Kind.Episode
+        // A /series/ URL alone does not establish an episode identity.
         if ("/movie/" in url || "/vod/" in url) return Kind.Movie
         if ("/live/" in url) return Kind.Live
 
