@@ -71,20 +71,57 @@
     const DEVICE_UID_STORAGE_KEY = "zyviotv.tizen.device_uid.v1";
     const RUNTIME_CACHE_PREFIX = "zyviotv.tizen.parental_runtime.v1.";
 
+    function stableHash(value) {
+        const text = String(value || "");
+        const seeds = [2166136261, 2246822519, 3266489917, 668265263];
+        return seeds.map((seed, index) => {
+            let hash = seed >>> 0;
+            for (let i = 0; i < text.length; i += 1) {
+                hash ^= text.charCodeAt(i) + index * 17;
+                hash = Math.imul(hash, 16777619) >>> 0;
+                hash ^= hash >>> 13;
+            }
+            return hash.toString(16).padStart(8, "0");
+        }).join("");
+    }
+
+    function hardwareDerivedDeviceUid() {
+        try {
+            const rawDuid = String(window.webapis?.productinfo?.getDuid?.() || "").trim();
+            if (!rawDuid) return null;
+            return "tizen-duid-" + stableHash("zyviotv-player:" + rawDuid);
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function randomDeviceUid() {
+        const random = window.crypto?.getRandomValues
+            ? Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
+                .map((value) => value.toString(16).padStart(2, "0"))
+                .join("")
+            : Math.random().toString(36).slice(2) + Date.now().toString(36);
+        return "tizen-" + random.slice(0, 48);
+    }
+
     function stableDeviceUid() {
+        const hardwareUid = hardwareDerivedDeviceUid();
+
         try {
             const existing = localStorage.getItem(DEVICE_UID_STORAGE_KEY);
+            if (hardwareUid) {
+                if (existing !== hardwareUid) {
+                    localStorage.setItem(DEVICE_UID_STORAGE_KEY, hardwareUid);
+                }
+                return hardwareUid;
+            }
             if (existing) return existing;
-            const random = window.crypto?.getRandomValues
-                ? Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
-                    .map((value) => value.toString(16).padStart(2, "0"))
-                    .join("")
-                : Math.random().toString(36).slice(2) + Date.now().toString(36);
-            const uid = "tizen-" + random.slice(0, 48);
+
+            const uid = randomDeviceUid();
             localStorage.setItem(DEVICE_UID_STORAGE_KEY, uid);
             return uid;
         } catch (_) {
-            return "tizen-session";
+            return hardwareUid || randomDeviceUid();
         }
     }
 
