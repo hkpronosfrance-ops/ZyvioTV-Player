@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">ZyvioTV Player</string>
+    <string name="nav_back">Back</string>
+    <string name="playlist_title">Playlists</string>
+    <string name="action_add">Add</string>
+    <string name="action_refresh">Refresh</string>
+</resources>

@@ -26,6 +26,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.res.stringResource
+import fr.zyviotv.player.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,11 +91,11 @@ fun PlaylistSettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = onBack) {
-                Text("Retour")
+                Text(stringResource(R.string.nav_back))
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Playlists",
+                    text = stringResource(R.string.playlist_title),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                 )
@@ -103,10 +105,10 @@ fun PlaylistSettingsScreen(
                 )
             }
             TextButton(onClick = onAddPlaylist) {
-                Text("Ajouter")
+                Text(stringResource(R.string.action_add))
             }
             IconButton(onClick = { reload() }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Actualiser")
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.action_refresh))
             }
         }
 
