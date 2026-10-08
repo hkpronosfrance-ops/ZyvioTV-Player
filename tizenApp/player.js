@@ -7,11 +7,51 @@
       this.usingAvPlay = Boolean(window.webapis?.avplay);
       this.currentUrl = null;
       this.paused = false;
+      this.buffering = false;
+      this.ended = false;
+      this.buffering = false;
+      this.ended = false;
+
+      if (this.usingAvPlay) {
+        try {
+          window.webapis.avplay.setListener({
+            onbufferingstart: () => { this.buffering = true; },
+            onbufferingcomplete: () => { this.buffering = false; },
+            onstreamcompleted: () => {
+              this.ended = true;
+              this.buffering = false;
+              this.paused = false;
+            },
+            onerror: () => {
+              this.buffering = false;
+            },
+          });
+        } catch (_) {}
+      } else if (this.video) {
+        ["waiting", "stalled"].forEach((eventName) => {
+          this.video.addEventListener(eventName, () => { this.buffering = true; });
+        });
+        ["playing", "canplay", "canplaythrough"].forEach((eventName) => {
+          this.video.addEventListener(eventName, () => {
+            this.buffering = false;
+            this.ended = false;
+          });
+        });
+        this.video.addEventListener("ended", () => {
+          this.ended = true;
+          this.buffering = false;
+        });
+        this.video.addEventListener("error", () => {
+          this.buffering = false;
+        });
+      }
     }
 
     async play(url) {
       this.stop();
       this.currentUrl = url;
+      this.buffering = true;
+      this.ended = false;
 
       if (this.usingAvPlay) {
         const avplay = window.webapis.avplay;
@@ -23,6 +63,8 @@
         });
         avplay.play();
         this.paused = false;
+        this.buffering = false;
+        this.ended = false;
         return;
       }
 
@@ -31,6 +73,7 @@
       this.video.hidden = false;
       await this.video.play();
       this.paused = false;
+      this.ended = false;
     }
 
     pause() {
@@ -51,6 +94,24 @@
         this.video.play().catch(() => {});
       }
       this.paused = false;
+      this.ended = false;
+    }
+
+    isPlaying() {
+      if (!this.currentUrl || this.paused || this.buffering || this.ended) return false;
+
+      if (this.usingAvPlay) {
+        try {
+          return window.webapis.avplay.getState() === "PLAYING";
+        } catch (_) {
+          return false;
+        }
+      }
+
+      if (!this.video) return false;
+      return !this.video.paused &&
+        !this.video.ended &&
+        this.video.readyState >= 3;
     }
 
     togglePause() {
