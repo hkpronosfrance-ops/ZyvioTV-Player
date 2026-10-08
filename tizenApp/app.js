@@ -1973,9 +1973,16 @@
 
     document.addEventListener("click", async (event) => {
         const target = event.target.closest(
-            "[data-section], [data-action], [data-catalog-kind], [data-profile-id], [data-home-kind], [data-device-id]"
+            "[data-section], [data-action], [data-catalog-kind], [data-profile-id], [data-home-kind], [data-home-see-all], [data-device-id]"
         );
         if (!target) return;
+
+        if (target.dataset.homeKind || target.dataset.homeSeeAll) {
+            lastHomeFocus = {
+                kind: target.dataset.homeKind || "see-all",
+                id: target.dataset.homeId || target.dataset.homeSeeAll || "",
+            };
+        }
 
         if (target.dataset.deviceId) {
             const device = devices.find((item) => item.id === target.dataset.deviceId);
@@ -2001,6 +2008,49 @@
             );
             if (item) {
                 resolveProgressPlayback(item).catch(() => setStatus("Contenu indisponible."));
+            }
+            return;
+        }
+
+        if (target.dataset.homeKind === "next-episode") {
+            const episode = nextEpisodes.find(
+                (item) => String(item.id) === String(target.dataset.homeId)
+            );
+            if (episode?.streamUrl) {
+                startTrackedPlayback(episode.streamUrl, {
+                    contentType: "episode",
+                    contentId: episode.id,
+                    title: episode.seriesTitle + " — S" + episode.season + "E" + episode.number,
+                    seriesId: episode.seriesId,
+                    seasonNumber: episode.season,
+                    episodeNumber: episode.number,
+                    artworkUrl: episode.poster || null,
+                }).catch(() => setStatus("Épisode indisponible."));
+            }
+            return;
+        }
+
+        if (target.dataset.homeKind === "recent-movie" ||
+            (target.dataset.homeKind === "same-category" && target.dataset.homeType === "movie")) {
+            const movie = movies.find((item) => String(item.id) === String(target.dataset.homeId));
+            if (movie) {
+                startTrackedPlayback(movie.streamUrl, {
+                    contentType: "movie",
+                    contentId: movie.id,
+                    title: movie.title,
+                    artworkUrl: movie.poster || null,
+                }).catch(() => setStatus("Film indisponible."));
+            }
+            return;
+        }
+
+        if (target.dataset.homeKind === "recent-series" ||
+            (target.dataset.homeKind === "same-category" && target.dataset.homeType === "series")) {
+            const seriesItem = series.find((item) => String(item.id) === String(target.dataset.homeId));
+            if (seriesItem) {
+                window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id)
+                    .then((info) => renderEpisodes(seriesItem, info))
+                    .catch(() => setStatus("Détails de série indisponibles."));
             }
             return;
         }
@@ -2063,6 +2113,53 @@
             return;
         }
 
+        if (target.dataset.homeSeeAll) {
+            const kind = target.dataset.homeSeeAll;
+            if (kind === "continue") {
+                const entries = watchProgress
+                    .filter((item) =>
+                        String(item.playlist_id || "") === String(currentPlaylist?.id || "") &&
+                        !item.completed &&
+                        Number(item.position_ms || 0) >= 10_000
+                    )
+                    .map((item) => ({
+                        id: item.content_id,
+                        title: item.title,
+                        categoryName: item.content_type === "episode" ? "Épisode" : "Film",
+                        favoriteType: item.content_type,
+                    }));
+                renderCatalog("Reprendre la lecture", entries, "home-progress");
+            } else if (kind === "favorites") {
+                await loadFavorites();
+            } else if (kind === "recent-movies") {
+                renderCatalog("Films récents", recentByAdded(movies), "movie");
+            } else if (kind === "recent-series") {
+                renderCatalog("Séries récentes", recentByAdded(series), "series");
+            } else if (kind === "next-episodes") {
+                renderCatalog("Épisodes suivants", nextEpisodes.map((item) => ({
+                    ...item,
+                    title: item.seriesTitle + " — S" + item.season + "E" + item.number,
+                })), "episode");
+            } else if (kind === "recent-live") {
+                await loadProviderLive();
+            } else if (kind === "same-category") {
+                const last = lastViewedCatalogItem();
+                if (last) {
+                    const source = last.type === "movie" ? movies : series;
+                    renderCatalog(
+                        last.item.categoryName || "Même catégorie",
+                        source.filter((item) =>
+                            item.categoryId === last.item.categoryId &&
+                            String(item.id) !== String(last.item.id) &&
+                            !isLockedItem(last.type, item)
+                        ),
+                        last.type
+                    );
+                }
+            }
+            return;
+        }
+
         if (target.dataset.action === "verify-pin") {
             verifyPendingPin();
             return;
@@ -2116,6 +2213,18 @@
                 );
             } else {
                 signOut();
+            }
+            return;
+        }
+
+        if (target.dataset.catalogKind === "home-progress") {
+            const item = watchProgress.find(
+                (entry) =>
+                    String(entry.playlist_id || "") === String(currentPlaylist?.id || "") &&
+                    String(entry.content_id) === String(target.dataset.catalogId)
+            );
+            if (item) {
+                resolveProgressPlayback(item).catch(() => setStatus("Contenu indisponible."));
             }
             return;
         }
@@ -2198,6 +2307,13 @@
             hideCatalog();
             activateSection("home");
             renderHomeShelves();
+            setTimeout(() => {
+                if (!lastHomeFocus) return;
+                const selectorValue = lastHomeFocus.kind === "see-all"
+                    ? '[data-home-see-all="' + lastHomeFocus.id + '"]'
+                    : '[data-home-kind="' + lastHomeFocus.kind + '"][data-home-id="' + lastHomeFocus.id + '"]';
+                document.querySelector(selectorValue)?.focus();
+            }, 0);
             return;
         }
 
