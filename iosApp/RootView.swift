@@ -144,10 +144,10 @@ private struct ParentalPinRecoveryView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 18) {
-                Text("Réinitialiser le code PIN")
+                Text((Locale.current.language.languageCode?.identifier == "fr" ? "Réinitialiser le code PIN" : "Reset parental PIN"))
                     .font(.largeTitle.bold())
 
-                Text("Créez un nouveau code PIN parental à 4 chiffres.")
+                Text((Locale.current.language.languageCode?.identifier == "fr" ? "Créez un nouveau code PIN parental à 4 chiffres." : "Create a new 4-digit parental PIN."))
                     .foregroundStyle(.secondary)
 
                 if loading {
@@ -158,14 +158,14 @@ private struct ParentalPinRecoveryView: View {
                         .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
                 } else if linkReady {
-                    SecureField("Nouveau PIN", text: $newPin)
+                    SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "Nouveau PIN" : "New PIN"), text: $newPin)
                         .keyboardType(.numberPad)
                         .onChange(of: newPin) { _, value in
                             newPin = String(value.filter(\.isNumber).prefix(4))
                         }
                         .textFieldStyle(.roundedBorder)
 
-                    SecureField("Confirmer le PIN", text: $confirmPin)
+                    SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "Confirmer le PIN" : "Confirm PIN"), text: $confirmPin)
                         .keyboardType(.numberPad)
                         .onChange(of: confirmPin) { _, value in
                             confirmPin = String(value.filter(\.isNumber).prefix(4))
@@ -178,7 +178,7 @@ private struct ParentalPinRecoveryView: View {
                         if busy {
                             ProgressView()
                         } else {
-                            Text("Enregistrer le nouveau PIN")
+                            Text((Locale.current.language.languageCode?.identifier == "fr" ? "Enregistrer le nouveau PIN" : "Save new PIN"))
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -191,7 +191,7 @@ private struct ParentalPinRecoveryView: View {
                     )
 
                     if newPin.count == 4, confirmPin.count == 4, newPin != confirmPin {
-                        Text("Les deux codes PIN ne correspondent pas.")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Les deux codes PIN ne correspondent pas." : "The PINs do not match."))
                             .font(.footnote)
                             .foregroundStyle(.red)
                     }
