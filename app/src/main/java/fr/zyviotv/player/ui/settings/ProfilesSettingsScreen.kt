@@ -472,7 +472,7 @@ private fun ProfileRow(
         shape = RoundedCornerShape(16.dp),
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(ZyvioSpace.s4),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -488,7 +488,7 @@ private fun ProfileRow(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 12.dp),
+                    .padding(start = ZyvioSpace.s3),
             ) {
                 Text(
                     text = item.name,
