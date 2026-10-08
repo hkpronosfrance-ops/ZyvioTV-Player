@@ -235,3 +235,53 @@ The Tizen client now derives its device UID from Samsung ProductInfo DUID when a
 - if localStorage is unavailable, the app still avoids the old shared `tizen-session` collision fallback
 
 No database migration is required.
+
+
+## Canonical Home parity
+
+The Samsung Tizen Home now follows the shared canonical shelf order:
+1. Continue Watching
+2. Next Episodes
+3. Recent Channels
+4. Favorites
+5. Recent Movies
+6. Recent Series
+7. Same category as the most recently watched title
+
+Additional behavior:
+- empty shelves are hidden
+- max 20 items per shelf
+- See All appears only when a shelf exceeds 20 items
+- recent Movies/Series are sorted by Xtream added/last_modified
+- Next Episodes are resolved from real provider episode lists and profile watch progress
+- same-category recommendations exclude the last watched title
+- Home interactions open/play the correct content
+- Home focus is restored when returning from content
+- active-playlist isolation remains enforced
+
+M3U and Xtream now share the same product contract:
+- Live TV is supported
+- Movies are supported
+- Series are supported
+- seasons and episodes are reconstructed from M3U metadata/title patterns when using M3U
+- series patterns include S01E02, 1x02 and Saison 1 Episode 2 conventions
+- group-title and stream URL hints distinguish Live, VOD and Series when explicit episode notation is absent
+- ambiguous M3U entries fall back to Live rather than being silently dropped
+- Home shelves work with both providers and hide only genuinely empty sections
+
+No database migration is required.
+
+
+## Full M3U catalog parity
+
+ZYVIOTV product rule: M3U and Xtream Codes API must both expose the complete available catalog on every platform.
+
+For Tizen, the M3U provider now:
+- parses the playlist once and caches it per source URL
+- creates stable content IDs from playlist metadata and stream URL
+- separates Live, Movies and Series
+- groups series episodes into series/seasons
+- exposes generic `loadSeriesInfo` for both Xtream and M3U
+- supports M3U content in Home, Favorites, progress and resume flows
+
+XMLTV remains the EPG source when supplied for M3U.

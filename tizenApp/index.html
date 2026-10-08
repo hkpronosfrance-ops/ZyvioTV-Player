@@ -113,23 +113,38 @@
             </section>
 
             <section id="continue-shelf" class="shelf" hidden>
-                <h2>Reprendre la lecture</h2>
+                <div class="shelf-header"><h2>Reprendre la lecture</h2><button class="shelf-more" data-focusable data-home-see-all="continue" hidden>Voir tout</button></div>
                 <div id="continue-cards" class="cards wide"></div>
             </section>
 
+            <section id="next-episodes-shelf" class="shelf" hidden>
+                <div class="shelf-header"><h2>Épisodes suivants</h2><button class="shelf-more" data-focusable data-home-see-all="next-episodes" hidden>Voir tout</button></div>
+                <div id="next-episode-cards" class="cards wide"></div>
+            </section>
+
             <section id="recent-channels-shelf" class="shelf" hidden>
-                <h2>Chaînes récentes</h2>
+                <div class="shelf-header"><h2>Chaînes récentes</h2><button class="shelf-more" data-focusable data-home-see-all="recent-live" hidden>Voir tout</button></div>
                 <div id="recent-channel-cards" class="cards wide"></div>
             </section>
 
             <section id="favorites-shelf" class="shelf" hidden>
-                <h2>Favoris</h2>
+                <div class="shelf-header"><h2>Favoris</h2><button class="shelf-more" data-focusable data-home-see-all="favorites" hidden>Voir tout</button></div>
                 <div id="favorite-cards" class="cards wide"></div>
             </section>
 
-            <section id="history-shelf" class="shelf" hidden>
-                <h2>Récemment regardé</h2>
-                <div id="history-cards" class="cards wide"></div>
+            <section id="recent-movies-shelf" class="shelf" hidden>
+                <div class="shelf-header"><h2>Films récents</h2><button class="shelf-more" data-focusable data-home-see-all="recent-movies" hidden>Voir tout</button></div>
+                <div id="recent-movie-cards" class="cards wide"></div>
+            </section>
+
+            <section id="recent-series-shelf" class="shelf" hidden>
+                <div class="shelf-header"><h2>Séries récentes</h2><button class="shelf-more" data-focusable data-home-see-all="recent-series" hidden>Voir tout</button></div>
+                <div id="recent-series-cards" class="cards wide"></div>
+            </section>
+
+            <section id="same-category-shelf" class="shelf" hidden>
+                <div class="shelf-header"><h2 id="same-category-title">Dans la même catégorie</h2><button class="shelf-more" data-focusable data-home-see-all="same-category" hidden>Voir tout</button></div>
+                <div id="same-category-cards" class="cards wide"></div>
             </section>
 
             <section id="more-panel" class="catalog-panel" hidden>

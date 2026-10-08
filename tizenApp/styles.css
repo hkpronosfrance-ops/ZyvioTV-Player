@@ -550,3 +550,7 @@ nav {
     font-weight: 800;
     letter-spacing: .8px;
 }
+
+.shelf-header{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.shelf-more{border:0;background:transparent;color:#aaa;font-weight:800;font-size:14px;padding:10px 14px;border-radius:10px}
+.shelf-more:focus{outline:2px solid #fff;color:#fff;background:#171717}
