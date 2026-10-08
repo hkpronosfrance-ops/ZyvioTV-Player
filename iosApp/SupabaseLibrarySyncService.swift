@@ -2149,11 +2149,12 @@ actor SupabaseProviderCatalogService {
     private func m3uKind(_ entry: AppleM3uEntry) -> String {
         if m3uEpisode(entry.name) != nil { return "series" }
         let group = m3uKey(entry.groupTitle ?? "")
-        if ["series", "serie", "tv show", "episodes", "saison"].contains(where: group.contains) { return "series" }
+        // A series without an identifiable episode must not disappear from the catalog.
+        if ["series", "serie", "tv show", "episodes", "saison"].contains(where: group.contains) { return "live" }
         if ["vod", "movie", "film", "cinema", "cinéma"].contains(where: group.contains) { return "movie" }
         if ["live", "tv", "channels", "chaine", "sport", "news", "info"].contains(where: group.contains) { return "live" }
         let path = entry.streamURL.path.lowercased()
-        if path.contains("/series/") { return "series" }
+        if path.contains("/series/") { return "live" }
         if path.contains("/movie/") || path.contains("/vod/") { return "movie" }
         if path.contains("/live/") { return "live" }
         if ["mkv", "mp4", "avi", "mov", "m4v", "webm"].contains(entry.streamURL.pathExtension.lowercased()) {
