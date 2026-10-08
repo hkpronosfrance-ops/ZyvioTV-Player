@@ -37,6 +37,7 @@ class SupabaseLibrarySyncRepository(
         withContext(Dispatchers.IO) {
             runCatching {
                 val session = sessionStore.load() ?: error("Session absente.")
+                val userId = fetchCurrentUserId(session.accessToken) ?: error("Compte utilisateur introuvable.")
                 val response = request(
                     path = "/rest/v1/player_favorites?profile_id=eq." + encoded(profileId) + "&select=profile_id,playlist_id,content_type,content_id,title,artwork_url&order=updated_at.desc",
                     method = "GET",
@@ -104,6 +105,8 @@ class SupabaseLibrarySyncRepository(
         contentId: String,
     ): SyncResult = withContext(Dispatchers.IO) {
         val session = sessionStore.load() ?: return@withContext SyncResult.Failure("Session absente.")
+        val userId = fetchCurrentUserId(session.accessToken)
+            ?: return@withContext SyncResult.Failure("Compte utilisateur introuvable.")
         val path = "/rest/v1/player_favorites?profile_id=eq." + encoded(profileId) +
             "&playlist_id=eq." + encoded(playlistId) +
             "&content_type=eq." + encoded(contentType.wireValue) +
@@ -122,6 +125,7 @@ class SupabaseLibrarySyncRepository(
         withContext(Dispatchers.IO) {
             runCatching {
                 val session = sessionStore.load() ?: error("Session absente.")
+                val userId = fetchCurrentUserId(session.accessToken) ?: error("Compte utilisateur introuvable.")
                 val safeLimit = limit.coerceIn(1, 200)
                 val path = "/rest/v1/player_watch_progress?profile_id=eq." + encoded(profileId) + "&select=profile_id,playlist_id,content_type,content_id,title,series_id,season_number,episode_number,artwork_url,position_ms,duration_ms,completed&order=last_watched_at.desc&limit=" + safeLimit
                 val response = request(
@@ -205,6 +209,8 @@ class SupabaseLibrarySyncRepository(
         contentId: String,
     ): SyncResult = withContext(Dispatchers.IO) {
         val session = sessionStore.load() ?: return@withContext SyncResult.Failure("Session absente.")
+        val userId = fetchCurrentUserId(session.accessToken)
+            ?: return@withContext SyncResult.Failure("Compte utilisateur introuvable.")
         val path = "/rest/v1/player_watch_progress?profile_id=eq." + encoded(profileId) +
             "&playlist_id=eq." + encoded(playlistId) +
             "&content_type=eq." + encoded(contentType.wireValue) +
@@ -225,6 +231,7 @@ class SupabaseLibrarySyncRepository(
     ): Result<List<SyncedLiveHistory>> = withContext(Dispatchers.IO) {
         runCatching {
             val session = sessionStore.load() ?: error("Session absente.")
+                val userId = fetchCurrentUserId(session.accessToken) ?: error("Compte utilisateur introuvable.")
             val safeLimit = limit.coerceIn(1, 100)
             val response = request(
                 path = "/rest/v1/player_live_history?profile_id=eq." +
