@@ -761,18 +761,26 @@
     }
 
 
-    function favoriteKey(type, id) {
-        return type + ":" + String(id);
+    function libraryKey(playlistId, type, id) {
+        return String(playlistId || "") + ":" + String(type || "") + ":" + String(id || "");
     }
 
-    function isFavorite(type, id) {
-        const key = favoriteKey(type, id);
-        return favorites.some((item) => favoriteKey(item.content_type, item.content_id) === key);
+    function favoriteKey(itemOrType, id = null, playlistId = null) {
+        if (typeof itemOrType === "object" && itemOrType) {
+            return libraryKey(itemOrType.playlist_id, itemOrType.content_type, itemOrType.content_id);
+        }
+        return libraryKey(playlistId || currentPlaylist?.id, itemOrType, id);
     }
 
-    function progressFor(type, id) {
+    function isFavorite(type, id, playlistId = null) {
+        const key = favoriteKey(type, id, playlistId);
+        return favorites.some((item) => favoriteKey(item) === key);
+    }
+
+    function progressFor(type, id, playlistId = null) {
+        const key = libraryKey(playlistId || currentPlaylist?.id, type, id);
         return watchProgress.find(
-            (item) => item.content_type === type && String(item.content_id) === String(id)
+            (item) => libraryKey(item.playlist_id, item.content_type, item.content_id) === key
         ) || null;
     }
 
@@ -818,8 +826,8 @@
                     payload
                 );
                 favorites = favorites.filter(
-                    (item) => favoriteKey(item.content_type, item.content_id) !==
-                        favoriteKey(kind, source.id)
+                    (item) => favoriteKey(item) !==
+                        favoriteKey(kind, source.id, currentPlaylist.id)
                 );
                 setStatus(title + " retiré des favoris.");
             } else {
@@ -1079,10 +1087,8 @@
                 payload
             );
             watchProgress = watchProgress.filter(
-                (item) => !(
-                    item.content_type === payload.contentType &&
-                    String(item.content_id) === String(payload.contentId)
-                )
+                (item) => libraryKey(item.playlist_id, item.content_type, item.content_id) !==
+                    libraryKey(payload.playlistId, payload.contentType, payload.contentId)
             );
             watchProgress.unshift({
                 playlist_id: payload.playlistId,
@@ -1113,7 +1119,7 @@
         await player.play(url);
         activePlayback = { ...metadata, trackProgress: true };
         runtimeBlocked = false;
-        const previous = progressFor(metadata.contentType, metadata.contentId);
+        const previous = progressFor(metadata.contentType, metadata.contentId, currentPlaylist?.id);
         const resumeMs = Number(previous?.position_ms || 0);
         const completed = Boolean(previous?.completed);
         if (!completed && resumeMs >= 10_000) {
@@ -1183,6 +1189,8 @@
         button.dataset.focusable = "";
         button.dataset.homeKind = kind;
         button.dataset.homeId = String(item.id || item.content_id || "");
+        button.dataset.homeType = String(item.content_type || (kind === "recent-live" ? "live" : ""));
+        button.dataset.homePlaylist = String(item.playlist_id || currentPlaylist?.id || "");
 
         const title = document.createElement("span");
         title.textContent = item.title || "Contenu";
@@ -1232,6 +1240,8 @@
                 {
                     id: item.channel_id,
                     title: item.channel_name,
+                    content_type: "live",
+                    playlist_id: item.playlist_id,
                 },
                 "recent-live",
                 "TV en direct"
@@ -1396,7 +1406,8 @@
                     }
                 );
                 liveHistory = liveHistory.filter(
-                    (item) => String(item.channel_id) !== String(channel.id)
+                    (item) => libraryKey(item.playlist_id, "live", item.channel_id) !==
+                        libraryKey(currentPlaylist.id, "live", channel.id)
                 );
                 liveHistory.unshift({
                     playlist_id: currentPlaylist.id,
