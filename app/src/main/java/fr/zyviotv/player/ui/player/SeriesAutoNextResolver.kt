@@ -21,7 +21,11 @@ class SeriesAutoNextResolver(
 
         val detail = (AndroidSeriesDetailLoader.load(secret, seriesId) as? SeriesDetailLoadResult.Success)?.detail
             ?: return null
-        val episodes = detail.episodes
+        // Provider responses may return episodes in arbitrary order; auto-next must
+        // follow season/episode numbering, never the raw API response order.
+        val episodes = detail.episodes.sortedWith(
+            compareBy<SeriesEpisodeSource> { it.season }.thenBy { it.number }
+        )
         if (episodes.isEmpty()) return null
 
         val currentIndex = episodes.indexOfFirst { episode ->
