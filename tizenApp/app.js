@@ -1215,7 +1215,11 @@
 
     function renderHomeShelves() {
         const resumable = watchProgress
-            .filter((item) => !item.completed && Number(item.position_ms || 0) >= 10_000)
+            .filter((item) =>
+                String(item.playlist_id || "") === String(currentPlaylist?.id || "") &&
+                !item.completed &&
+                Number(item.position_ms || 0) >= 10_000
+            )
             .slice(0, 20);
         clearHomeContainer(continueCards);
         resumable.forEach((item) => {
@@ -1230,6 +1234,7 @@
 
         const recentChannels = liveHistory
             .filter((item) => {
+                if (String(item.playlist_id || "") !== String(currentPlaylist?.id || "")) return false;
                 if (!isChildProfile()) return true;
                 return liveChannels.some((channel) => channel.id === String(item.channel_id));
             })
@@ -1251,6 +1256,7 @@
 
         const favoriteItems = favorites
             .filter((item) => {
+                if (String(item.playlist_id || "") !== String(currentPlaylist?.id || "")) return false;
                 if (!isChildProfile() || item.content_type !== "live") return true;
                 return liveChannels.some((channel) => channel.id === String(item.content_id));
             })
@@ -1263,7 +1269,9 @@
         });
         if (favoritesShelf) favoritesShelf.hidden = favoriteItems.length === 0;
 
-        const recent = watchProgress.slice(0, 20);
+        const recent = watchProgress
+            .filter((item) => String(item.playlist_id || "") === String(currentPlaylist?.id || ""))
+            .slice(0, 20);
         clearHomeContainer(historyCards);
         recent.forEach((item) => {
             const label = item.content_type === "episode" && item.season_number != null
@@ -1764,8 +1772,13 @@
         }
 
         if (target.dataset.homeKind === "continue" || target.dataset.homeKind === "history") {
+            const targetKey = libraryKey(
+                target.dataset.homePlaylist,
+                target.dataset.homeType,
+                target.dataset.homeId
+            );
             const item = watchProgress.find(
-                (entry) => String(entry.content_id) === String(target.dataset.homeId)
+                (entry) => libraryKey(entry.playlist_id, entry.content_type, entry.content_id) === targetKey
             );
             if (item) {
                 resolveProgressPlayback(item).catch(() => setStatus("Contenu indisponible."));
@@ -1774,6 +1787,10 @@
         }
 
         if (target.dataset.homeKind === "recent-live") {
+            if (String(target.dataset.homePlaylist || "") !== String(currentPlaylist?.id || "")) {
+                setStatus("Cette chaîne appartient à une autre playlist.");
+                return;
+            }
             if (!liveChannels.length) await loadProviderLive();
             const channel = liveChannels.find(
                 (entry) => String(entry.id) === String(target.dataset.homeId)
@@ -1787,8 +1804,13 @@
         }
 
         if (target.dataset.homeKind === "favorite") {
+            const targetKey = libraryKey(
+                target.dataset.homePlaylist,
+                target.dataset.homeType,
+                target.dataset.homeId
+            );
             const item = favorites.find(
-                (entry) => String(entry.content_id) === String(target.dataset.homeId)
+                (entry) => libraryKey(entry.playlist_id, entry.content_type, entry.content_id) === targetKey
             );
             if (item) {
                 if (item.content_type === "movie") {
