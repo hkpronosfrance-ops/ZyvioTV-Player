@@ -9,8 +9,6 @@
       this.paused = false;
       this.buffering = false;
       this.ended = false;
-      this.buffering = false;
-      this.ended = false;
 
       if (this.usingAvPlay) {
         try {
@@ -71,7 +69,12 @@
       if (!this.video) throw new Error("Lecteur indisponible.");
       this.video.src = url;
       this.video.hidden = false;
-      await this.video.play();
+      try {
+        await this.video.play();
+      } catch (error) {
+        this.stop();
+        throw error;
+      }
       this.paused = false;
       this.ended = false;
     }
@@ -170,6 +173,8 @@
       }
       this.currentUrl = null;
       this.paused = false;
+      this.buffering = false;
+      this.ended = false;
     }
   }
 
