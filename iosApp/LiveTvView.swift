@@ -25,7 +25,7 @@ struct LiveTvView: View {
         NavigationStack {
             Group {
                 if loading {
-                    ProgressView("Chargement des chaînes…").tint(.red)
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement des chaînes…" : "Loading channels…")).tint(.red)
                 } else if let error {
                     ContentUnavailableView {
                         Label("TV indisponible", systemImage: "exclamationmark.triangle")
@@ -62,10 +62,10 @@ struct LiveTvView: View {
                 }
             }
             .background(Color.black)
-            .navigationTitle("TV en direct")
+            .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "TV en direct" : "Live TV"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Guide TV") { showGuide = true }
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Guide TV" : "TV guide")) { showGuide = true }
                 }
             }
             .sheet(isPresented: $showGuide) {
@@ -87,7 +87,7 @@ struct LiveTvView: View {
     private var categoryBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack {
-                Button("Toutes") {
+                Button((Locale.current.language.languageCode?.identifier == "fr" ? "Toutes" : "All")) {
                     selectedCategory = nil
                     selectedId = channels.first?.id
                 }
@@ -162,7 +162,7 @@ struct LiveTvView: View {
                         Button {
                             playing = channel
                         } label: {
-                            Label("Regarder", systemImage: "play.fill")
+                            Label((Locale.current.language.languageCode?.identifier == "fr" ? "Regarder" : "Watch"), systemImage: "play.fill")
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
@@ -171,7 +171,7 @@ struct LiveTvView: View {
                 .frame(minHeight: sizeClass == .regular ? 360 : 260)
 
                 if let current = now(for: channel.id) {
-                    Text("Maintenant")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Maintenant" : "Now"))
                         .foregroundStyle(.red)
                         .bold()
 
@@ -187,7 +187,7 @@ struct LiveTvView: View {
                     ProgressView(value: progress(current))
                         .tint(.red)
                 } else {
-                    Text("Programme en cours indisponible")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Programme en cours indisponible" : "Current program unavailable"))
                         .foregroundStyle(.secondary)
                 }
 
@@ -332,14 +332,14 @@ private struct GuideList: View {
                             HStack {
                                 Text(channel.name).bold()
                                 Spacer()
-                                Button("Regarder") { onTune(channel) }
+                                Button((Locale.current.language.languageCode?.identifier == "fr" ? "Regarder" : "Watch")) { onTune(channel) }
                                     .buttonStyle(.borderedProminent)
                                     .tint(.red)
                             }
 
                             Text(
                                 current.map { "Maintenant · \($0.title)" }
-                                    ?? "Programme en cours indisponible"
+                                    ?? (Locale.current.language.languageCode?.identifier == "fr" ? "Programme en cours indisponible" : "Current program unavailable")
                             )
 
                             if let next {
@@ -355,10 +355,10 @@ private struct GuideList: View {
                 .padding(16)
             }
             .background(Color.black)
-            .navigationTitle("Guide TV")
+            .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Guide TV" : "TV guide"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Fermer") { dismiss() }
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Fermer" : "Close")) { dismiss() }
                 }
             }
         }

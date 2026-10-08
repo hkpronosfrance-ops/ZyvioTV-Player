@@ -18,7 +18,7 @@ struct SeriesView: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    ProgressView("Chargement des séries…")
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement des séries…" : "Loading series…"))
                         .tint(.red)
                 } else if let errorMessage {
                     ContentUnavailableView {
@@ -36,7 +36,7 @@ struct SeriesView: View {
                     ContentUnavailableView(
                         "Aucune série disponible",
                         systemImage: "rectangle.stack",
-                        description: Text("Cette playlist ne contient pas de catalogue Séries.")
+                        description: Text((Locale.current.language.languageCode?.identifier == "fr" ? "Cette playlist ne contient pas de catalogue Séries." : "This playlist has no series catalog."))
                     )
                 } else {
                     ScrollView {
@@ -189,7 +189,7 @@ struct SeriesDetailView: View {
     var body: some View {
         Group {
             if isLoading {
-                ProgressView("Chargement des épisodes…")
+                ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement des épisodes…" : "Loading episodes…"))
                     .tint(.red)
             } else if let errorMessage {
                 ContentUnavailableView {
@@ -478,20 +478,20 @@ private struct EpisodePlayerScreen: View {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
-                    Text("Lecture impossible")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Lecture impossible" : "Playback unavailable"))
                         .font(.title2.bold())
                     Text(errorMessage)
                         .foregroundStyle(.secondary)
 
                     if let nextEpisode {
-                        Button("Épisode suivant") {
+                        Button((Locale.current.language.languageCode?.identifier == "fr" ? "Épisode suivant" : "Next episode")) {
                             onPlayNext(nextEpisode)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
                     }
 
-                    Button("Fermer") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Fermer" : "Close")) {
                         dismiss()
                     }
                     .buttonStyle(.bordered)
