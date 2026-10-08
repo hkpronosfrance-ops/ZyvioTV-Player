@@ -149,3 +149,29 @@ The LG webOS client now also supports:
 - device registration refresh on sign-in/session restore
 
 No database migration is required; existing device/account/service-state tables and RLS policies are reused.
+
+
+## Canonical Home parity
+
+The LG webOS Home now follows the shared canonical shelf order:
+1. Continue Watching
+2. Next Episodes
+3. Recent Channels
+4. Favorites
+5. Recent Movies
+6. Recent Series
+7. Same category as the most recently watched title
+
+Additional behavior:
+- parental filtering is applied before Home rendering
+- empty shelves are hidden
+- each shelf is capped at 20 items
+- See All appears only when a shelf has more than 20 items
+- recent Movies/Series are sorted by Xtream added/last_modified timestamps
+- Next Episodes are resolved from real provider episode lists and watch progress
+- same-category recommendations exclude the last watched title
+- Home card actions open/play the correct content
+- focus is restored when returning to Home
+- M3U remains limited to compatible Home shelves
+
+No database migration is required.
