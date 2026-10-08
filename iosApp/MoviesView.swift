@@ -18,7 +18,7 @@ struct MoviesView: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    ProgressView("Chargement des films…")
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement des films…" : "Loading movies…"))
                         .tint(.red)
                 } else if let errorMessage {
                     ContentUnavailableView {
@@ -36,7 +36,7 @@ struct MoviesView: View {
                     ContentUnavailableView(
                         "Aucun film disponible",
                         systemImage: "film",
-                        description: Text("Cette playlist ne contient pas de catalogue Films.")
+                        description: Text((Locale.current.language.languageCode?.identifier == "fr" ? "Cette playlist ne contient pas de catalogue Films." : "This playlist has no movie catalog."))
                     )
                 } else {
                     ScrollView {
@@ -220,11 +220,11 @@ struct MoviePlayerScreen: View {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
-                    Text("Lecture impossible")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Lecture impossible" : "Playback unavailable"))
                         .font(.title2.bold())
                     Text(errorMessage)
                         .foregroundStyle(.secondary)
-                    Button("Fermer") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Fermer" : "Close")) {
                         dismiss()
                     }
                     .buttonStyle(.borderedProminent)
