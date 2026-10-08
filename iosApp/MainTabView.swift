@@ -10,11 +10,12 @@ private enum AppSection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
+        let isEnglish = Locale.current.language.languageCode?.identifier != "fr"
         switch self {
-        case .home: return "Accueil"
+        case .home: return isEnglish ? "Home" : "Accueil"
         case .live: return "TV"
-        case .movies: return "Films"
-        case .series: return "Séries"
+        case .movies: return isEnglish ? "Movies" : "Films"
+        case .series: return isEnglish ? "Series" : "Séries"
         case .account: return "Plus"
         }
     }
@@ -70,31 +71,31 @@ struct MainTabView: View {
                 TabView(selection: $selectedSection) {
                     sectionView(.home)
                         .tabItem {
-                            Label("Accueil", systemImage: "house.fill")
+                            Label(AppSection.home.title, systemImage: "house.fill")
                         }
                         .tag(AppSection.home)
 
                     sectionView(.live)
                         .tabItem {
-                            Label("TV", systemImage: "tv.fill")
+                            Label(AppSection.live.title, systemImage: "tv.fill")
                         }
                         .tag(AppSection.live)
 
                     sectionView(.movies)
                         .tabItem {
-                            Label("Films", systemImage: "film.fill")
+                            Label(AppSection.movies.title, systemImage: "film.fill")
                         }
                         .tag(AppSection.movies)
 
                     sectionView(.series)
                         .tabItem {
-                            Label("Séries", systemImage: "rectangle.stack.fill")
+                            Label(AppSection.series.title, systemImage: "rectangle.stack.fill")
                         }
                         .tag(AppSection.series)
 
                     sectionView(.account)
                         .tabItem {
-                            Label("Plus", systemImage: "ellipsis.circle.fill")
+                            Label(AppSection.account.title, systemImage: "ellipsis.circle.fill")
                         }
                         .tag(AppSection.account)
                 }
