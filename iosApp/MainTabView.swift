@@ -815,13 +815,13 @@ private struct DevicesSettingsView: View {
                     }
                 }
             } else if devices.isEmpty {
-                Text("Aucun appareil enregistré.")
+                Text((Locale.current.language.languageCode?.identifier == "fr" ? "Aucun appareil enregistré." : "No devices registered."))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(devices) { device in
                     VStack(alignment: .leading, spacing: 10) {
                         if editingId == device.id {
-                            TextField("Nom de l’appareil", text: $editingName)
+                            TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Nom de l’appareil" : "Device name"), text: $editingName)
                                 .textFieldStyle(.roundedBorder)
 
                             HStack {
@@ -938,7 +938,7 @@ private struct DevicesSettingsView: View {
             parts.append("v\(appVersion)")
         }
         if device.deviceUid == currentDeviceUid {
-            parts.append("Cet appareil")
+            parts.append((Locale.current.language.languageCode?.identifier == "fr" ? "Cet appareil" : "This device"))
         }
         return parts.joined(separator: " · ")
     }
@@ -955,7 +955,7 @@ private struct ParentalPinRecoveryRequestView: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                Text("PIN oublié")
+                Text((Locale.current.language.languageCode?.identifier == "fr" ? "PIN oublié" : "Forgot PIN"))
                     .font(.largeTitle.bold())
 
                 Text("Un lien sécurisé sera envoyé à l’adresse e-mail de votre compte. Le lien est valable pour une réauthentification récente.")
@@ -984,7 +984,7 @@ private struct ParentalPinRecoveryRequestView: View {
                     if busy {
                         ProgressView()
                     } else {
-                        Text("Envoyer le lien")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Envoyer le lien" : "Send link"))
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -999,7 +999,7 @@ private struct ParentalPinRecoveryRequestView: View {
             }
             .padding(22)
             .background(Color.black)
-            .navigationTitle("Récupération du PIN")
+            .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Récupération du PIN" : "PIN recovery"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Fermer") { dismiss() }
@@ -1017,7 +1017,7 @@ private struct ParentalPinRecoveryRequestView: View {
         do {
             email = try await SupabaseAuthService.shared.currentUserEmail()
         } catch {
-            message = "Erreur : impossible de récupérer l’adresse e-mail du compte."
+            message = (Locale.current.language.languageCode?.identifier == "fr" ? "Erreur : impossible de récupérer l’adresse e-mail du compte." : "Error: Unable to retrieve your account email address.")
         }
     }
 
@@ -1027,7 +1027,7 @@ private struct ParentalPinRecoveryRequestView: View {
         defer { busy = false }
         do {
             try await SupabaseAuthService.shared.requestParentalPinRecovery(email: email)
-            message = "Lien envoyé. Ouvrez l’e-mail sur cet appareil pour créer un nouveau PIN."
+            message = (Locale.current.language.languageCode?.identifier == "fr" ? "Lien envoyé. Ouvrez l’e-mail sur cet appareil pour créer un nouveau PIN." : "Link sent. Open the email on this device to create a new PIN.")
         } catch {
             message = "Erreur : \(error.localizedDescription)"
         }
