@@ -235,3 +235,33 @@ The Tizen client now derives its device UID from Samsung ProductInfo DUID when a
 - if localStorage is unavailable, the app still avoids the old shared `tizen-session` collision fallback
 
 No database migration is required.
+
+
+## Canonical Home parity
+
+The Samsung Tizen Home now follows the shared canonical shelf order:
+1. Continue Watching
+2. Next Episodes
+3. Recent Channels
+4. Favorites
+5. Recent Movies
+6. Recent Series
+7. Same category as the most recently watched title
+
+Additional behavior:
+- empty shelves are hidden
+- max 20 items per shelf
+- See All appears only when a shelf exceeds 20 items
+- recent Movies/Series are sorted by Xtream added/last_modified
+- Next Episodes are resolved from real provider episode lists and profile watch progress
+- same-category recommendations exclude the last watched title
+- Home interactions open/play the correct content
+- Home focus is restored when returning from content
+- active-playlist isolation remains enforced
+
+M3U scope is intentionally unchanged:
+- Live is supported
+- Movies/Series catalog calls return no entries for M3U
+- unsupported Home catalog shelves stay hidden
+
+No database migration is required.
