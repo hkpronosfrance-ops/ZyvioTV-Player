@@ -1,5 +1,6 @@
 package fr.zyviotv.player.ui
 
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -2010,7 +2011,7 @@ private fun AdaptiveShell(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(16.dp),
+                    .padding(ZyvioSpace.s4),
             ) {
                 content()
             }
