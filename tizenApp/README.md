@@ -188,3 +188,18 @@ bash tizenApp/package-wgt.sh "<security-profile>" ["<device-name>"]
 The signing profile and certificates remain local and must never be committed.
 
 Physical Samsung hardware validation and Samsung Seller Office submission remain external release steps.
+
+
+## Parental runtime playback-state hardening
+
+Tizen parental screen-time accounting now uses the real playback state:
+- AVPlay `PLAYING` counts
+- paused playback does not count
+- buffering/stalled playback does not count
+- completed playback does not count
+- HTML5 fallback follows the same rule
+- the 30-second parental heartbeat sends `playing=false` outside true playback
+- local offline fallback usage only increments while playback is truly active
+- trusted runtime cache now persists a wall-clock anchor for safer app-restart fallback
+
+A dedicated CI regression test covers HTML5 and Samsung AVPlay pause/buffer/end states.

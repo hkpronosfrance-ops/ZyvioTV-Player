@@ -134,6 +134,7 @@
             scheduleWindows: Array.isArray(state.schedule_windows) ? state.schedule_windows : [],
             trustedEpochMs: serverNow,
             trustedPerformanceMs: Number(performance.now() || 0),
+            trustedWallClockMs: Date.now(),
             consumedSeconds: consumed,
             usageDayUtc: day,
             dailyLimitMinutes: state.daily_limit_minutes == null ? null : Number(state.daily_limit_minutes),
@@ -158,10 +159,19 @@
 
     function trustedRuntimeNowMs(cache = parentalRuntime) {
         if (!cache) return 0;
+
         const currentPerf = Number(performance.now() || 0);
         const anchorPerf = Number(cache.trustedPerformanceMs || 0);
-        const delta = currentPerf >= anchorPerf ? currentPerf - anchorPerf : 0;
-        return Number(cache.trustedEpochMs || 0) + delta;
+        if (anchorPerf > 0 && currentPerf >= anchorPerf) {
+            return Number(cache.trustedEpochMs || 0) + (currentPerf - anchorPerf);
+        }
+
+        const wallAnchor = Number(cache.trustedWallClockMs || 0);
+        const wallNow = Date.now();
+        const wallDelta = wallAnchor > 0 && wallNow >= wallAnchor
+            ? Math.min(wallNow - wallAnchor, 24 * 60 * 60 * 1000)
+            : 0;
+        return Number(cache.trustedEpochMs || 0) + wallDelta;
     }
 
     function effectiveRuntimeLimitMinutes(cache = parentalRuntime) {
@@ -990,7 +1000,7 @@
         if (!activePlayback) return;
 
         const key = activeContentKey(activePlayback);
-        const playing = !runtimeBlocked;
+        const playing = !runtimeBlocked && Boolean(player?.isPlaying?.());
         try {
             const heartbeat = await window.ZyvioCloud.parentalHeartbeat(
                 currentSession,

@@ -41,6 +41,9 @@ jobs:
       - name: Validate playback adapter syntax
         run: node --check tizenApp/player.js
 
+      - name: Validate parental playback state
+        run: node tizenApp/player.test.cjs
+
       - name: Validate Tizen manifest XML
         run: |
           python - <<'PY'
