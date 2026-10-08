@@ -33,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.catalog.D6MediaDetailHero
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -127,38 +129,27 @@ private fun SeriesDetailReady(
         .filter { it.season == selectedSeason }
         .sortedBy { it.number }
 
-    val currentEpisode = series.episodes.firstOrNull { it.state == EpisodeWatchState.InProgress }
-        ?: series.episodes.firstOrNull { it.state == EpisodeWatchState.Next }
-        ?: series.episodes.firstOrNull { it.state == EpisodeWatchState.Unwatched }
+    val playableEpisodes = remember(series.episodes) {
+        series.episodes.sortedWith(compareBy({ it.season }, { it.number }))
+    }
+    val currentEpisode = playableEpisodes.firstOrNull { it.state == EpisodeWatchState.InProgress }
+        ?: playableEpisodes.firstOrNull { it.state == EpisodeWatchState.Next }
+        ?: playableEpisodes.firstOrNull { it.state == EpisodeWatchState.Unwatched }
+    LaunchedEffect(seasons, selectedSeason) {
+        if (seasons.isNotEmpty() && selectedSeason !in seasons) {
+            selectedSeason = seasons.first()
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (profile == DeviceProfile.Mobile) 220.dp else 300.dp),
-            color = ZyvioSurface1,
-            shape = RoundedCornerShape(20.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(ZyvioSurface2),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = series.title,
-                    modifier = Modifier.padding(20.dp),
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        D6MediaDetailHero(
+            title = series.title,
+            height = if (profile != DeviceProfile.Mobile) 300.dp else 220.dp,
+        )
 
         Spacer(Modifier.height(20.dp))
 
