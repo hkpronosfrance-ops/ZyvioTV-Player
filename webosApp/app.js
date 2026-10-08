@@ -1716,7 +1716,11 @@
 
     if (event.key === "ColorF0Red" || event.keyCode === 403) {
       event.preventDefault();
-      await toggleFavoriteForFocused();
+      if (document.activeElement?.closest?.("[data-device-id]")) {
+        await disconnectFocusedDevice();
+      } else {
+        await toggleFavoriteForFocused();
+      }
       return;
     }
 
@@ -1737,6 +1741,21 @@
         return;
       }
 
+      if (deviceEditScreen && !deviceEditScreen.hidden) {
+        closeDeviceRename();
+        return;
+      }
+
+      if (systemScreen && !systemScreen.hidden) {
+        if (systemState.type === "maintenance_planned") {
+          plannedMaintenanceDismissed = true;
+          systemScreen.hidden = true;
+          showApp();
+          return;
+        }
+        return;
+      }
+
       if (await stopPlayback()) return;
 
       if (livePanel && !livePanel.hidden) {
@@ -1750,6 +1769,13 @@
         catalogPanel.hidden = true;
         activate("home");
         setTimeout(() => document.querySelector('[data-section="home"]')?.focus(), 0);
+        return;
+      }
+
+      if (devicesPanel && !devicesPanel.hidden) {
+        devicesPanel.hidden = true;
+        if (accountPanel) accountPanel.hidden = false;
+        setTimeout(() => accountPanel?.querySelector("[data-focusable]")?.focus(), 0);
         return;
       }
 
@@ -1797,8 +1823,14 @@
   });
 
   document.addEventListener("click", async (event) => {
-    const target = event.target.closest("[data-section], [data-action], [data-channel-id], [data-catalog-kind], [data-profile-id], [data-home-kind]");
+    const target = event.target.closest("[data-section], [data-action], [data-channel-id], [data-catalog-kind], [data-profile-id], [data-home-kind], [data-device-id]");
     if (!target) return;
+
+    if (target.dataset.deviceId) {
+      const device = devices.find((item) => item.id === target.dataset.deviceId);
+      if (device) openDeviceRename(device);
+      return;
+    }
 
     if (target.dataset.profileId) {
       try {
@@ -1960,6 +1992,33 @@
       return;
     }
 
+    if (target.dataset.action === "devices") {
+      await loadDevices();
+      return;
+    }
+
+    if (target.dataset.action === "device-save") {
+      await saveDeviceRename();
+      return;
+    }
+
+    if (target.dataset.action === "device-cancel") {
+      closeDeviceRename();
+      return;
+    }
+
+    if (target.dataset.action === "system-continue") {
+      plannedMaintenanceDismissed = true;
+      if (systemScreen) systemScreen.hidden = true;
+      showApp();
+      return;
+    }
+
+    if (target.dataset.action === "system-signout") {
+      await signOut();
+      return;
+    }
+
     if (target.dataset.action === "verify-pin") {
       await verifyPendingPin();
       return;
@@ -1999,5 +2058,8 @@
       syncActivePlayback();
       parentalRuntimeTick();
     }, 30_000);
+    setInterval(() => {
+      if (currentSession) refreshSystemState();
+    }, 5 * 60_000);
   });
 })();
