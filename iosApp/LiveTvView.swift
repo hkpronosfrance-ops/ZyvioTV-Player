@@ -192,7 +192,7 @@ struct LiveTvView: View {
                 }
 
                 if let next = next(for: channel.id) {
-                    Text("À suivre : \(next.title)")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "À suivre : " : "Up next: ") + next.title)
                         .foregroundStyle(.secondary)
                 }
 
@@ -343,7 +343,7 @@ private struct GuideList: View {
                             )
 
                             if let next {
-                                Text("À suivre · \(next.title)")
+                                Text((Locale.current.language.languageCode?.identifier == "fr" ? "À suivre · " : "Up next · ") + next.title)
                                     .foregroundStyle(.secondary)
                             }
                         }
