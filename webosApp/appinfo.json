@@ -9,5 +9,6 @@
   "largeIcon": "icon-large.png",
   "bgColor": "#070707",
   "transparent": false,
-  "disableBackHistoryAPI": true
+  "disableBackHistoryAPI": true,
+  "requiredACG": []
 }
