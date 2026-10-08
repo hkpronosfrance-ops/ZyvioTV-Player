@@ -57,7 +57,7 @@ fun CacheSettingsScreen(
                 enabled = !busy,
                 onClick = onBack,
             ) {
-                Text("Retour")
+                Text(stringResource(R.string.nav_back))
             }
             Column(Modifier.weight(1f)) {
                 Text(
