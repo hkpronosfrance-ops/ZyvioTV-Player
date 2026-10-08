@@ -33,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -134,8 +135,10 @@ private fun SeriesDetailReady(
     val currentEpisode = playableEpisodes.firstOrNull { it.state == EpisodeWatchState.InProgress }
         ?: playableEpisodes.firstOrNull { it.state == EpisodeWatchState.Next }
         ?: playableEpisodes.firstOrNull { it.state == EpisodeWatchState.Unwatched }
-    if (seasons.isNotEmpty() && selectedSeason !in seasons) {
-        selectedSeason = seasons.first()
+    LaunchedEffect(seasons, selectedSeason) {
+        if (seasons.isNotEmpty() && selectedSeason !in seasons) {
+            selectedSeason = seasons.first()
+        }
     }
 
     Column(
