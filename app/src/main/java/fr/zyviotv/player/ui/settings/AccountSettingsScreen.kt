@@ -72,7 +72,7 @@ fun AccountSettingsScreen(
             modifier = Modifier.fillMaxWidth(0.6f),
             onClick = onOpenPlaylists,
         ) {
-            Text("Playlists")
+            Text(stringResource(R.string.playlist_title))
         }
 
         Spacer(Modifier.height(12.dp))

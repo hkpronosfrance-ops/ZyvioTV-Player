@@ -149,10 +149,10 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(enabled = !busy, onClick = onBack) { Text("Retour") }
+            TextButton(enabled = !busy, onClick = onBack) { Text(stringResource(R.string.nav_back)) }
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Contrôle parental",
+                    text = stringResource(R.string.settings_parental),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                 )
@@ -309,7 +309,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
             selectedProfile?.let { profile ->
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    text = "Restrictions de ${profile.name} · propre au profil",
+                    text = stringResource(R.string.parental_profile_restrictions, profile.name),
                     fontWeight = FontWeight.Bold,
                 )
 

@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import fr.zyviotv.player.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -526,7 +528,7 @@ fun ZyvioTVPlayerApp(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Impossible de charger vos profils.",
+                            text = stringResource(R.string.profile_load_error),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
@@ -534,7 +536,7 @@ fun ZyvioTVPlayerApp(
                         androidx.compose.material3.Button(
                             onClick = { profilesReloadToken += 1 },
                         ) {
-                            Text("Réessayer")
+                            Text(stringResource(R.string.device_retry))
                         }
                     }
                 }
@@ -2041,7 +2043,7 @@ private fun FoundationScreen(title: String, profile: DeviceProfile) {
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "Écran ${profile.name.lowercase()} en préparation.",
+            text = stringResource(R.string.profile_screen_preparing, profile.name.lowercase()),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
