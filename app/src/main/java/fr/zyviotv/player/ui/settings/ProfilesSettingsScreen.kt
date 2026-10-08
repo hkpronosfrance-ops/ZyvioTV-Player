@@ -109,7 +109,7 @@ fun ProfilesSettingsScreen(
         error = null
 
         repository.ensurePrimaryProfile().getOrElse {
-            error = "Impossible de préparer le profil principal."
+            error = context.getString(R.string.profile_prepare_error)
             loading = false
             return@LaunchedEffect
         }
@@ -130,7 +130,7 @@ fun ProfilesSettingsScreen(
                 enabled = !busy,
                 onClick = onBack,
             ) {
-                Text("Retour")
+                Text(stringResource(R.string.nav_back))
             }
             Column(Modifier.weight(1f)) {
                 Text(
@@ -189,11 +189,11 @@ fun ProfilesSettingsScreen(
                         preferences.setDefaultProfileId(item.id)
                         preferences.setSelectedProfileId(item.id)
                         onProfileSelectionChanged()
-                        message = "Profil par défaut enregistré sur cet appareil."
+                        message = context.getString(R.string.profile_default_saved)
                     } else {
                         defaultProfileId = null
                         preferences.setDefaultProfileId(null)
-                        message = "Profil par défaut désactivé sur cet appareil."
+                        message = context.getString(R.string.profile_default_disabled)
                     }
                 },
                 onSave = {
@@ -202,7 +202,7 @@ fun ProfilesSettingsScreen(
                         it.id != item.id && it.name.equals(cleanName, ignoreCase = true)
                     }
                     if (duplicate) {
-                        editError = "Ce nom est déjà utilisé par un autre profil."
+                        editError = context.getString(R.string.profile_duplicate_name)
                     } else {
                         scope.launch {
                             busy = true
@@ -225,7 +225,7 @@ fun ProfilesSettingsScreen(
                                     if (preferences.selectedProfileId() == item.id) {
                                         onProfileSelectionChanged()
                                     }
-                                    message = "Profil modifié."
+                                    message = context.getString(R.string.profile_updated)
                                     reload()
                                 }
                                 is ProfileWriteResult.Failure -> {
@@ -341,7 +341,7 @@ fun ProfilesSettingsScreen(
                         onClick = {
                             val cleanName = name.trim()
                             if (profiles.any { it.name.equals(cleanName, ignoreCase = true) }) {
-                                message = "Ce nom est déjà utilisé par un autre profil."
+                                message = context.getString(R.string.profile_duplicate_name)
                             } else {
                                 scope.launch {
                                     busy = true
@@ -425,7 +425,7 @@ fun ProfilesSettingsScreen(
                             preferences.setDefaultProfileId(item.id)
                             preferences.setSelectedProfileId(item.id)
                             onProfileSelectionChanged()
-                            message = "Profil par défaut enregistré sur cet appareil."
+                            message = context.getString(R.string.profile_default_saved)
                         },
                         onDelete = {
                             scope.launch {
