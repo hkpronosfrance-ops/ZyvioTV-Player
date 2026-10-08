@@ -88,7 +88,7 @@ struct HomeView: View {
             .padding(horizontalSizeClass == .regular ? 32 : 20)
             .padding(.vertical, 20)
         }
-        .background(Color.black)
+        .background(ZyvioDesign.Palette.base)
         .preferredColorScheme(.dark)
         .refreshable {
             await reload()
@@ -124,7 +124,7 @@ private struct HomeHero: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             LinearGradient(
-                colors: [Color.red.opacity(0.30), Color.black],
+                colors: [ZyvioDesign.Palette.brand.opacity(0.30), ZyvioDesign.Palette.base],
                 startPoint: .leading,
                 endPoint: .trailing
             )
