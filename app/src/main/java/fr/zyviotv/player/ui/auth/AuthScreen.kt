@@ -38,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import fr.zyviotv.player.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -314,9 +316,9 @@ private fun AuthFormCard(
 
             Text(
                 text = when (mode) {
-                    AuthMode.SignIn -> "Bon retour"
-                    AuthMode.SignUp -> "Créer votre compte"
-                    AuthMode.ResetPassword -> "Réinitialiser le mot de passe"
+                    AuthMode.SignIn -> stringResource(R.string.auth_welcome)
+                    AuthMode.SignUp -> stringResource(R.string.auth_create_account)
+                    AuthMode.ResetPassword -> stringResource(R.string.auth_reset_password)
                 },
                 modifier = Modifier.padding(top = 28.dp),
                 style = MaterialTheme.typography.headlineMedium,
@@ -325,9 +327,9 @@ private fun AuthFormCard(
 
             Text(
                 text = when (mode) {
-                    AuthMode.SignIn -> "Connectez-vous pour retrouver vos playlists et votre progression."
-                    AuthMode.SignUp -> "Un seul compte pour retrouver ZYVIOTV sur tous vos appareils."
-                    AuthMode.ResetPassword -> "Saisissez votre adresse e-mail pour recevoir les instructions."
+                    AuthMode.SignIn -> stringResource(R.string.auth_signin_description)
+                    AuthMode.SignUp -> stringResource(R.string.auth_signup_description)
+                    AuthMode.ResetPassword -> stringResource(R.string.auth_reset_description)
                 },
                 modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
                 color = ZyvioTextSecondary,
@@ -339,7 +341,7 @@ private fun AuthFormCard(
                 onValueChange = onEmailChange,
                 enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Adresse e-mail") },
+                label = { Text(stringResource(R.string.auth_email)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 shape = RoundedCornerShape(12.dp),
@@ -353,7 +355,7 @@ private fun AuthFormCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
-                    label = { Text("Mot de passe") },
+                    label = { Text(stringResource(R.string.auth_password)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -369,7 +371,7 @@ private fun AuthFormCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
-                    label = { Text("Confirmer le mot de passe") },
+                    label = { Text(stringResource(R.string.auth_confirm_password)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -413,9 +415,9 @@ private fun AuthFormCard(
                 } else {
                     Text(
                         text = when (mode) {
-                            AuthMode.SignIn -> "Se connecter"
-                            AuthMode.SignUp -> "Créer mon compte"
-                            AuthMode.ResetPassword -> "Envoyer le lien"
+                            AuthMode.SignIn -> stringResource(R.string.auth_signin)
+                            AuthMode.SignUp -> stringResource(R.string.auth_signup_submit)
+                            AuthMode.ResetPassword -> stringResource(R.string.auth_send_link)
                         },
                         fontWeight = FontWeight.Bold,
                     )
@@ -428,7 +430,7 @@ private fun AuthFormCard(
                     onClick = { onModeChange(AuthMode.ResetPassword) },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) {
-                    Text("Mot de passe oublié ?")
+                    Text(stringResource(R.string.auth_forgot_password))
                 }
             }
 
@@ -453,7 +455,7 @@ private fun AuthFormCard(
                             enabled = !isLoading,
                             onClick = { onModeChange(AuthMode.SignUp) },
                         ) {
-                            Text("S'inscrire")
+                            Text(stringResource(R.string.auth_signup))
                         }
                     }
                 }
@@ -467,7 +469,7 @@ private fun AuthFormCard(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                     ) {
-                        Text("Retour à la connexion")
+                        Text(stringResource(R.string.auth_back_to_signin))
                     }
                 }
             }
