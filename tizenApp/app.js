@@ -1,5 +1,7 @@
 (() => {
     "use strict";
+    const tvLanguage = ((navigator.language || "fr").split("-")[0].toLowerCase());
+    const tvText = (fr, en) => tvLanguage === "fr" ? fr : en;
 
     const focusableSelector = "[data-focusable]";
     const status = document.getElementById("status");
@@ -449,7 +451,7 @@
 
         currentProfile = profile;
         persistProfileId(profile.id);
-        setProfileStatus("Chargement de " + profile.name + "…");
+        setProfileStatus(tvText("Chargement de ", "Loading ") + profile.name + "…");
 
         const [
             loadedFavorites,
@@ -645,7 +647,7 @@
 
     async function loadDevices() {
         if (!currentSession) return;
-        setStatus("Chargement des appareils…");
+        setStatus(tvText("Chargement des appareils…", "Loading devices…"));
         try {
             devices = await window.ZyvioCloud.listDevices(currentSession);
             renderDevices();
@@ -703,7 +705,7 @@
         }
 
         if (!providerConfig) {
-            setStatus("Aucune playlist active configurée sur ce compte.");
+            setStatus(tvText("Aucune playlist active configurée sur ce compte.", "No active playlist configured for this account."));
             return;
         }
 
@@ -987,7 +989,7 @@
         if (resumeExistingPlayback) player?.pause();
         runtimeBlocked = true;
         showPinPrompt(
-            reason || "Lecture bloquée",
+            reason || tvText("Lecture bloquée", "Playback blocked"),
             "Saisissez le PIN parental pour continuer ce contenu pendant 30 minutes.",
             async () => {
                 runtimeBlocked = false;
@@ -1173,7 +1175,7 @@
             player.seekToMs(resumeMs);
             setStatus("Reprise : " + metadata.title);
         } else {
-            setStatus("Lecture : " + metadata.title);
+            setStatus(tvText("Lecture : ", "Playing: ") + metadata.title);
         }
         return true;
     }
@@ -1541,13 +1543,13 @@
             setStatus("Aucun fournisseur configuré.");
             return;
         }
-        setStatus("Chargement des films…");
+        setStatus(tvText("Chargement des films…", "Loading movies…"));
         try {
             movies = filterForProfile(
                 "movie",
                 await window.ZyvioProvider.loadMovies(providerConfig)
             );
-            renderCatalog("Films", movies, "movie");
+            renderCatalog(tvText("Films", "Movies"), movies, "movie");
             setStatus(movies.length ? movies.length + " films chargés." : "Aucun film disponible.");
         } catch (error) {
             hideCatalog();
@@ -1560,14 +1562,14 @@
             setStatus("Aucun fournisseur configuré.");
             return;
         }
-        setStatus("Chargement des séries…");
+        setStatus(tvText("Chargement des séries…", "Loading series…"));
         try {
             series = filterForProfile(
                 "series",
                 await window.ZyvioProvider.loadSeries(providerConfig)
             );
-            renderCatalog("Séries", series, "series");
-            setStatus(series.length ? series.length + " séries chargées." : "Aucune série disponible.");
+            renderCatalog(tvText("Séries", "Series"), series, "series");
+            setStatus(series.length ? series.length + " séries chargées." : tvText("Aucune série disponible.", "No series available."));
         } catch (error) {
             hideCatalog();
             setStatus(error?.message || "Impossible de charger les séries.");
@@ -1579,7 +1581,7 @@
             setStatus("Aucun fournisseur configuré.");
             return [];
         }
-        setStatus("Chargement des chaînes…");
+        setStatus(tvText("Chargement des chaînes…", "Loading channels…"));
         try {
             liveChannels = filterForProfile(
                 "live",
@@ -1658,7 +1660,7 @@
                     if (current?.title) epgSuffix = " — " + current.title;
                 } catch (_) {}
             }
-            setStatus("Lecture : " + channel.name + epgSuffix);
+            setStatus(tvText("Lecture : ", "Playing: ") + channel.name + epgSuffix);
         } catch (_) {
             setStatus("Flux indisponible.");
         }
@@ -1763,8 +1765,8 @@
         const labels = {
             home: "Accueil",
             live: "TV en direct",
-            movies: "Films",
-            series: "Séries",
+            movies: tvText("Films", "Movies"),
+            series: tvText("Séries", "Series"),
             favorites: "Favoris",
             profiles: "Profils",
             more: "Plus",
@@ -1778,7 +1780,7 @@
             window.tizen?.application?.getCurrentApplication?.().exit();
             return;
         } catch (_) {}
-        setStatus("Utilisez Retour pour quitter ZYVIOTV.");
+        setStatus(tvText("Utilisez Retour pour quitter ZYVIOTV.", "Press Back to exit ZYVIOTV."));
     }
 
     function focusHomeNavigation() {
@@ -1786,7 +1788,7 @@
         setTimeout(() => home?.focus(), 0);
     }
 
-    async function stopCurrentPlayback(statusMessage = "Retour") {
+    async function stopCurrentPlayback(statusMessage = tvText("Retour", "Back")) {
         if (!player?.isActive?.() && !activePlayback) return false;
         try { await syncActivePlayback(); } catch (_) {}
         try { await finishParentalPlayback(); } catch (_) {}
@@ -1864,7 +1866,7 @@
         if (mediaKey === "MediaPlayPause") {
             event.preventDefault();
             if (player?.togglePause?.()) {
-                setStatus(player.paused ? "Pause" : "Lecture");
+                setStatus(player.paused ? "Pause" : tvText("Lecture", "Playing"));
             }
             return;
         }
@@ -1880,7 +1882,7 @@
         }
         if (mediaKey === "MediaStop") {
             event.preventDefault();
-            stopCurrentPlayback("Lecture arrêtée.");
+            stopCurrentPlayback(tvText("Lecture arrêtée.", "Playback stopped."));
             return;
         }
         if (mediaKey === "MediaFastForward") {
@@ -2132,11 +2134,11 @@
             } else if (kind === "favorites") {
                 await loadFavorites();
             } else if (kind === "recent-movies") {
-                renderCatalog("Films récents", recentByAdded(movies), "movie");
+                renderCatalog(tvText("Films récents", "Recent movies"), recentByAdded(movies), "movie");
             } else if (kind === "recent-series") {
-                renderCatalog("Séries récentes", recentByAdded(series), "series");
+                renderCatalog(tvText("Séries récentes", "Recent series"), recentByAdded(series), "series");
             } else if (kind === "next-episodes") {
-                renderCatalog("Épisodes suivants", nextEpisodes.map((item) => ({
+                renderCatalog(tvText("Épisodes suivants", "Next episodes"), nextEpisodes.map((item) => ({
                     ...item,
                     title: item.seriesTitle + " — S" + item.season + "E" + item.number,
                 })), "episode");
@@ -2245,7 +2247,7 @@
         if (target.dataset.catalogKind === "series") {
             const item = series.find((entry) => entry.id === target.dataset.catalogId);
             if (!item) return;
-            setStatus("Chargement : " + item.title + "…");
+            setStatus(tvText("Chargement : ", "Loading: ") + item.title + "…");
             window.ZyvioProvider.loadSeriesInfo(providerConfig, item.id)
                 .then((info) => {
                     renderEpisodes(item, info);
