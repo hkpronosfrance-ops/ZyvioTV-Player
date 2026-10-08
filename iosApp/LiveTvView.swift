@@ -28,11 +28,11 @@ struct LiveTvView: View {
                     ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement des chaînes…" : "Loading channels…")).tint(.red)
                 } else if let error {
                     ContentUnavailableView {
-                        Label("TV indisponible", systemImage: "exclamationmark.triangle")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "TV indisponible" : "TV unavailable"), systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(error)
                     } actions: {
-                        Button("Réessayer") { Task { await load() } }
+                        Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) { Task { await load() } }
                             .buttonStyle(.borderedProminent)
                             .tint(.red)
                     }
