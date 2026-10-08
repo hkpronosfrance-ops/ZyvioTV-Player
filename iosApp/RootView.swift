@@ -366,7 +366,7 @@ private struct PlaylistBootstrapView: View {
             if loading {
                 ZStack {
                     Color.black.ignoresSafeArea()
-                    ProgressView("Vérification de vos playlists…")
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Vérification de vos playlists…" : "Checking your playlists…"))
                         .tint(.red)
                 }
             } else if ready {
@@ -427,9 +427,9 @@ struct PlaylistOnboardingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Ajoutez votre première playlist")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Ajoutez votre première playlist" : "Add your first playlist"))
                             .font(.largeTitle.bold())
-                        Text("ZYVIOTV doit disposer d’une source active avant d’ouvrir l’Accueil.")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "ZYVIOTV doit disposer d’une source active avant d’ouvrir l’Accueil." : "ZYVIOTV needs an active source before opening Home."))
                             .foregroundStyle(.secondary)
                     }
 
@@ -439,25 +439,25 @@ struct PlaylistOnboardingView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    TextField("Nom de la playlist", text: $name)
+                    TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Nom de la playlist" : "Playlist name"), text: $name)
                         .textFieldStyle(.roundedBorder)
 
                     if type == "xtream" {
-                        TextField("Adresse du serveur", text: $serverURL)
+                        TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Adresse du serveur" : "Server address"), text: $serverURL)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
                             .textFieldStyle(.roundedBorder)
-                        TextField("Nom d’utilisateur", text: $username)
+                        TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Nom d’utilisateur" : "Username"), text: $username)
                             .textInputAutocapitalization(.never)
                             .textFieldStyle(.roundedBorder)
-                        SecureField("Mot de passe", text: $password)
+                        SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "Mot de passe" : "Password"), text: $password)
                             .textFieldStyle(.roundedBorder)
                     } else {
                         TextField("URL M3U", text: $m3uURL)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
                             .textFieldStyle(.roundedBorder)
-                        TextField("URL XMLTV (optionnelle)", text: $xmlTvURL)
+                        TextField((Locale.current.language.languageCode?.identifier == "fr" ? "URL XMLTV (optionnelle)" : "XMLTV URL (optional)"), text: $xmlTvURL)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
                             .textFieldStyle(.roundedBorder)
@@ -466,7 +466,7 @@ struct PlaylistOnboardingView: View {
                     if let text = message ?? errorMessage {
                         Text(text)
                             .font(.footnote)
-                            .foregroundStyle((message ?? "").hasPrefix("Erreur") ? .red : .secondary)
+                            .foregroundStyle(((message ?? "").hasPrefix("Erreur") || (message ?? "").hasPrefix("Error:")) ? .red : .secondary)
                     }
 
                     Button {
@@ -475,14 +475,14 @@ struct PlaylistOnboardingView: View {
                         if busy {
                             ProgressView()
                         } else {
-                            Text("Tester et enregistrer")
+                            Text((Locale.current.language.languageCode?.identifier == "fr" ? "Tester et enregistrer" : "Test and save"))
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                     .disabled(busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                    Text("Les identifiants sont testés puis enregistrés de façon sécurisée. Ils ne sont jamais affichés en clair.")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Les identifiants sont testés puis enregistrés de façon sécurisée. Ils ne sont jamais affichés en clair." : "Credentials are tested and saved securely. They are never displayed in plain text."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -491,10 +491,10 @@ struct PlaylistOnboardingView: View {
                 .frame(maxWidth: .infinity)
             }
             .background(Color.black)
-            .navigationTitle("Configurer ZYVIOTV")
+            .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Configurer ZYVIOTV" : "Set up ZYVIOTV"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Déconnexion", action: onSignedOut)
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Déconnexion" : "Sign out"), action: onSignedOut)
                 }
             }
         }
@@ -559,10 +559,10 @@ struct PlaylistOnboardingView: View {
                 throw error
             }
 
-            message = "Playlist enregistrée."
+            message = (Locale.current.language.languageCode?.identifier == "fr" ? "Playlist enregistrée." : "Playlist saved.")
             onSaved()
         } catch {
-            message = "Erreur : \(error.localizedDescription)"
+            message = (Locale.current.language.languageCode?.identifier == "fr" ? "Erreur : " : "Error: ") + error.localizedDescription
         }
     }
 
@@ -692,7 +692,7 @@ private struct ProfilePickerView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Déconnexion", action: onSignedOut)
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Déconnexion" : "Sign out"), action: onSignedOut)
                 }
             }
         }
