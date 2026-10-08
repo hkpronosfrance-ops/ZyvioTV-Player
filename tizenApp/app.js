@@ -1339,7 +1339,7 @@
     }
 
     async function buildNextEpisodes() {
-        if (!providerConfig || providerConfig.type !== "xtream") {
+        if (!providerConfig) {
             nextEpisodes = [];
             return;
         }
@@ -1360,7 +1360,7 @@
         const candidates = [];
         for (const [seriesId, progress] of Array.from(latestBySeries.entries()).slice(0, 12)) {
             try {
-                const detail = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesId);
+                const detail = await window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesId);
                 const ordered = Object.values(detail.episodesBySeason || {})
                     .flat()
                     .sort((a, b) => a.season - b.season || a.number - b.number);
@@ -1400,7 +1400,7 @@
     }
 
     async function refreshHomeCatalogShelves() {
-        if (!providerConfig || providerConfig.type !== "xtream") {
+        if (!providerConfig) {
             nextEpisodes = [];
             if (nextEpisodesShelf) nextEpisodesShelf.hidden = true;
             if (recentMoviesShelf) recentMoviesShelf.hidden = true;
@@ -1515,7 +1515,7 @@
         }
 
         if (progress.content_type === "episode" && progress.series_id) {
-            const detail = await window.ZyvioProvider.loadXtreamSeriesInfo(
+            const detail = await window.ZyvioProvider.loadSeriesInfo(
                 providerConfig,
                 String(progress.series_id)
             );
@@ -2048,7 +2048,7 @@
             (target.dataset.homeKind === "same-category" && target.dataset.homeType === "series")) {
             const seriesItem = series.find((item) => String(item.id) === String(target.dataset.homeId));
             if (seriesItem) {
-                window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id)
+                window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesItem.id)
                     .then((info) => renderEpisodes(seriesItem, info))
                     .catch(() => setStatus("Détails de série indisponibles."));
             }
@@ -2097,7 +2097,7 @@
                     if (!series.length) series = await window.ZyvioProvider.loadSeries(providerConfig);
                     const seriesItem = series.find((entry) => entry.id === String(item.content_id));
                     if (seriesItem) {
-                        window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id)
+                        window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesItem.id)
                             .then((info) => renderEpisodes(seriesItem, info))
                             .catch(() => setStatus("Détails de série indisponibles."));
                     }
@@ -2246,7 +2246,7 @@
             const item = series.find((entry) => entry.id === target.dataset.catalogId);
             if (!item) return;
             setStatus("Chargement : " + item.title + "…");
-            window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, item.id)
+            window.ZyvioProvider.loadSeriesInfo(providerConfig, item.id)
                 .then((info) => {
                     renderEpisodes(item, info);
                     const count = Object.values(info.episodesBySeason || {})
@@ -2290,7 +2290,7 @@
                 if (!series.length) await loadSeries();
                 const item = series.find((entry) => entry.id === id);
                 if (item) {
-                    window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, item.id)
+                    window.ZyvioProvider.loadSeriesInfo(providerConfig, item.id)
                         .then((info) => renderEpisodes(item, info))
                         .catch(() => setStatus("Détails de série indisponibles."));
                 }
