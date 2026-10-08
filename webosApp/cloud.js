@@ -50,9 +50,11 @@
   }
 
   async function listFavorites(session, profileId) {
+    const user = await currentUser(session);
     const rows = await request(
       "/rest/v1/player_favorites" +
-      "?profile_id=eq." + encodeURIComponent(profileId) +
+      "?user_id=eq." + encodeURIComponent(user.id) +
+      "&profile_id=eq." + encodeURIComponent(profileId) +
       "&select=playlist_id,content_type,content_id,title,artwork_url" +
       "&order=updated_at.desc",
       session
@@ -84,9 +86,11 @@
   }
 
   async function removeFavorite(session, profileId, favorite) {
+    const user = await currentUser(session);
     await request(
       "/rest/v1/player_favorites" +
-      "?profile_id=eq." + encodeURIComponent(profileId) +
+      "?user_id=eq." + encodeURIComponent(user.id) +
+      "&profile_id=eq." + encodeURIComponent(profileId) +
       "&playlist_id=eq." + encodeURIComponent(favorite.playlistId) +
       "&content_type=eq." + encodeURIComponent(favorite.contentType) +
       "&content_id=eq." + encodeURIComponent(favorite.contentId),
@@ -96,10 +100,12 @@
   }
 
   async function listWatchProgress(session, profileId, limit = 100) {
+    const user = await currentUser(session);
     const safeLimit = Math.min(Math.max(Number(limit || 100), 1), 200);
     const rows = await request(
       "/rest/v1/player_watch_progress" +
-      "?profile_id=eq." + encodeURIComponent(profileId) +
+      "?user_id=eq." + encodeURIComponent(user.id) +
+      "&profile_id=eq." + encodeURIComponent(profileId) +
       "&select=playlist_id,content_type,content_id,title,series_id,season_number,episode_number,artwork_url,position_ms,duration_ms,completed,last_watched_at" +
       "&order=last_watched_at.desc&limit=" + safeLimit,
       session
