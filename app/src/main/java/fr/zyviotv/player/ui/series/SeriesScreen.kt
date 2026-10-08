@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.catalog.catalogPosterMinimumWidth
 import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
@@ -253,11 +254,7 @@ private fun SeriesBody(
         return
     }
 
-    val columns = when (profile) {
-        DeviceProfile.Mobile -> 3
-        DeviceProfile.Tablet -> 4
-        DeviceProfile.Television -> 6
-    }
+    val posterMinWidth = catalogPosterMinimumWidth(profile)
 
     val gridState = rememberLazyGridState()
     val focusRequesters = remember(items) {
@@ -275,7 +272,7 @@ private fun SeriesBody(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
+        columns = GridCells.Adaptive(minSize = posterMinWidth),
         state = gridState,
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(if (profile == DeviceProfile.Mobile) 8.dp else 12.dp),
@@ -565,11 +562,7 @@ private fun EmptySeriesState(
 
 @Composable
 private fun SeriesLoading(profile: DeviceProfile) {
-    val columns = when (profile) {
-        DeviceProfile.Mobile -> 3
-        DeviceProfile.Tablet -> 4
-        DeviceProfile.Television -> 6
-    }
+    val posterMinWidth = catalogPosterMinimumWidth(profile)
 
     Column(Modifier.fillMaxSize()) {
         CatalogHeader(
@@ -580,7 +573,7 @@ private fun SeriesLoading(profile: DeviceProfile) {
         )
         Spacer(Modifier.height(16.dp))
         LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
+            columns = GridCells.Adaptive(minSize = posterMinWidth),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
