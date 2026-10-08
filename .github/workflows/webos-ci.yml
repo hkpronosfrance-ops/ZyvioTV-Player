@@ -95,19 +95,29 @@ jobs:
       - name: Install current webOS CLI
         run: npm install --global @webos-tools/cli
 
-      - name: Build IPK
+      - name: Build FHD IPK
+        env:
+          WEBOS_RESOLUTION: 1920x1080
         run: bash webosApp/package-ipk.sh
 
-      - name: Verify packaged artifact
+      - name: Build HD IPK
+        env:
+          WEBOS_RESOLUTION: 1280x720
+        run: bash webosApp/package-ipk.sh
+
+      - name: Verify packaged artifacts
         run: |
-          IPK="$(find webosApp/dist -maxdepth 1 -type f -name '*.ipk' -print -quit)"
-          test -n "$IPK"
-          ares-package --info "$IPK"
+          FHD_IPK="$(find webosApp/dist/1920X1080 -maxdepth 1 -type f -name '*.ipk' -print -quit)"
+          HD_IPK="$(find webosApp/dist/1280X720 -maxdepth 1 -type f -name '*.ipk' -print -quit)"
+          test -n "$FHD_IPK"
+          test -n "$HD_IPK"
+          ares-package --info "$FHD_IPK"
+          ares-package --info "$HD_IPK"
 
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
           name: zyviotv-webos-ipk
-          path: webosApp/dist/*.ipk
+          path: webosApp/dist/**/*.ipk
           if-no-files-found: error
           retention-days: 14
