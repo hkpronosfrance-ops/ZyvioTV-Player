@@ -22,10 +22,13 @@ for (const marker of order) {
   previous = index;
 }
 
-assert(app.includes('providerConfig.type !== "xtream"'), "Home catalog shelves must stay hidden for non-Xtream providers");
-assert(provider.includes('if (!config || config.type !== "xtream") return [];'), "M3U Movies/Series must remain unsupported intentionally");
+assert(!app.includes('Films indisponibles pour cette playlist M3U.'), "M3U Movies must not be blocked");
+assert(!app.includes('Séries indisponibles pour cette playlist M3U.'), "M3U Series must not be blocked");
+assert(provider.includes('if (config.type === "m3u") return (await loadM3uCatalog(config)).movies'), "M3U Movies must be supported");
+assert(provider.includes('if (config.type === "m3u")'), "M3U provider branches must exist");
+assert(provider.includes("loadM3uSeriesInfo"), "M3U Series details must be supported");
 assert(app.includes('data-home-see-all'), "Home must support See All");
 assert(app.includes('buildNextEpisodes'), "Home must build Next Episodes");
 assert(app.includes('lastViewedCatalogItem'), "Home must build same-category recommendations");
 
-console.log("Tizen canonical Home parity tests passed");
+console.log("Tizen canonical Home + full M3U parity tests passed");
