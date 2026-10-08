@@ -51,6 +51,10 @@ function createVideoMock() {
     video.ended = true;
     video.fire("ended");
     assert.equal(player.isPlaying(), false, "HTML5 ended must not count");
+    player.stop();
+    assert.equal(player.buffering, false);
+    assert.equal(player.ended, false);
+    assert.equal(player.isActive(), false);
   }
 
   {
@@ -92,6 +96,9 @@ function createVideoMock() {
 
     listener.onstreamcompleted();
     assert.equal(player.isPlaying(), false, "AVPlay completed stream must not count");
+    player.stop();
+    assert.equal(player.buffering, false);
+    assert.equal(player.ended, false);
   }
 
   delete global.window;

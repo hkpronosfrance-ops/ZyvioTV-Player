@@ -6,16 +6,17 @@
       this.video = videoElement;
       this.currentUrl = null;
       this.buffering = false;
+      this.ended = false;
 
       if (this.video) {
         ["waiting", "stalled"].forEach((eventName) => {
           this.video.addEventListener(eventName, () => { this.buffering = true; });
         });
         ["playing", "canplay", "canplaythrough"].forEach((eventName) => {
-          this.video.addEventListener(eventName, () => { this.buffering = false; });
+          this.video.addEventListener(eventName, () => { this.buffering = false; this.ended = false; });
         });
         ["ended", "emptied", "error"].forEach((eventName) => {
-          this.video.addEventListener(eventName, () => { this.buffering = false; });
+          this.video.addEventListener(eventName, () => { this.buffering = false; this.ended = true; });
         });
       }
     }
@@ -27,7 +28,13 @@
       this.video.src = url;
       this.video.hidden = false;
       this.buffering = true;
-      await this.video.play();
+      this.ended = false;
+      try {
+        await this.video.play();
+      } catch (error) {
+        this.stop();
+        throw error;
+      }
     }
 
     pause() {
@@ -56,7 +63,7 @@
 
     isPlaying() {
       if (!this.video || !this.currentUrl) return false;
-      return !this.video.paused &&
+      return !this.ended && !this.video.paused &&
         !this.video.ended &&
         !this.buffering &&
         this.video.readyState >= 3;
@@ -69,13 +76,19 @@
     }
 
     stop() {
-      if (!this.video) return;
+      if (!this.video) {
+        this.currentUrl = null;
+        this.buffering = false;
+        this.ended = false;
+        return;
+      }
       this.video.pause();
       this.video.removeAttribute("src");
       this.video.load();
       this.video.hidden = true;
       this.currentUrl = null;
       this.buffering = false;
+      this.ended = false;
     }
   }
 
