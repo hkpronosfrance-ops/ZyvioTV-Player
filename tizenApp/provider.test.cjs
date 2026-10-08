@@ -39,6 +39,21 @@ const provider = require("./provider.js");
   assert.equal(provider.classifyM3uEntry(parsed[2]).type, "episode");
   assert.equal(provider.classifyM3uEntry(parsed[3]).type, "episode");
 
+  // Category or URL alone cannot manufacture a season/episode.
+  const unknownEpisode = {
+    name: "Unnamed Show", categoryName: "FR - SERIES",
+    streamUrl: "https://stream.example/series/99.mkv"
+  };
+  assert.notEqual(provider.classifyM3uEntry(unknownEpisode).type, "episode");
+  const urlOnly = {
+    name: "Unknown Show", categoryName: "Unclassified",
+    streamUrl: "https://stream.example/series/100.mkv"
+  };
+  assert.notEqual(provider.classifyM3uEntry(urlOnly).type, "episode");
+  assert.equal(provider.classifyM3uEntry({
+    ...unknownEpisode, name: "Named Show S03E04"
+  }).type, "episode");
+
   const m3uText = [
     "#EXTM3U",
     '#EXTINF:-1 tvg-id="a1" group-title="FR - LIVE",Actu 24',

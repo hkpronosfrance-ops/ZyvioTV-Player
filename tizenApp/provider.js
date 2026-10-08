@@ -261,19 +261,9 @@
 
     if (episode) return { type: "episode", episode };
 
-    const seriesGroup = /(^|\b)(series|serie|tv shows?|episodes?|saisons?)(\b|$)/i.test(group);
-    if (seriesGroup) {
-      return {
-        type: "episode",
-        episode: {
-          seriesTitle: String(entry.name || "Série").trim(),
-          season: 1,
-          episode: 1,
-          episodeTitle: "",
-        },
-      };
-    }
-
+    // A series category alone is not evidence of an episode number.
+    // Entries without an explicit SxxExx/1x02/Saison ... Episode ... pattern
+    // must not create fictional season 1 / episode 1 records.
     const movieGroup = /(^|\b)(vod|movies?|films?|cinema|cine)(\b|$)/i.test(group);
     const liveGroup = /(^|\b)(live|tv|chaines?|channels?|sports?|news|infos?|radio)(\b|$)/i.test(group);
 
@@ -285,17 +275,7 @@
     })();
 
     if (/\/(movie|vod)\//.test(pathname)) return { type: "movie" };
-    if (/\/(series)\//.test(pathname)) {
-      return {
-        type: "episode",
-        episode: episode || {
-          seriesTitle: String(entry.name || "Série").trim(),
-          season: 1,
-          episode: 1,
-          episodeTitle: "",
-        },
-      };
-    }
+    // A /series/ URL is not sufficient to infer a season or episode.
     if (/\/(live)\//.test(pathname)) return { type: "live" };
 
     if (/\.(mp4|mkv|avi|mov|m4v|webm)(?:$|\?)/i.test(entry.streamUrl)) {
