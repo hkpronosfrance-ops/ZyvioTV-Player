@@ -47,6 +47,7 @@ import fr.zyviotv.player.shared.sync.PlayerProfile
 import fr.zyviotv.player.shared.sync.PlayerProfileType
 import fr.zyviotv.player.shared.sync.ProfileWriteResult
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
@@ -249,7 +250,7 @@ fun ProfilesSettingsScreen(
                 color = ZyvioSurface1,
                 shape = RoundedCornerShape(16.dp),
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(ZyvioSpace.s4)) {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it.take(40) },
