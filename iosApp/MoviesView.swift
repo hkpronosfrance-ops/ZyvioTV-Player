@@ -61,7 +61,7 @@ struct MoviesView: View {
                     }
                 }
             }
-            .background(Color.black)
+            .background(ZyvioDesign.Palette.base)
             .navigationTitle("Films")
             .preferredColorScheme(.dark)
         }
@@ -179,7 +179,7 @@ struct MoviePlayerScreen: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+            ZyvioDesign.Palette.base.ignoresSafeArea()
 
             ParentalProtectedPlayerView(
                 title: movie.title,
@@ -233,8 +233,8 @@ struct MoviePlayerScreen: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                 }
-                .padding(24)
-                .background(Color.black.opacity(0.92))
+                .padding(ZyvioDesign.Space.s6)
+                .background(ZyvioDesign.Palette.surface1.opacity(0.96))
                 .clipShape(RoundedRectangle(cornerRadius: 20))
             }
         }
