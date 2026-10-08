@@ -22,6 +22,7 @@
             },
             onerror: () => {
               this.buffering = false;
+              this.ended = true;
             },
           });
         } catch (_) {}
@@ -41,6 +42,7 @@
         });
         this.video.addEventListener("error", () => {
           this.buffering = false;
+          this.ended = true;
         });
       }
     }
@@ -56,10 +58,15 @@
         avplay.open(url);
         avplay.setDisplayRect(0, 0, 1920, 1080);
         avplay.setDisplayMethod("PLAYER_DISPLAY_MODE_FULL_SCREEN");
-        await new Promise((resolve, reject) => {
-          avplay.prepareAsync(resolve, () => reject(new Error("Lecture impossible.")));
-        });
-        avplay.play();
+        try {
+          await new Promise((resolve, reject) => {
+            avplay.prepareAsync(resolve, () => reject(new Error("Lecture impossible.")));
+          });
+          avplay.play();
+        } catch (error) {
+          this.stop();
+          throw error;
+        }
         this.paused = false;
         this.buffering = false;
         this.ended = false;
@@ -94,7 +101,10 @@
       if (this.usingAvPlay) {
         try { window.webapis.avplay.play(); } catch (_) {}
       } else if (this.video) {
-        this.video.play().catch(() => {});
+        this.video.play().catch(() => {
+          this.paused = true;
+          this.buffering = false;
+        });
       }
       this.paused = false;
       this.ended = false;
