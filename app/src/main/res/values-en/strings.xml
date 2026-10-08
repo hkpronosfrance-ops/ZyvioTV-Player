@@ -4,4 +4,19 @@
     <string name="playlist_title">Playlists</string>
     <string name="action_add">Add</string>
     <string name="action_refresh">Refresh</string>
+    <string name="auth_welcome">Welcome back</string>
+    <string name="auth_create_account">Create your account</string>
+    <string name="auth_reset_password">Reset password</string>
+    <string name="auth_signin_description">Sign in to access your playlists and watch progress.</string>
+    <string name="auth_signup_description">One account for ZYVIOTV on all your devices.</string>
+    <string name="auth_reset_description">Enter your email address to receive instructions.</string>
+    <string name="auth_email">Email address</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_confirm_password">Confirm password</string>
+    <string name="auth_signin">Sign in</string>
+    <string name="auth_signup_submit">Create my account</string>
+    <string name="auth_send_link">Send link</string>
+    <string name="auth_forgot_password">Forgot password?</string>
+    <string name="auth_signup">Sign up</string>
+    <string name="auth_back_to_signin">Back to sign in</string>
 </resources>
