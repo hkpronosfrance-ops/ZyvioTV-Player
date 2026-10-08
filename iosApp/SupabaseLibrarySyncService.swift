@@ -444,22 +444,24 @@ actor SupabaseLibrarySyncService {
 
     func listFavorites() async throws -> [SyncedFavoriteDTO] {
         let profileId = try activeProfileId()
+        let userId = try await currentUserId()
         return try await get(
-            path: "/rest/v1/player_favorites?profile_id=eq.\(encoded(profileId))&select=playlist_id,content_type,content_id,title,artwork_url&order=updated_at.desc"
+            path: "/rest/v1/player_favorites?user_id=eq.\(encoded(userId))&profile_id=eq.\(encoded(profileId))&select=playlist_id,content_type,content_id,title,artwork_url&order=updated_at.desc"
         )
     }
 
     func listWatchProgress(limit: Int = 50) async throws -> [SyncedWatchProgressDTO] {
         let profileId = try activeProfileId()
+        let userId = try await currentUserId()
         let safeLimit = min(max(limit, 1), 200)
         return try await get(
-            path: "/rest/v1/player_watch_progress?profile_id=eq.\(encoded(profileId))&select=playlist_id,content_type,content_id,title,series_id,season_number,episode_number,artwork_url,position_ms,duration_ms,completed&order=last_watched_at.desc&limit=\(safeLimit)"
+            path: "/rest/v1/player_watch_progress?user_id=eq.\(encoded(userId))&profile_id=eq.\(encoded(profileId))&select=playlist_id,content_type,content_id,title,series_id,season_number,episode_number,artwork_url,position_ms,duration_ms,completed&order=last_watched_at.desc&limit=\(safeLimit)"
         )
     }
 
     func upsertFavorite(_ favorite: SyncedFavoriteDTO) async throws {
-        let userId = try await currentUserId()
         let profileId = try activeProfileId()
+        let userId = try await currentUserId()
         let payload: [String: Any] = [
             "user_id": userId,
             "profile_id": profileId,
@@ -480,15 +482,16 @@ actor SupabaseLibrarySyncService {
 
     func removeFavorite(_ favorite: SyncedFavoriteDTO) async throws {
         let profileId = try activeProfileId()
+        let userId = try await currentUserId()
         try await mutate(
-            path: "/rest/v1/player_favorites?profile_id=eq.\(encoded(profileId))&playlist_id=eq.\(encoded(favorite.playlistId))&content_type=eq.\(encoded(favorite.contentType))&content_id=eq.\(encoded(favorite.contentId))",
+            path: "/rest/v1/player_favorites?user_id=eq.\(encoded(userId))&profile_id=eq.\(encoded(profileId))&playlist_id=eq.\(encoded(favorite.playlistId))&content_type=eq.\(encoded(favorite.contentType))&content_id=eq.\(encoded(favorite.contentId))",
             method: "DELETE"
         )
     }
 
     func upsertWatchProgress(_ progress: SyncedWatchProgressDTO) async throws {
-        let userId = try await currentUserId()
         let profileId = try activeProfileId()
+        let userId = try await currentUserId()
         let now = ISO8601DateFormatter().string(from: Date())
         let payload: [String: Any] = [
             "user_id": userId,
@@ -517,8 +520,9 @@ actor SupabaseLibrarySyncService {
 
     func removeWatchProgress(_ progress: SyncedWatchProgressDTO) async throws {
         let profileId = try activeProfileId()
+        let userId = try await currentUserId()
         try await mutate(
-            path: "/rest/v1/player_watch_progress?profile_id=eq.\(encoded(profileId))&playlist_id=eq.\(encoded(progress.playlistId))&content_type=eq.\(encoded(progress.contentType))&content_id=eq.\(encoded(progress.contentId))",
+            path: "/rest/v1/player_watch_progress?user_id=eq.\(encoded(userId))&profile_id=eq.\(encoded(profileId))&playlist_id=eq.\(encoded(progress.playlistId))&content_type=eq.\(encoded(progress.contentType))&content_id=eq.\(encoded(progress.contentId))",
             method: "DELETE"
         )
     }
