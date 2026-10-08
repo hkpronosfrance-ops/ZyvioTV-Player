@@ -2,61 +2,230 @@ package fr.zyviotv.player.data.catalog
 
 import fr.zyviotv.player.shared.catalog.CatalogCategory
 import fr.zyviotv.player.shared.catalog.CatalogLiveChannel
+import fr.zyviotv.player.shared.catalog.CatalogMovie
+import fr.zyviotv.player.shared.catalog.CatalogSeries
 import fr.zyviotv.player.shared.catalog.CatalogSnapshot
 import fr.zyviotv.player.shared.m3u.M3uEntry
 
 object M3uCatalogMapper {
+    private data class EpisodeIdentity(
+        val seriesTitle: String,
+        val season: Int,
+        val episode: Int,
+        val episodeTitle: String?,
+    )
+
+    private enum class Kind { Live, Movie, Episode }
+
     fun map(entries: List<M3uEntry>): CatalogSnapshot {
-        val normalizedGroups = entries.map { entry ->
-            entry.groupTitle
-                ?.trim()
-                ?.replace(Regex("""\s+"""), " ")
-                ?.takeIf(String::isNotBlank)
-        }
+        val liveCategories = linkedMapOf<String, CatalogCategory>()
+        val movieCategories = linkedMapOf<String, CatalogCategory>()
+        val seriesCategories = linkedMapOf<String, CatalogCategory>()
+        val liveChannels = mutableListOf<CatalogLiveChannel>()
+        val movies = mutableListOf<CatalogMovie>()
+        val seriesBuilders = linkedMapOf<String, MutableSeries>()
+        val usedLiveIds = mutableSetOf<String>()
 
-        val categoryNames = normalizedGroups
-            .filterNotNull()
-            .distinctBy { it.lowercase() }
-
-        val categories = categoryNames.mapIndexed { index, name ->
-            CatalogCategory(id = "m3u-group-$index", name = name)
-        }
-        val categoryIds = categories.associateBy(
-            keySelector = { it.name.lowercase() },
-            valueTransform = { it.id },
-        )
-
-        val usedIds = mutableSetOf<String>()
-        val channels = entries.mapIndexedNotNull { index, entry ->
+        entries.forEachIndexed { index, entry ->
             val streamUrl = entry.streamUrl.trim()
-            if (streamUrl.isBlank()) return@mapIndexedNotNull null
+            if (streamUrl.isBlank()) return@forEachIndexed
+            val group = normalizedGroup(entry.groupTitle)
 
-            val baseId = entry.tvgId
-                ?.trim()
-                ?.takeIf(String::isNotBlank)
-                ?: "m3u-$index"
-            var channelId = baseId
-            var duplicateIndex = 2
-            while (!usedIds.add(channelId)) {
-                channelId = "$baseId-$duplicateIndex"
-                duplicateIndex += 1
+            when (classify(entry)) {
+                Kind.Live -> {
+                    val categoryId = group?.let { ensureCategory(liveCategories, "m3u-live", it).id }
+                    val baseId = entry.tvgId?.trim()?.takeIf(String::isNotBlank)
+                        ?: stableId("live|$index|${entry.name}|$streamUrl")
+                    var id = baseId
+                    var duplicateIndex = 2
+                    while (!usedLiveIds.add(id)) {
+                        id = "$baseId-$duplicateIndex"
+                        duplicateIndex += 1
+                    }
+                    liveChannels += CatalogLiveChannel(
+                        id = id,
+                        name = entry.name.trim(),
+                        categoryId = categoryId,
+                        logoUrl = entry.logoUrl?.trim()?.takeIf(String::isNotBlank),
+                        streamUrl = streamUrl,
+                        epgId = entry.tvgId?.trim()?.takeIf(String::isNotBlank),
+                    )
+                }
+
+                Kind.Movie -> {
+                    val categoryId = group?.let { ensureCategory(movieCategories, "m3u-movie", it).id }
+                    movies += CatalogMovie(
+                        id = stableId("movie|${entry.name}|${group.orEmpty()}|$streamUrl"),
+                        title = entry.name.trim(),
+                        categoryId = categoryId,
+                        posterUrl = entry.logoUrl?.trim()?.takeIf(String::isNotBlank),
+                        streamUrl = streamUrl,
+                        containerExtension = streamUrl.substringAfterLast('.', "")
+                            .substringBefore('?')
+                            .takeIf { it.length in 2..5 }
+                            ?: "mp4",
+                    )
+                }
+
+                Kind.Episode -> {
+                    val identity = parseEpisode(entry.name) ?: EpisodeIdentity(
+                        seriesTitle = entry.name.trim().ifBlank { "Série" },
+                        season = 1,
+                        episode = 1,
+                        episodeTitle = null,
+                    )
+                    val seriesKey = identity.seriesTitle.lowercase()
+                    val categoryId = group?.let { ensureCategory(seriesCategories, "m3u-series", it).id }
+                    val builder = seriesBuilders.getOrPut(seriesKey) {
+                        MutableSeries(
+                            id = stableId("series|$seriesKey|${group.orEmpty()}"),
+                            title = identity.seriesTitle,
+                            categoryId = categoryId,
+                            posterUrl = entry.logoUrl?.trim()?.takeIf(String::isNotBlank),
+                        )
+                    }
+                    val episodeNumber = identity.episode.coerceAtLeast(1)
+                    builder.episodes += SeriesEpisodeSource(
+                        id = stableId("episode|${builder.id}|${identity.season}|$episodeNumber|$streamUrl"),
+                        season = identity.season.coerceAtLeast(1),
+                        number = episodeNumber,
+                        title = identity.episodeTitle?.takeIf(String::isNotBlank)
+                            ?: "Épisode $episodeNumber",
+                        synopsis = null,
+                        streamUrl = streamUrl,
+                    )
+                }
             }
+        }
 
-            CatalogLiveChannel(
-                id = channelId,
-                name = entry.name.trim(),
-                categoryId = normalizedGroups[index]
-                    ?.lowercase()
-                    ?.let(categoryIds::get),
-                logoUrl = entry.logoUrl?.trim()?.takeIf(String::isNotBlank),
-                streamUrl = streamUrl,
-                epgId = entry.tvgId?.trim()?.takeIf(String::isNotBlank),
+        val series = seriesBuilders.values.map { builder ->
+            CatalogSeries(
+                id = builder.id,
+                title = builder.title,
+                categoryId = builder.categoryId,
+                posterUrl = builder.posterUrl,
             )
         }
 
+        M3uSeriesDetailRegistry.replace(
+            seriesBuilders.values.associate { builder ->
+                builder.id to SeriesDetailSource(
+                    title = builder.title,
+                    year = null,
+                    synopsis = null,
+                    genres = emptyList(),
+                    episodes = builder.episodes.sortedWith(
+                        compareBy<SeriesEpisodeSource> { it.season }.thenBy { it.number },
+                    ),
+                )
+            },
+        )
+
         return CatalogSnapshot(
-            liveCategories = categories,
-            liveChannels = channels,
+            liveCategories = liveCategories.values.toList(),
+            liveChannels = liveChannels,
+            movieCategories = movieCategories.values.toList(),
+            movies = movies,
+            seriesCategories = seriesCategories.values.toList(),
+            series = series,
         )
     }
+
+    private fun classify(entry: M3uEntry): Kind {
+        if (parseEpisode(entry.name) != null) return Kind.Episode
+        val group = normalize(entry.groupTitle)
+        if (SERIES_TOKENS.any(group::contains)) return Kind.Episode
+        if (MOVIE_TOKENS.any(group::contains)) return Kind.Movie
+        if (LIVE_TOKENS.any(group::contains)) return Kind.Live
+
+        val url = entry.streamUrl.lowercase()
+        if ("/series/" in url) return Kind.Episode
+        if ("/movie/" in url || "/vod/" in url) return Kind.Movie
+        if ("/live/" in url) return Kind.Live
+
+        val extension = url.substringBefore('?').substringAfterLast('.', "")
+        if (extension in MOVIE_EXTENSIONS) return Kind.Movie
+        return Kind.Live
+    }
+
+    private fun parseEpisode(value: String): EpisodeIdentity? {
+        val original = value.trim()
+        val patterns = listOf(
+            Regex("""^(.*?)[\s._-]+s(\d{1,2})[\s._-]*e(\d{1,3})(?:\b|[\s._-])(.*)$""", RegexOption.IGNORE_CASE),
+            Regex("""^(.*?)[\s._-]+(\d{1,2})x(\d{1,3})(?:\b|[\s._-])(.*)$""", RegexOption.IGNORE_CASE),
+            Regex("""^(.*?)[\s._-]+saison[\s._-]*(\d{1,2})[\s._-]+(?:episode|ep)[\s._-]*(\d{1,3})(?:\b|[\s._-])(.*)$""", RegexOption.IGNORE_CASE),
+        )
+        for (pattern in patterns) {
+            val match = pattern.find(original) ?: continue
+            val title = match.groupValues[1]
+                .replace('.', ' ')
+                .replace('_', ' ')
+                .replace(Regex("""\s+"""), " ")
+                .trim()
+            if (title.isBlank()) continue
+            return EpisodeIdentity(
+                seriesTitle = title,
+                season = match.groupValues[2].toIntOrNull() ?: 1,
+                episode = match.groupValues[3].toIntOrNull() ?: 1,
+                episodeTitle = match.groupValues[4]
+                    .trim()
+                    .trimStart(' ', '.', '_', '-')
+                    .replace('.', ' ')
+                    .replace('_', ' ')
+                    .replace(Regex("""\s+"""), " ")
+                    .trim()
+                    .takeIf(String::isNotBlank),
+            )
+        }
+        return null
+    }
+
+    private fun ensureCategory(
+        target: LinkedHashMap<String, CatalogCategory>,
+        prefix: String,
+        name: String,
+    ): CatalogCategory {
+        val key = name.lowercase()
+        return target.getOrPut(key) {
+            CatalogCategory(
+                id = "$prefix-${stableId(key)}",
+                name = name,
+            )
+        }
+    }
+
+    private fun normalizedGroup(value: String?): String? = value
+        ?.trim()
+        ?.replace(Regex("""\s+"""), " ")
+        ?.takeIf(String::isNotBlank)
+
+    private fun normalize(value: String?): String = value
+        .orEmpty()
+        .lowercase()
+        .replace('é', 'e')
+        .replace('è', 'e')
+        .replace('ê', 'e')
+        .replace('à', 'a')
+        .replace('â', 'a')
+        .replace('î', 'i')
+        .replace('ï', 'i')
+        .replace('ô', 'o')
+        .replace('ù', 'u')
+        .replace('û', 'u')
+
+    private fun stableId(value: String): String =
+        "m3u-" + value.hashCode().toUInt().toString(16)
+
+    private data class MutableSeries(
+        val id: String,
+        val title: String,
+        val categoryId: String?,
+        val posterUrl: String?,
+        val episodes: MutableList<SeriesEpisodeSource> = mutableListOf(),
+    )
+
+    private val MOVIE_EXTENSIONS = setOf("mp4", "mkv", "avi", "mov", "m4v", "webm")
+    private val SERIES_TOKENS = listOf("series", "serie", "tv show", "episode", "saison")
+    private val MOVIE_TOKENS = listOf("vod", "movie", "movies", "film", "films", "cinema", "cine")
+    private val LIVE_TOKENS = listOf("live", "tv", "chaine", "channel", "sport", "news", "info", "radio")
 }
