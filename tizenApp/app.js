@@ -761,18 +761,26 @@
     }
 
 
-    function favoriteKey(type, id) {
-        return type + ":" + String(id);
+    function libraryKey(playlistId, type, id) {
+        return String(playlistId || "") + ":" + String(type || "") + ":" + String(id || "");
     }
 
-    function isFavorite(type, id) {
-        const key = favoriteKey(type, id);
-        return favorites.some((item) => favoriteKey(item.content_type, item.content_id) === key);
+    function favoriteKey(itemOrType, id = null, playlistId = null) {
+        if (typeof itemOrType === "object" && itemOrType) {
+            return libraryKey(itemOrType.playlist_id, itemOrType.content_type, itemOrType.content_id);
+        }
+        return libraryKey(playlistId || currentPlaylist?.id, itemOrType, id);
     }
 
-    function progressFor(type, id) {
+    function isFavorite(type, id, playlistId = null) {
+        const key = favoriteKey(type, id, playlistId);
+        return favorites.some((item) => favoriteKey(item) === key);
+    }
+
+    function progressFor(type, id, playlistId = null) {
+        const key = libraryKey(playlistId || currentPlaylist?.id, type, id);
         return watchProgress.find(
-            (item) => item.content_type === type && String(item.content_id) === String(id)
+            (item) => libraryKey(item.playlist_id, item.content_type, item.content_id) === key
         ) || null;
     }
 
@@ -818,8 +826,8 @@
                     payload
                 );
                 favorites = favorites.filter(
-                    (item) => favoriteKey(item.content_type, item.content_id) !==
-                        favoriteKey(kind, source.id)
+                    (item) => favoriteKey(item) !==
+                        favoriteKey(kind, source.id, currentPlaylist.id)
                 );
                 setStatus(title + " retiré des favoris.");
             } else {
@@ -1079,10 +1087,8 @@
                 payload
             );
             watchProgress = watchProgress.filter(
-                (item) => !(
-                    item.content_type === payload.contentType &&
-                    String(item.content_id) === String(payload.contentId)
-                )
+                (item) => libraryKey(item.playlist_id, item.content_type, item.content_id) !==
+                    libraryKey(payload.playlistId, payload.contentType, payload.contentId)
             );
             watchProgress.unshift({
                 playlist_id: payload.playlistId,
@@ -1113,7 +1119,7 @@
         await player.play(url);
         activePlayback = { ...metadata, trackProgress: true };
         runtimeBlocked = false;
-        const previous = progressFor(metadata.contentType, metadata.contentId);
+        const previous = progressFor(metadata.contentType, metadata.contentId, currentPlaylist?.id);
         const resumeMs = Number(previous?.position_ms || 0);
         const completed = Boolean(previous?.completed);
         if (!completed && resumeMs >= 10_000) {
@@ -1144,6 +1150,7 @@
         try {
             favorites = await window.ZyvioCloud.listFavorites(currentSession, currentProfile.id);
             const visibleFavorites = favorites.filter((item) => {
+                if (String(item.playlist_id || "") !== String(currentPlaylist?.id || "")) return false;
                 if (!isChildProfile()) return true;
                 const key = contentKey(item.content_type, item.content_id);
                 if (
@@ -1183,6 +1190,8 @@
         button.dataset.focusable = "";
         button.dataset.homeKind = kind;
         button.dataset.homeId = String(item.id || item.content_id || "");
+        button.dataset.homeType = String(item.content_type || (kind === "recent-live" ? "live" : ""));
+        button.dataset.homePlaylist = String(item.playlist_id || currentPlaylist?.id || "");
 
         const title = document.createElement("span");
         title.textContent = item.title || "Contenu";
@@ -1207,7 +1216,11 @@
 
     function renderHomeShelves() {
         const resumable = watchProgress
-            .filter((item) => !item.completed && Number(item.position_ms || 0) >= 10_000)
+            .filter((item) =>
+                String(item.playlist_id || "") === String(currentPlaylist?.id || "") &&
+                !item.completed &&
+                Number(item.position_ms || 0) >= 10_000
+            )
             .slice(0, 20);
         clearHomeContainer(continueCards);
         resumable.forEach((item) => {
@@ -1222,6 +1235,7 @@
 
         const recentChannels = liveHistory
             .filter((item) => {
+                if (String(item.playlist_id || "") !== String(currentPlaylist?.id || "")) return false;
                 if (!isChildProfile()) return true;
                 return liveChannels.some((channel) => channel.id === String(item.channel_id));
             })
@@ -1232,6 +1246,8 @@
                 {
                     id: item.channel_id,
                     title: item.channel_name,
+                    content_type: "live",
+                    playlist_id: item.playlist_id,
                 },
                 "recent-live",
                 "TV en direct"
@@ -1241,6 +1257,7 @@
 
         const favoriteItems = favorites
             .filter((item) => {
+                if (String(item.playlist_id || "") !== String(currentPlaylist?.id || "")) return false;
                 if (!isChildProfile() || item.content_type !== "live") return true;
                 return liveChannels.some((channel) => channel.id === String(item.content_id));
             })
@@ -1253,7 +1270,9 @@
         });
         if (favoritesShelf) favoritesShelf.hidden = favoriteItems.length === 0;
 
-        const recent = watchProgress.slice(0, 20);
+        const recent = watchProgress
+            .filter((item) => String(item.playlist_id || "") === String(currentPlaylist?.id || ""))
+            .slice(0, 20);
         clearHomeContainer(historyCards);
         recent.forEach((item) => {
             const label = item.content_type === "episode" && item.season_number != null
@@ -1265,6 +1284,10 @@
     }
 
     async function resolveProgressPlayback(progress) {
+        if (String(progress?.playlist_id || "") !== String(currentPlaylist?.id || "")) {
+            throw new Error("Ce contenu appartient à une autre playlist.");
+        }
+
         if (progress.content_type === "movie") {
             if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
             const movie = movies.find((item) => item.id === String(progress.content_id));
@@ -1396,7 +1419,8 @@
                     }
                 );
                 liveHistory = liveHistory.filter(
-                    (item) => String(item.channel_id) !== String(channel.id)
+                    (item) => libraryKey(item.playlist_id, "live", item.channel_id) !==
+                        libraryKey(currentPlaylist.id, "live", channel.id)
                 );
                 liveHistory.unshift({
                     playlist_id: currentPlaylist.id,
@@ -1753,8 +1777,13 @@
         }
 
         if (target.dataset.homeKind === "continue" || target.dataset.homeKind === "history") {
+            const targetKey = libraryKey(
+                target.dataset.homePlaylist,
+                target.dataset.homeType,
+                target.dataset.homeId
+            );
             const item = watchProgress.find(
-                (entry) => String(entry.content_id) === String(target.dataset.homeId)
+                (entry) => libraryKey(entry.playlist_id, entry.content_type, entry.content_id) === targetKey
             );
             if (item) {
                 resolveProgressPlayback(item).catch(() => setStatus("Contenu indisponible."));
@@ -1763,6 +1792,10 @@
         }
 
         if (target.dataset.homeKind === "recent-live") {
+            if (String(target.dataset.homePlaylist || "") !== String(currentPlaylist?.id || "")) {
+                setStatus("Cette chaîne appartient à une autre playlist.");
+                return;
+            }
             if (!liveChannels.length) await loadProviderLive();
             const channel = liveChannels.find(
                 (entry) => String(entry.id) === String(target.dataset.homeId)
@@ -1776,8 +1809,13 @@
         }
 
         if (target.dataset.homeKind === "favorite") {
+            const targetKey = libraryKey(
+                target.dataset.homePlaylist,
+                target.dataset.homeType,
+                target.dataset.homeId
+            );
             const item = favorites.find(
-                (entry) => String(entry.content_id) === String(target.dataset.homeId)
+                (entry) => libraryKey(entry.playlist_id, entry.content_type, entry.content_id) === targetKey
             );
             if (item) {
                 if (item.content_type === "movie") {

@@ -203,3 +203,22 @@ Tizen parental screen-time accounting now uses the real playback state:
 - trusted runtime cache now persists a wall-clock anchor for safer app-restart fallback
 
 A dedicated CI regression test covers HTML5 and Samsung AVPlay pause/buffer/end states.
+
+
+## Multi-playlist library isolation
+
+Tizen favorites, progress and Home library identity now use:
+`playlist_id + content_type + content_id`.
+
+This prevents collisions when two playlists expose the same provider content ID.
+
+Additional safeguards:
+- Continue Watching only renders items from the active playlist
+- recent channels only render from the active playlist
+- Favorites Home shelf only renders from the active playlist
+- recently watched only renders from the active playlist
+- Favorites catalog hides items belonging to another playlist
+- resume resolution rejects records from another playlist instead of resolving them against the active provider
+- live-history de-duplication is scoped by playlist
+
+No database migration is required; this matches the existing backend uniqueness model.
