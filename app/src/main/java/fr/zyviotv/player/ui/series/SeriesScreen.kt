@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.catalog.catalogPosterMinimumWidth
 import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -275,8 +276,8 @@ private fun SeriesBody(
         columns = GridCells.Adaptive(minSize = posterMinWidth),
         state = gridState,
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(if (profile == DeviceProfile.Mobile) 8.dp else 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (profile == DeviceProfile.Mobile) ZyvioSpace.s2 else ZyvioSpace.s3),
+        verticalArrangement = Arrangement.spacedBy(ZyvioSpace.s4),
     ) {
         items(
             items = items,
@@ -415,7 +416,7 @@ private fun SeriesCard(
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f),
             colors = CardDefaults.cardColors(containerColor = ZyvioSurface1),
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(ZyvioSpace.s3),
         ) {
             Box(
                 modifier = Modifier
@@ -575,7 +576,7 @@ private fun SeriesLoading(profile: DeviceProfile) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = posterMinWidth),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(ZyvioSpace.s4),
         ) {
             items(12) {
                 Column {
