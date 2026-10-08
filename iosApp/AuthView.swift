@@ -41,20 +41,20 @@ struct AuthView: View {
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.secondary)
 
-                        TextField("Adresse e-mail", text: $email)
+                        TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Adresse e-mail" : "Email address"), text: $email)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.emailAddress)
                             .textFieldStyle(.roundedBorder)
                             .disabled(isLoading)
 
                         if mode != .reset {
-                            SecureField("Mot de passe", text: $password)
+                            SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "Mot de passe" : "Password"), text: $password)
                                 .textFieldStyle(.roundedBorder)
                                 .disabled(isLoading)
                         }
 
                         if mode == .signUp {
-                            SecureField("Confirmer le mot de passe", text: $confirmPassword)
+                            SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "Confirmer le mot de passe" : "Confirm password"), text: $confirmPassword)
                                 .textFieldStyle(.roundedBorder)
                                 .disabled(isLoading)
                         }
@@ -80,19 +80,19 @@ struct AuthView: View {
                         .disabled(isLoading)
 
                         if mode == .signIn {
-                            Button("Mot de passe oublié ?") {
+                            Button((Locale.current.language.languageCode?.identifier == "fr" ? "Mot de passe oublié ?" : "Forgot password?")) {
                                 mode = .reset
                                 message = nil
                             }
                             .disabled(isLoading)
 
-                            Button("Créer un compte") {
+                            Button((Locale.current.language.languageCode?.identifier == "fr" ? "Créer un compte" : "Create an account")) {
                                 mode = .signUp
                                 message = nil
                             }
                             .disabled(isLoading)
                         } else {
-                            Button("Retour à la connexion") {
+                            Button((Locale.current.language.languageCode?.identifier == "fr" ? "Retour à la connexion" : "Back to sign in")) {
                                 mode = .signIn
                                 message = nil
                             }
@@ -113,17 +113,17 @@ struct AuthView: View {
         message = nil
 
         if email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            message = "Saisissez votre adresse e-mail."
+            message = (Locale.current.language.languageCode?.identifier == "fr" ? "Saisissez votre adresse e-mail." : "Enter your email address.")
             return
         }
 
         if mode != .reset && password.count < 8 {
-            message = "Le mot de passe doit contenir au moins 8 caractères."
+            message = (Locale.current.language.languageCode?.identifier == "fr" ? "Le mot de passe doit contenir au moins 8 caractères." : "Password must contain at least 8 characters.")
             return
         }
 
         if mode == .signUp && password != confirmPassword {
-            message = "Les mots de passe ne correspondent pas."
+            message = (Locale.current.language.languageCode?.identifier == "fr" ? "Les mots de passe ne correspondent pas." : "Passwords do not match.")
             return
         }
 
@@ -144,14 +144,14 @@ struct AuthView: View {
                     email: email,
                     password: password
                 )
-                message = "Compte créé. Vérifiez votre e-mail si une confirmation est demandée."
+                message = (Locale.current.language.languageCode?.identifier == "fr" ? "Compte créé. Vérifiez votre e-mail si une confirmation est demandée." : "Account created. Check your email if confirmation is required.")
                 mode = .signIn
                 password = ""
                 confirmPassword = ""
 
             case .reset:
                 try await SupabaseAuthService.shared.requestPasswordReset(email: email)
-                message = "E-mail envoyé. Consultez votre boîte de réception."
+                message = (Locale.current.language.languageCode?.identifier == "fr" ? "E-mail envoyé. Consultez votre boîte de réception." : "Email sent. Check your inbox.")
                 mode = .signIn
             }
         } catch {
@@ -161,28 +161,28 @@ struct AuthView: View {
 
     private var title: String {
         switch mode {
-        case .signIn: return "Connexion"
-        case .signUp: return "Créer un compte"
-        case .reset: return "Mot de passe oublié"
+        case .signIn: return (Locale.current.language.languageCode?.identifier == "fr" ? "Connexion" : "Sign in")
+        case .signUp: return (Locale.current.language.languageCode?.identifier == "fr" ? "Créer un compte" : "Create an account")
+        case .reset: return (Locale.current.language.languageCode?.identifier == "fr" ? "Mot de passe oublié" : "Forgot password")
         }
     }
 
     private var subtitle: String {
         switch mode {
         case .signIn:
-            return "Retrouvez vos playlists et votre progression sur tous vos appareils."
+            return (Locale.current.language.languageCode?.identifier == "fr" ? "Retrouvez vos playlists et votre progression sur tous vos appareils." : "Access your playlists and watch progress on all your devices.")
         case .signUp:
-            return "Créez votre compte ZyvioTV Player pour synchroniser vos appareils."
+            return (Locale.current.language.languageCode?.identifier == "fr" ? "Créez votre compte ZyvioTV Player pour synchroniser vos appareils." : "Create your ZyvioTV Player account to sync your devices.")
         case .reset:
-            return "Nous vous enverrons un lien pour réinitialiser votre mot de passe."
+            return (Locale.current.language.languageCode?.identifier == "fr" ? "Nous vous enverrons un lien pour réinitialiser votre mot de passe." : "We will send you a password reset link.")
         }
     }
 
     private var primaryButtonTitle: String {
         switch mode {
-        case .signIn: return "Se connecter"
-        case .signUp: return "Créer mon compte"
-        case .reset: return "Envoyer le lien"
+        case .signIn: return (Locale.current.language.languageCode?.identifier == "fr" ? "Se connecter" : "Sign in")
+        case .signUp: return (Locale.current.language.languageCode?.identifier == "fr" ? "Créer mon compte" : "Create my account")
+        case .reset: return (Locale.current.language.languageCode?.identifier == "fr" ? "Envoyer le lien" : "Send link")
         }
     }
 }
