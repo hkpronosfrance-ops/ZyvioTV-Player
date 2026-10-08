@@ -1,6 +1,10 @@
 package fr.zyviotv.player.ui
 
 import fr.zyviotv.player.ui.theme.ZyvioSpace
+import fr.zyviotv.player.ui.theme.ZyvioCanvas
+import fr.zyviotv.player.ui.theme.ZyvioSurface1
+import fr.zyviotv.player.ui.theme.ZyvioRedTint
+import fr.zyviotv.player.ui.theme.ZyvioTextPrimary
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,8 +26,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -1936,15 +1942,17 @@ private fun AdaptiveShell(
     content: @Composable () -> Unit,
 ) {
     if (profile != DeviceProfile.Mobile) {
-        Row(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize().background(ZyvioCanvas)) {
             NavigationRail(
+                containerColor = ZyvioSurface1,
+                contentColor = ZyvioTextPrimary,
                 modifier = if (profile == DeviceProfile.Television) {
                     Modifier
                         .width(144.dp)
                         .padding(
-                            start = 16.dp,
-                            top = 32.dp,
-                            bottom = 32.dp,
+                            start = ZyvioSpace.s4,
+                            top = ZyvioSpace.s8,
+                            bottom = ZyvioSpace.s8,
                         )
                 } else {
                     Modifier
@@ -1975,9 +1983,14 @@ private fun AdaptiveShell(
                             )
                         },
                         alwaysShowLabel = true,
+                        colors = NavigationRailItemDefaults.colors(
+                            selectedIconColor = ZyvioTextPrimary,
+                            selectedTextColor = ZyvioTextPrimary,
+                            indicatorColor = ZyvioRedTint,
+                        ),
                     )
                     if (profile == DeviceProfile.Television) {
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(ZyvioSpace.s2))
                     }
                 }
             }
@@ -1985,8 +1998,8 @@ private fun AdaptiveShell(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(
-                        horizontal = if (profile == DeviceProfile.Television) 48.dp else 24.dp,
-                        vertical = if (profile == DeviceProfile.Television) 32.dp else 24.dp,
+                        horizontal = if (profile == DeviceProfile.Television) ZyvioSpace.s12 else ZyvioSpace.s6,
+                        vertical = if (profile == DeviceProfile.Television) ZyvioSpace.s8 else ZyvioSpace.s6,
                     ),
             ) {
                 content()
@@ -1995,13 +2008,21 @@ private fun AdaptiveShell(
     } else {
         Scaffold(
             bottomBar = {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = ZyvioSurface1,
+                    contentColor = ZyvioTextPrimary,
+                ) {
                     destinations.forEach { destination ->
                         NavigationBarItem(
                             selected = selectedRoute == destination.route,
                             onClick = { onDestinationSelected(destination) },
                             icon = { Icon(destination.icon, contentDescription = destination.label) },
                             label = { Text(destination.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = ZyvioTextPrimary,
+                                selectedTextColor = ZyvioTextPrimary,
+                                indicatorColor = ZyvioRedTint,
+                            ),
                         )
                     }
                 }
