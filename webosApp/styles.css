@@ -1,4 +1,4 @@
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#070707;color:#fff;font-family:Arial,Helvetica,sans-serif;overflow:hidden}button{font:inherit;color:inherit}.shell{display:grid;grid-template-columns:210px 1fr;height:100vh}.rail{padding:42px 24px;background:#0d0d0d;border-right:1px solid #202020}.brand{margin-bottom:46px}.brand strong{display:block;font-size:28px}.brand span,.eyebrow{color:#ef233c;font-weight:800;letter-spacing:4px}nav{display:grid;gap:14px}.nav,.primary,.card{border:2px solid transparent;outline:none;cursor:pointer;transition:transform 120ms ease,border-color 120ms ease,background 120ms ease}.nav{text-align:left;padding:16px 18px;border-radius:14px;background:transparent;color:#c8c8c8}.nav.active{background:#251014;color:#fff}[data-focusable]:focus{border-color:#ef233c;transform:scale(1.045)}.content{padding:36px 44px 64px;overflow-y:auto}.hero{min-height:330px;padding:44px;border-radius:28px;background:radial-gradient(circle at 78% 30%,rgba(239,35,60,.20),transparent 34%),linear-gradient(105deg,#300308,#111 55%,#080808);display:flex;flex-direction:column;justify-content:center}.hero h1{margin:10px 0 14px;font-size:48px;line-height:1.05}.hero p{color:#bdbdbd;font-size:20px;line-height:1.45}.primary{align-self:flex-start;margin-top:18px;padding:15px 24px;border-radius:14px;background:#ef233c;font-weight:800}.shelf{margin-top:34px}.shelf h2{font-size:25px}.cards{display:flex;gap:18px}.card{width:240px;height:150px;padding:20px;border-radius:20px;background:linear-gradient(160deg,#292929,#141414);display:flex;align-items:flex-end;text-align:left;font-weight:800;font-size:20px}.card.wide{width:310px;height:174px}.status{min-height:28px;margin-top:28px;color:#aaa}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#050506;color:#fff;font-family:Manrope,Arial,Helvetica,sans-serif;overflow:hidden}button{font:inherit;color:inherit}.shell{display:grid;grid-template-columns:210px 1fr;height:100vh}.rail{padding:42px 24px;background:#121215;border-right:1px solid #24242A}.brand{margin-bottom:46px}.brand strong{display:block;font-size:28px}.brand span,.eyebrow{color:#E0102F;font-weight:800;letter-spacing:4px}nav{display:grid;gap:14px}.nav,.primary,.card{border:2px solid transparent;outline:none;cursor:pointer;transition:transform 120ms ease,border-color 120ms ease,background 120ms ease}.nav{text-align:left;padding:16px 18px;border-radius:14px;background:transparent;color:#A9A9B3}.nav.active{background:#251014;color:#fff}[data-focusable]:focus{border-color:#E0102F;transform:scale(1.045)}.content{padding:36px 44px 64px;overflow-y:auto}.hero{min-height:330px;padding:44px;border-radius:28px;background:radial-gradient(circle at 78% 30%,rgba(239,35,60,.20),transparent 34%),linear-gradient(105deg,#300308,#111 55%,#080808);display:flex;flex-direction:column;justify-content:center}.hero h1{margin:10px 0 14px;font-size:48px;line-height:1.05}.hero p{color:#A9A9B3;font-size:20px;line-height:1.45}.primary{align-self:flex-start;margin-top:18px;padding:15px 24px;border-radius:14px;background:#E0102F;font-weight:800}.shelf{margin-top:34px}.shelf h2{font-size:25px}.cards{display:flex;gap:18px}.card{width:240px;height:150px;padding:20px;border-radius:20px;background:linear-gradient(160deg,#292929,#121215);display:flex;align-items:flex-end;text-align:left;font-weight:800;font-size:20px}.card.wide{width:310px;height:174px}.status{min-height:28px;margin-top:28px;color:#aaa}
 
 
 .tv-player {
@@ -13,12 +13,12 @@
 
 
 [hidden]{display:none!important}
-.auth-screen{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:48px;background:radial-gradient(circle at 72% 26%,rgba(239,35,60,.20),transparent 30%),#070707}
+.auth-screen{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:48px;background:radial-gradient(circle at 72% 26%,rgba(239,35,60,.20),transparent 30%),#050506}
 .auth-card{width:min(720px,72vw);padding:44px;border:1px solid #242424;border-radius:28px;background:#101010;box-shadow:0 28px 80px rgba(0,0,0,.46)}
 .auth-card h1{margin:8px 0 10px;font-size:46px}
-.auth-copy{margin:0 0 28px;color:#bdbdbd;font-size:19px}
+.auth-copy{margin:0 0 28px;color:#A9A9B3;font-size:19px}
 .auth-card label{display:grid;gap:8px;margin-top:16px;color:#cfcfcf;font-weight:700}
-.auth-card input{width:100%;padding:16px 18px;border:2px solid #292929;border-radius:14px;outline:none;background:#171717;color:#fff;font-size:20px}
+.auth-card input{width:100%;padding:16px 18px;border:2px solid #292929;border-radius:14px;outline:none;background:#1A1A1F;color:#fff;font-size:20px}
 .auth-card input:focus,[data-focusable]:focus{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.2)}
 .catalog-panel{margin-top:34px}
 .catalog-header{display:flex;align-items:baseline;justify-content:space-between;gap:24px}
@@ -32,7 +32,7 @@
 @media(max-width:1280px){.catalog-grid{grid-template-columns:repeat(4,minmax(140px,1fr))}}
 
 
-.profile-screen{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:48px;background:radial-gradient(circle at 50% 18%,rgba(239,35,60,.16),transparent 26%),#070707}
+.profile-screen{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:48px;background:radial-gradient(circle at 50% 18%,rgba(239,35,60,.16),transparent 26%),#050506}
 .profile-shell{width:min(1180px,88vw);text-align:center}
 .profile-shell h1{margin:8px 0 34px;font-size:48px}
 .profile-grid{display:flex;justify-content:center;flex-wrap:wrap;gap:24px}
@@ -53,4 +53,9 @@
 
 .shelf-header{display:flex;align-items:center;justify-content:space-between;gap:18px}
 .shelf-more{border:0;background:transparent;color:#aaa;font-weight:800;font-size:14px;padding:10px 14px;border-radius:10px}
-.shelf-more:focus{outline:2px solid #fff;color:#fff;background:#171717}
+.shelf-more:focus{outline:2px solid #fff;color:#fff;background:#1A1A1F}
+
+/* Claude Design D6: shared TV tokens and accessible remote focus. */
+:root { --zyvio-bg: #050506; --zyvio-canvas: #0A0A0C; --zyvio-surface-1: #121215; --zyvio-surface-2: #1A1A1F; --zyvio-red: #E0102F; --zyvio-text: #F4F4F6; --zyvio-muted: #A9A9B3; --zyvio-focus: #F4F4F6; }
+:focus-visible, [data-focusable]:focus { outline: 4px solid var(--zyvio-focus); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

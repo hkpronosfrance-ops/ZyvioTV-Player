@@ -6,9 +6,9 @@ html, body {
     margin: 0;
     width: 100%;
     height: 100%;
-    background: #070707;
+    background: #050506;
     color: #fff;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: Manrope, Arial, Helvetica, sans-serif;
     overflow: hidden;
 }
 
@@ -25,8 +25,8 @@ button {
 
 .rail {
     padding: 42px 24px;
-    background: #0d0d0d;
-    border-right: 1px solid #202020;
+    background: #121215;
+    border-right: 1px solid #24242A;
 }
 
 .brand {
@@ -41,7 +41,7 @@ button {
 
 .brand span,
 .eyebrow {
-    color: #ef233c;
+    color: #E0102F;
     font-weight: 800;
     letter-spacing: 4px;
 }
@@ -65,7 +65,7 @@ nav {
     padding: 16px 18px;
     border-radius: 14px;
     background: transparent;
-    color: #c8c8c8;
+    color: #A9A9B3;
 }
 
 .nav-item.active {
@@ -74,7 +74,7 @@ nav {
 }
 
 [data-focusable]:focus {
-    border-color: #ef233c;
+    border-color: #E0102F;
     transform: scale(1.045);
 }
 
@@ -105,7 +105,7 @@ nav {
 }
 
 .hero p {
-    color: #bdbdbd;
+    color: #A9A9B3;
     font-size: 20px;
     line-height: 1.45;
 }
@@ -114,7 +114,7 @@ nav {
     margin-top: 18px;
     padding: 15px 24px;
     border-radius: 14px;
-    background: #ef233c;
+    background: #E0102F;
     font-weight: 800;
 }
 
@@ -136,7 +136,7 @@ nav {
     height: 150px;
     padding: 20px;
     border-radius: 20px;
-    background: linear-gradient(160deg, #292929, #141414);
+    background: linear-gradient(160deg, #292929, #121215);
     display: flex;
     align-items: flex-end;
     text-align: left;
@@ -193,7 +193,7 @@ nav {
     padding: 48px;
     background:
         radial-gradient(circle at 72% 26%, rgba(239,35,60,.20), transparent 30%),
-        #070707;
+        #050506;
 }
 
 .auth-card {
@@ -212,7 +212,7 @@ nav {
 
 .auth-copy {
     margin: 0 0 28px;
-    color: #bdbdbd;
+    color: #A9A9B3;
     font-size: 19px;
 }
 
@@ -230,7 +230,7 @@ nav {
     border: 2px solid #292929;
     border-radius: 14px;
     outline: none;
-    background: #171717;
+    background: #1A1A1F;
     color: #fff;
     font-size: 20px;
 }
@@ -340,7 +340,7 @@ nav {
     padding: 48px;
     background:
         radial-gradient(circle at 50% 18%, rgba(239,35,60,.16), transparent 26%),
-        #070707;
+        #050506;
 }
 
 .profile-shell {
@@ -465,7 +465,7 @@ nav {
     border: 2px solid #333;
     border-radius: 14px;
     outline: none;
-    background: #171717;
+    background: #1A1A1F;
     color: #fff;
     font-size: 28px;
     letter-spacing: 14px;
@@ -508,7 +508,7 @@ nav {
     padding: 48px;
     background:
         radial-gradient(circle at 50% 22%, rgba(239,35,60,.16), transparent 28%),
-        #070707;
+        #050506;
 }
 
 .system-card {
@@ -526,7 +526,7 @@ nav {
 }
 
 .system-card p {
-    color: #bdbdbd;
+    color: #A9A9B3;
     font-size: 20px;
     line-height: 1.5;
 }
@@ -553,4 +553,9 @@ nav {
 
 .shelf-header{display:flex;align-items:center;justify-content:space-between;gap:18px}
 .shelf-more{border:0;background:transparent;color:#aaa;font-weight:800;font-size:14px;padding:10px 14px;border-radius:10px}
-.shelf-more:focus{outline:2px solid #fff;color:#fff;background:#171717}
+.shelf-more:focus{outline:2px solid #fff;color:#fff;background:#1A1A1F}
+
+/* Claude Design D6: shared TV tokens and accessible remote focus. */
+:root { --zyvio-bg: #050506; --zyvio-canvas: #0A0A0C; --zyvio-surface-1: #121215; --zyvio-surface-2: #1A1A1F; --zyvio-red: #E0102F; --zyvio-text: #F4F4F6; --zyvio-muted: #A9A9B3; --zyvio-focus: #F4F4F6; }
+:focus-visible, [data-focusable]:focus { outline: 4px solid var(--zyvio-focus); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
