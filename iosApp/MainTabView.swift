@@ -200,14 +200,14 @@ private struct AccountView: View {
                     NavigationLink {
                         GlobalSearchView()
                     } label: {
-                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Recherche" : "Search"), systemImage: "magnifyingglass")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? (Locale.current.language.languageCode?.identifier == "fr" ? "Recherche" : "Search") : "Search"), systemImage: "magnifyingglass")
                     }
                     .buttonStyle(.bordered)
 
                     NavigationLink {
                         LibraryView()
                     } label: {
-                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Bibliothèque" : "Library"), systemImage: "books.vertical.fill")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? (Locale.current.language.languageCode?.identifier == "fr" ? "Bibliothèque" : "Library") : "Library"), systemImage: "books.vertical.fill")
                     }
                     .buttonStyle(.bordered)
 
@@ -297,11 +297,11 @@ private struct GlobalSearchView: View {
     var body: some View {
         Group {
             if loading {
-                ProgressView("Chargement du catalogue…")
+                ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement du catalogue…" : "Loading catalog…"))
                     .tint(.red)
             } else if let errorMessage {
                 ContentUnavailableView {
-                    Label("Recherche indisponible", systemImage: "exclamationmark.triangle")
+                    Label((Locale.current.language.languageCode?.identifier == "fr" ? "Recherche indisponible" : "Search unavailable"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
@@ -315,7 +315,7 @@ private struct GlobalSearchView: View {
                         ContentUnavailableView(
                             "Rechercher dans ZYVIOTV",
                             systemImage: "magnifyingglass",
-                            description: Text("Chaînes, films et séries.")
+                            description: Text((Locale.current.language.languageCode?.identifier == "fr" ? "Chaînes, films et séries." : "Channels, movies and series."))
                         )
                         .listRowBackground(Color.clear)
                     } else if liveResults.isEmpty && movieResults.isEmpty && seriesResults.isEmpty {
@@ -409,7 +409,7 @@ private struct GlobalSearchView: View {
                                             VStack(alignment: .leading, spacing: 4) {
                                                 Text(series.title)
                                                     .foregroundStyle(.primary)
-                                                Text("Série")
+                                                Text((Locale.current.language.languageCode?.identifier == "fr" ? "Série" : "Series"))
                                                     .font(.caption)
                                                     .foregroundStyle(.secondary)
                                             }
@@ -448,7 +448,7 @@ private struct GlobalSearchView: View {
                 .background(Color.black)
             }
         }
-        .navigationTitle("Recherche")
+        .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Recherche" : "Search"))
         .searchable(text: $query, prompt: "Chaîne, film ou série")
         .task { await reload() }
         .fullScreenCover(item: $playbackTarget) { target in
@@ -651,7 +651,7 @@ private struct LibraryView: View {
             if loading {
                 HStack {
                     Spacer()
-                    ProgressView("Chargement…")
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement…" : "Loading…"))
                     Spacer()
                 }
             } else if let errorMessage {
@@ -663,7 +663,7 @@ private struct LibraryView: View {
             } else {
                 Section("Favoris") {
                     if favorites.isEmpty {
-                        Text("Aucun favori.")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Aucun favori." : "No favorites."))
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(favorites) { item in
@@ -679,7 +679,7 @@ private struct LibraryView: View {
 
                 Section("Continuer") {
                     if continueWatching.isEmpty {
-                        Text("Aucune lecture à reprendre.")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Aucune lecture à reprendre." : "Nothing to resume."))
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(continueWatching) { item in
@@ -695,7 +695,7 @@ private struct LibraryView: View {
 
                 Section("Historique") {
                     if progress.isEmpty {
-                        Text("Aucun historique.")
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Aucun historique." : "No watch history."))
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(progress) { item in
@@ -712,7 +712,7 @@ private struct LibraryView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.black)
-        .navigationTitle("Bibliothèque")
+        .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Bibliothèque" : "Library"))
         .refreshable { await reload() }
         .task { await reload() }
     }
@@ -748,7 +748,7 @@ private struct LibraryView: View {
         switch type {
         case "live": return "Chaîne TV"
         case "movie": return "Film"
-        case "series": return "Série"
+        case "series": return (Locale.current.language.languageCode?.identifier == "fr" ? "Série" : "Series")
         case "episode": return "Épisode"
         default: return type.capitalized
         }
@@ -803,7 +803,7 @@ private struct DevicesSettingsView: View {
             if loading {
                 HStack {
                     Spacer()
-                    ProgressView("Chargement…")
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement…" : "Loading…"))
                     Spacer()
                 }
             } else if let errorMessage {
@@ -1061,7 +1061,7 @@ private struct PlaylistSettingsView: View {
             if loading {
                 HStack {
                     Spacer()
-                    ProgressView("Chargement…")
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement…" : "Loading…"))
                     Spacer()
                 }
             } else if let errorMessage {
@@ -1476,7 +1476,7 @@ private struct ParentalSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if loading {
-                    ProgressView("Chargement…").tint(.red)
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement…" : "Loading…")).tint(.red)
                 } else {
                     pinSection
                     if account?.hasPin == true {
@@ -1913,7 +1913,7 @@ private struct ParentalSettingsView: View {
             catalog.series.lazy
                 .filter { normalized($0.title).contains(query) }
                 .prefix(40)
-                .map { LockEditorItem(key: "series:" + $0.id, name: $0.title, kind: "Série") }
+                .map { LockEditorItem(key: "series:" + $0.id, name: $0.title, kind: (Locale.current.language.languageCode?.identifier == "fr" ? "Série" : "Series")) }
         )
 
         return Array((live + movies + series).prefix(80))
