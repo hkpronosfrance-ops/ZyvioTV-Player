@@ -1571,7 +1571,7 @@ private struct ParentalSettingsView: View {
 
     private var profileSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Restrictions par profil")
+            Text((Locale.current.language.languageCode?.identifier == "fr" ? "Restrictions par profil" : "Restrictions by profile"))
                 .font(.title3.bold())
 
             Picker("Profil", selection: Binding(
@@ -1586,11 +1586,11 @@ private struct ParentalSettingsView: View {
 
             if let settings = profileSettings {
                 if settings.isPrimary {
-                    Text("Le profil principal reste sans restriction d’âge.")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Le profil principal reste sans restriction d’âge." : "The main profile has no age restrictions."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 } else {
-                    Picker("Âge maximum", selection: Binding(
+                    Picker((Locale.current.language.languageCode?.identifier == "fr" ? "Âge maximum" : "Maximum age"), selection: Binding(
                         get: { maxAge ?? 0 },
                         set: { maxAge = $0 == 0 ? nil : $0 }
                     )) {
@@ -1602,22 +1602,22 @@ private struct ParentalSettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Toggle("Masquer les contenus verrouillés", isOn: $hideLocked)
+                Toggle((Locale.current.language.languageCode?.identifier == "fr" ? "Masquer les contenus verrouillés" : "Hide locked content"), isOn: $hideLocked)
 
-                TextField("Temps quotidien (minutes)", text: $dailyLimit)
+                TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Temps quotidien (minutes)" : "Daily limit (minutes)"), text: $dailyLimit)
                     .keyboardType(.numberPad)
                     .textFieldStyle(.roundedBorder)
 
-                TextField("Limite week-end (minutes)", text: $weekendLimit)
+                TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Limite week-end (minutes)" : "Weekend limit (minutes)"), text: $weekendLimit)
                     .keyboardType(.numberPad)
                     .textFieldStyle(.roundedBorder)
 
-                TextField("Avertir avant la fin (minutes)", text: $warningMinutes)
+                TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Avertir avant la fin (minutes)" : "Warn before time runs out (minutes)"), text: $warningMinutes)
                     .keyboardType(.numberPad)
                     .textFieldStyle(.roundedBorder)
 
                 Toggle(
-                    "Plages horaires activées",
+                    (Locale.current.language.languageCode?.identifier == "fr" ? "Plages horaires activées" : "Scheduled access enabled"),
                     isOn: Binding(
                         get: { scheduleEnabled },
                         set: { requested in
@@ -1635,7 +1635,7 @@ private struct ParentalSettingsView: View {
                     )
                 )
 
-                Button("Enregistrer les restrictions") {
+                Button((Locale.current.language.languageCode?.identifier == "fr" ? "Enregistrer les restrictions" : "Save restrictions")) {
                     Task { await saveProfile() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -1645,14 +1645,14 @@ private struct ParentalSettingsView: View {
                 if settings.profileType == "child", let catalog {
                     Divider().padding(.vertical, 4)
 
-                    Text("Verrouillages")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Verrouillages" : "Content locks"))
                         .font(.headline)
 
                     Text("\(lockedCategoryKeys.count) catégorie(s) · \(lockedContentKeys.count) contenu(s)")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
-                    DisclosureGroup("Catégories") {
+                    DisclosureGroup((Locale.current.language.languageCode?.identifier == "fr" ? "Catégories" : "Categories")) {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(lockCategories(catalog), id: \.key) { item in
                                 Toggle(
@@ -1679,7 +1679,7 @@ private struct ParentalSettingsView: View {
                         .padding(.top, 8)
                     }
 
-                    TextField("Rechercher une chaîne, un film ou une série", text: $contentLockQuery)
+                    TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Rechercher une chaîne, un film ou une série" : "Search for a channel, movie or series"), text: $contentLockQuery)
                         .textFieldStyle(.roundedBorder)
 
                     if contentLockQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
@@ -1706,7 +1706,7 @@ private struct ParentalSettingsView: View {
                         }
                     }
 
-                    Button("Enregistrer les verrouillages") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Enregistrer les verrouillages" : "Save content locks")) {
                         Task { await saveLocks() }
                     }
                     .buttonStyle(.bordered)
@@ -1935,7 +1935,7 @@ private struct ParentalSettingsView: View {
         case "invalid_age": return "Restriction d’âge invalide."
         case "invalid_limit": return "Limite de temps invalide."
         case "invalid_warning": return "Avertissement invalide."
-        case "primary_unrestricted": return "Le profil principal reste sans restriction d’âge."
+        case "primary_unrestricted": return (Locale.current.language.languageCode?.identifier == "fr" ? "Le profil principal reste sans restriction d’âge." : "The main profile has no age restrictions.")
         default: return "Modification impossible."
         }
     }
