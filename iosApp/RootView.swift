@@ -254,7 +254,7 @@ private struct AppleSystemGateContainer<Content: View>: View {
             if loading {
                 ZStack {
                     Color.black.ignoresSafeArea()
-                    ProgressView("Vérification du service…")
+                    ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Vérification du service…" : "Checking service…"))
                         .tint(.red)
                 }
             } else {
@@ -266,21 +266,21 @@ private struct AppleSystemGateContainer<Content: View>: View {
                         content()
                     } else {
                         systemStateView(
-                            title: "Maintenance programmée",
-                            message: message ?? "Une maintenance est prévue prochainement. Vous pouvez continuer à utiliser ZYVIOTV.",
+                            title: (Locale.current.language.languageCode?.identifier == "fr" ? "Maintenance programmée" : "Scheduled maintenance"),
+                            message: message ?? (Locale.current.language.languageCode?.identifier == "fr" ? "Une maintenance est prévue prochainement. Vous pouvez continuer à utiliser ZYVIOTV." : "Maintenance is scheduled soon. You can continue using ZYVIOTV."),
                             blocking: false
                         )
                     }
                 case .blockingMaintenance(let message):
                     systemStateView(
-                        title: "Maintenance en cours",
-                        message: message ?? "Le service est momentanément indisponible pendant la maintenance.",
+                        title: (Locale.current.language.languageCode?.identifier == "fr" ? "Maintenance en cours" : "Maintenance in progress"),
+                        message: message ?? (Locale.current.language.languageCode?.identifier == "fr" ? "Le service est momentanément indisponible pendant la maintenance." : "The service is temporarily unavailable during maintenance."),
                         blocking: true
                     )
                 case .accountSuspended(let message):
                     systemStateView(
-                        title: "Compte suspendu",
-                        message: message ?? "L’accès au service est actuellement suspendu pour ce compte.",
+                        title: (Locale.current.language.languageCode?.identifier == "fr" ? "Compte suspendu" : "Account suspended"),
+                        message: message ?? (Locale.current.language.languageCode?.identifier == "fr" ? "L’accès au service est actuellement suspendu pour ce compte." : "Service access is currently suspended for this account."),
                         blocking: true
                     )
                 }
@@ -311,19 +311,19 @@ private struct AppleSystemGateContainer<Content: View>: View {
                     .multilineTextAlignment(.center)
 
                 if !blocking {
-                    Button("Continuer") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Continuer" : "Continue")) {
                         ignoredPlannedMaintenance = true
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                 } else {
-                    Button("Réessayer") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) {
                         Task { await reload() }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
 
-                    Button("Se déconnecter", role: .destructive) {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Se déconnecter" : "Sign out"), role: .destructive) {
                         Task {
                             await SupabaseAuthService.shared.signOut()
                             onSignedOut()
@@ -621,7 +621,7 @@ private struct ProfilePickerView: View {
                                 Text(message)
                                     .foregroundStyle(.secondary)
                                     .multilineTextAlignment(.center)
-                                Button("Réessayer") {
+                                Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) {
                                     Task { await reload() }
                                     onRetry()
                                 }
