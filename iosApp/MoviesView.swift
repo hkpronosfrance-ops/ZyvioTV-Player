@@ -169,8 +169,11 @@ struct MoviePlayerScreen: View {
     @State private var errorMessage: String?
 
     private var resumeSeconds: Double {
-        let milliseconds = existingProgress?.positionMs ?? 0
+        guard let progress = existingProgress, !progress.completed else { return 0 }
+        let milliseconds = progress.positionMs
         guard milliseconds > 0 else { return 0 }
+        if let duration = progress.durationMs, duration > 0,
+           Double(milliseconds) / Double(duration) >= 0.95 { return 0 }
         return max(Double(milliseconds) / 1_000.0 - 5.0, 0)
     }
 
