@@ -62,7 +62,7 @@ struct MainTabView: View {
                     }
                     .navigationTitle("ZYVIOTV")
                     .scrollContentBackground(.hidden)
-                    .background(Color.black)
+                    .background(ZyvioDesign.Palette.base)
                 } detail: {
                     sectionView(selectedSection)
                 }
@@ -135,7 +135,7 @@ private struct AccountView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                ZyvioDesign.Palette.base.ignoresSafeArea()
 
                 VStack(alignment: .leading, spacing: 20) {
                     Text((Locale.current.language.languageCode?.identifier == "fr" ? (Locale.current.language.languageCode?.identifier == "fr" ? "Compte" : "Account") : "Account"))
@@ -225,7 +225,7 @@ private struct AccountView: View {
 
                     Spacer()
                 }
-                .padding(24)
+                .padding(ZyvioDesign.Space.s6)
             }
             .navigationTitle("Plus")
         }
@@ -445,7 +445,7 @@ private struct GlobalSearchView: View {
                     }
                 }
                 .scrollContentBackground(.hidden)
-                .background(Color.black)
+                .background(ZyvioDesign.Palette.base)
             }
         }
         .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Recherche" : "Search"))
@@ -605,7 +605,7 @@ private struct SearchLivePlayer: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+            ZyvioDesign.Palette.base.ignoresSafeArea()
 
             ParentalProtectedPlayerView(
                 title: channel.name,
@@ -627,8 +627,8 @@ private struct SearchLivePlayer: View {
 
             if let errorMessage {
                 Text(errorMessage)
-                    .padding(16)
-                    .background(Color.black.opacity(0.9))
+                    .padding(ZyvioDesign.Space.s4)
+                    .background(ZyvioDesign.Palette.surface1.opacity(0.96))
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .padding(18)
             }
@@ -711,7 +711,7 @@ private struct LibraryView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.black)
+        .background(ZyvioDesign.Palette.base)
         .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Bibliothèque" : "Library"))
         .refreshable { await reload() }
         .task { await reload() }
@@ -879,7 +879,7 @@ private struct DevicesSettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.black)
+        .background(ZyvioDesign.Palette.base)
         .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Appareils" : "Devices"))
         .refreshable { await reload() }
         .task { await reload() }
@@ -998,7 +998,7 @@ private struct ParentalPinRecoveryRequestView: View {
                 Spacer()
             }
             .padding(22)
-            .background(Color.black)
+            .background(ZyvioDesign.Palette.base)
             .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Récupération du PIN" : "PIN recovery"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1082,7 +1082,7 @@ private struct PlaylistSettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.black)
+        .background(ZyvioDesign.Palette.base)
         .navigationTitle("Playlists")
         .task { await reload() }
         .sheet(isPresented: $showingAdd) {
@@ -1350,7 +1350,7 @@ private struct PlaylistEditView: View {
                 }
                 .padding(22)
             }
-            .background(Color.black)
+            .background(ZyvioDesign.Palette.base)
             .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Modifier la playlist" : "Edit playlist"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1493,7 +1493,7 @@ private struct ParentalSettingsView: View {
             }
             .padding(20)
         }
-        .background(Color.black)
+        .background(ZyvioDesign.Palette.base)
         .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Contrôle parental" : "Parental controls"))
         .task { await loadAll() }
         .onChange(of: selectedProfileId) { _, _ in
