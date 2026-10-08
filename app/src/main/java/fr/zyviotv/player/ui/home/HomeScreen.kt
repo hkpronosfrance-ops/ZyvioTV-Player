@@ -50,6 +50,11 @@ import fr.zyviotv.player.shared.sync.FavoriteContentType
 import fr.zyviotv.player.shared.sync.ProgressContentType
 import fr.zyviotv.player.shared.sync.SyncedWatchProgress
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioBase
+import fr.zyviotv.player.ui.theme.ZyvioRedTint
+import fr.zyviotv.player.ui.theme.ZyvioSurface1
+import fr.zyviotv.player.ui.theme.ZyvioSurface2
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.catalog.ProviderCatalogState
 import fr.zyviotv.player.ui.library.LibraryState
 import fr.zyviotv.player.ui.tv.tvFocusEffect
@@ -82,7 +87,7 @@ fun HomeScreen(
     onOpenContinueWatching: () -> Unit,
     onOpenHistory: () -> Unit,
 ) {
-    val contentPadding = if (profile == DeviceProfile.Mobile) 4.dp else 12.dp
+    val contentPadding = if (profile == DeviceProfile.Mobile) ZyvioSpace.s1 else ZyvioSpace.s3
     val readyProvider = providerState as? ProviderCatalogState.Ready
     val readyLibrary = libraryState as? LibraryState.Ready
 
@@ -591,7 +596,7 @@ private fun Hero(
             .fillMaxWidth()
             .height(heroHeight)
             .background(
-                color = Color(0xFF080808),
+                color = ZyvioBase,
                 shape = RoundedCornerShape(24.dp),
             ),
     ) {
@@ -609,9 +614,9 @@ private fun Hero(
                 .background(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
-                            Color(0xFF120002).copy(alpha = 0.96f),
-                            Color.Black.copy(alpha = 0.76f),
-                            Color.Black.copy(alpha = 0.24f),
+                            ZyvioRedTint.copy(alpha = 0.96f),
+                            ZyvioBase.copy(alpha = 0.88f),
+                            ZyvioBase.copy(alpha = 0.20f),
                         ),
                     ),
                     shape = RoundedCornerShape(24.dp),
@@ -620,8 +625,8 @@ private fun Hero(
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .fillMaxWidth(0.78f)
-                .padding(24.dp),
+                .fillMaxWidth(if (profile == DeviceProfile.Mobile) 0.94f else 0.78f)
+                .padding(if (profile == DeviceProfile.Mobile) ZyvioSpace.s4 else ZyvioSpace.s6),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
@@ -763,8 +768,8 @@ private fun HomeRecentChannelsSection(
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color(0xFF2A2A2A),
-                                    Color(0xFF151515),
+                                    ZyvioSurface2,
+                                    ZyvioSurface1,
                                 ),
                             ),
                         ),
