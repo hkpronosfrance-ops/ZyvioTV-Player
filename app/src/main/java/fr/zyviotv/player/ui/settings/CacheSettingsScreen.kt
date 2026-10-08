@@ -11,6 +11,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.res.stringResource
+import fr.zyviotv.player.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,12 +61,12 @@ fun CacheSettingsScreen(
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Données et cache",
+                    text = stringResource(R.string.settings_data_cache),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                 )
                 Text(
-                    text = "Stockage local de cet appareil",
+                    text = stringResource(R.string.settings_device_storage),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -73,7 +75,7 @@ fun CacheSettingsScreen(
         Spacer(Modifier.height(24.dp))
 
         Text(
-            text = "Cache temporaire",
+            text = stringResource(R.string.settings_temporary_cache),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )
@@ -85,7 +87,7 @@ fun CacheSettingsScreen(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Le cache contient uniquement des fichiers temporaires. Vos playlists, favoris et progressions synchronisés ne sont pas supprimés.",
+            text = stringResource(R.string.settings_cache_explanation),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
@@ -125,13 +127,13 @@ fun CacheSettingsScreen(
         Spacer(Modifier.height(18.dp))
 
         Text(
-            text = "À propos du stockage",
+            text = stringResource(R.string.settings_about_storage),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Les identifiants fournisseur restent dans le stockage sécurisé prévu à cet effet et ne sont pas effacés par cette action.",
+            text = stringResource(R.string.settings_secure_storage),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
