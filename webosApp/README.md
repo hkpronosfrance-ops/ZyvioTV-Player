@@ -60,7 +60,8 @@ The LG webOS client now also supports:
 - current-program display when live playback starts
 - remote-focusable dynamic movie/series/episode grids
 
-M3U remains Live-only for this phase.
+M3U and Xtream now both support Live TV, Movies, Series, seasons and episodes.
+M3U series are reconstructed from playlist metadata/title conventions such as S01E02, 1x02 and Saison/Episode patterns, with group-title and URL hints used for classification.
 No database migration is required.
 
 
@@ -162,7 +163,7 @@ Additional behavior:
 - same-category recommendations exclude the last watched title
 - Home card actions open/play the correct content
 - focus is restored when returning to Home
-- M3U remains limited to compatible Home shelves
+- M3U supports the same Home catalog shelves as Xtream when corresponding content is present
 
 No database migration is required.
 
@@ -194,3 +195,19 @@ WEBOS_RESOLUTION=1920x1080 bash webosApp/package-ipk.sh my-lg-tv
 ```
 
 A green CI package is not equivalent to physical-TV or LG Seller Lounge certification. The final external gate is documented in `PHYSICAL_QA.md`.
+
+
+## Full M3U catalog parity
+
+ZYVIOTV product rule: M3U and Xtream Codes API must both expose the complete available catalog on every platform.
+
+For webOS, the M3U provider now:
+- parses and caches the playlist per source URL
+- creates stable content IDs
+- separates Live, Movies and Series
+- groups series episodes into seasons
+- exposes generic `loadSeriesInfo` for both Xtream and M3U
+- supports M3U content in Home, Favorites, watch progress and resume
+- retains XMLTV as the EPG source when supplied
+
+Ambiguous entries fall back to Live instead of being silently discarded.
