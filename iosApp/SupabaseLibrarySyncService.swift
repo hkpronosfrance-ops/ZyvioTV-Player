@@ -1839,6 +1839,27 @@ actor SupabaseProviderCatalogService {
         seriesId: String
     ) async throws -> ProviderSeriesDetailDTO {
         let secret = try await loadPlaylistSecret(playlistId: playlistId)
+        if secret.providerType == "m3u" {
+            guard let url = secret.m3uURL else { throw ProviderCatalogError.invalidSecret }
+            let entries = try await loadM3uEntries(url: url)
+            guard var detail = m3uSeriesDetails(entries: entries)[seriesId] else {
+                throw ProviderCatalogError.providerUnavailable
+            }
+            // The series screen already supports this provider-neutral DTO.
+            if let identity = entries.compactMap({ entry -> M3uEpisodeIdentity? in
+                guard m3uKind(entry) == "series" else { return nil }
+                let candidate = m3uEpisode(entry.name)
+                let group = m3uGroup(entry.groupTitle) ?? ""
+                let id = candidate.map { "m3u-series-" + m3uStableId(m3uKey($0.seriesTitle) + "|" + m3uKey(group)) }
+                return id == seriesId ? candidate : nil
+            }).first {
+                detail = ProviderSeriesDetailDTO(
+                    title: identity.seriesTitle, year: nil, synopsis: nil,
+                    genres: [], episodes: detail.episodes
+                )
+            }
+            return detail
+        }
         guard
             secret.providerType == "xtream",
             let serverURL = secret.serverURL,
@@ -1967,7 +1988,7 @@ actor SupabaseProviderCatalogService {
         let groupTitle: String?
     }
 
-    private func loadM3uEntries(url: URL, maxEntries: Int = 20_000) async throws -> [AppleM3uEntry] {
+    private func loadM3uEntries(url: URL, maxEntries: Int = 100_000) async throws -> [AppleM3uEntry] {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 30
@@ -2069,82 +2090,165 @@ actor SupabaseProviderCatalogService {
         return nil
     }
 
+    private struct M3uEpisodeIdentity {
+        let seriesTitle: String
+        let season: Int
+        let number: Int
+        let title: String?
+    }
+
+    private func m3uStableId(_ input: String) -> String {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in input.utf8 {
+            hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211
+        }
+        return String(hash, radix: 16)
+    }
+
+    private func m3uGroup(_ value: String?) -> String? {
+        let group = value?
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        return group?.isEmpty == false ? group : nil
+    }
+
+    private func m3uKey(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+    }
+
+    private func m3uEpisode(_ name: String) -> M3uEpisodeIdentity? {
+        let patterns = [
+            #"^(.+?)[\s._-]+[sS](\d{1,2})[\s._-]*[eE](\d{1,3})(?:\b|[\s._-])(.*)$"#,
+            #"^(.+?)[\s._-]+(\d{1,2})[xX](\d{1,3})(?:\b|[\s._-])(.*)$"#,
+            #"^(.+?)[\s._-]+[sS]aison[\s._-]*(\d{1,2})[\s._-]+(?:[eE]pisode|[eE]p)[\s._-]*(\d{1,3})(?:\b|[\s._-])(.*)$"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
+                  match.numberOfRanges == 5
+            else { continue }
+            func capture(_ index: Int) -> String {
+                guard let range = Range(match.range(at: index), in: name) else { return "" }
+                return String(name[range])
+            }
+            let seriesName = capture(1).replacingOccurrences(of: ".", with: " ")
+                .replacingOccurrences(of: "_", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !seriesName.isEmpty, let season = Int(capture(2)), let number = Int(capture(3)),
+                  season > 0, number > 0 else { continue }
+            let episodeName = capture(4).trimmingCharacters(in: CharacterSet(charactersIn: " ._-"))
+            return M3uEpisodeIdentity(
+                seriesTitle: seriesName, season: season, number: number,
+                title: episodeName.isEmpty ? nil : episodeName.replacingOccurrences(of: ".", with: " ")
+            )
+        }
+        return nil
+    }
+
+    private func m3uKind(_ entry: AppleM3uEntry) -> String {
+        if m3uEpisode(entry.name) != nil { return "series" }
+        let group = m3uKey(entry.groupTitle ?? "")
+        if ["series", "serie", "tv show", "episodes", "saison"].contains(where: group.contains) { return "series" }
+        if ["vod", "movie", "film", "cinema", "cinéma"].contains(where: group.contains) { return "movie" }
+        if ["live", "tv", "channels", "chaine", "sport", "news", "info"].contains(where: group.contains) { return "live" }
+        let path = entry.streamURL.path.lowercased()
+        if path.contains("/series/") { return "series" }
+        if path.contains("/movie/") || path.contains("/vod/") { return "movie" }
+        if path.contains("/live/") { return "live" }
+        if ["mkv", "mp4", "avi", "mov", "m4v", "webm"].contains(entry.streamURL.pathExtension.lowercased()) {
+            return "movie"
+        }
+        return "live"
+    }
+
+    private func m3uSeriesDetails(entries: [AppleM3uEntry]) -> [String: ProviderSeriesDetailDTO] {
+        var grouped: [String: [ProviderSeriesEpisodeDTO]] = [:]
+        var titles: [String: String] = [:]
+        for entry in entries where m3uKind(entry) == "series" {
+            // Do not invent an episode when the M3U entry has no season/episode identity.
+            guard let identity = m3uEpisode(entry.name) else { continue }
+            let group = m3uGroup(entry.groupTitle) ?? ""
+            let seriesId = "m3u-series-" + m3uStableId(m3uKey(identity.seriesTitle) + "|" + m3uKey(group))
+            let episodeId = "m3u-episode-" + m3uStableId(seriesId + "|" + String(identity.season) +
+                "|" + String(identity.number) + "|" + entry.streamURL.absoluteString)
+            titles[seriesId] = identity.seriesTitle
+            grouped[seriesId, default: []].append(ProviderSeriesEpisodeDTO(
+                id: episodeId, season: identity.season, number: identity.number,
+                title: identity.title ?? "Épisode \(identity.number)",
+                synopsis: nil, streamUrl: entry.streamURL
+            ))
+        }
+        return grouped.mapValues { episodes in
+            let ordered = episodes.sorted {
+                $0.season == $1.season ? $0.number < $1.number : $0.season < $1.season
+            }
+            return ProviderSeriesDetailDTO(title: nil, year: nil, synopsis: nil, genres: [], episodes: ordered)
+        }
+    }
+
     private func mapM3uCatalog(
         playlist: ProviderPlaylistDTO,
         entries: [AppleM3uEntry]
     ) -> ProviderCatalogDTO {
-        var categoryNames: [String] = []
-        var seenNames = Set<String>()
+        var liveCategories: [String: String] = [:]
+        var movieCategories: [String: String] = [:]
+        var seriesCategories: [String: String] = [:]
+        var liveChannels: [ProviderLiveChannelDTO] = []
+        var movies: [ProviderMovieDTO] = []
+        var series: [ProviderSeriesDTO] = []
+        var seenSeries = Set<String>()
+        var usedLiveIds = Set<String>()
+
         for entry in entries {
-            guard let group = entry.groupTitle?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-                !group.isEmpty
-            else { continue }
-
-            let normalized = group
-                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                .lowercased()
-            if seenNames.insert(normalized).inserted {
-                categoryNames.append(group)
-            }
-        }
-
-        let categoryPairs = categoryNames.enumerated().map { index, name in
-            ("m3u-group-\(index)", name)
-        }
-        let categories = Dictionary(uniqueKeysWithValues: categoryPairs)
-        let categoryIdByName = Dictionary(
-            uniqueKeysWithValues: categoryPairs.map { id, name in
-                (
-                    name
-                        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                        .lowercased(),
-                    id
-                )
-            }
-        )
-
-        var usedIds = Set<String>()
-        let channels = entries.enumerated().map { index, entry -> ProviderLiveChannelDTO in
-            let baseId = entry.tvgId?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .nilIfBlank ?? "m3u-\(index)"
-            var id = baseId
-            var duplicateIndex = 2
-            while !usedIds.insert(id).inserted {
-                id = "\(baseId)-\(duplicateIndex)"
-                duplicateIndex += 1
-            }
-
-            let categoryId = entry.groupTitle
-                .map {
-                    $0.folding(
-                        options: [.diacriticInsensitive, .caseInsensitive],
-                        locale: .current
-                    ).lowercased()
+            let kind = m3uKind(entry)
+            let group = m3uGroup(entry.groupTitle)
+            let prefix = "m3u-" + kind + "-group-"
+            let categoryId = group.map { prefix + m3uStableId(m3uKey($0)) }
+            if let group, let categoryId {
+                switch kind {
+                case "movie": movieCategories[categoryId] = group
+                case "series": seriesCategories[categoryId] = group
+                default: liveCategories[categoryId] = group
                 }
-                .flatMap { categoryIdByName[$0] }
-
-            return ProviderLiveChannelDTO(
-                id: id,
-                playlistId: playlist.id,
-                name: entry.name,
-                categoryId: categoryId,
-                logoUrl: entry.logoURL,
-                streamUrl: entry.streamURL,
-                epgId: entry.tvgId
-            )
+            }
+            switch kind {
+            case "movie":
+                movies.append(ProviderMovieDTO(
+                    id: "m3u-movie-" + m3uStableId(entry.name + "|" + (group ?? "") + "|" + entry.streamURL.absoluteString),
+                    playlistId: playlist.id, title: entry.name, categoryId: categoryId,
+                    posterUrl: entry.logoURL, streamUrl: entry.streamURL, addedAtEpochSeconds: nil
+                ))
+            case "series":
+                guard let identity = m3uEpisode(entry.name) else { continue }
+                let id = "m3u-series-" + m3uStableId(m3uKey(identity.seriesTitle) + "|" + m3uKey(group ?? ""))
+                if seenSeries.insert(id).inserted {
+                    series.append(ProviderSeriesDTO(
+                        id: id, playlistId: playlist.id, title: identity.seriesTitle,
+                        categoryId: categoryId, posterUrl: entry.logoURL, addedAtEpochSeconds: nil
+                    ))
+                }
+            default:
+                let raw = entry.tvgId?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let base = raw?.isEmpty == false ? raw! :
+                    "m3u-live-" + m3uStableId(entry.name + "|" + (group ?? "") + "|" + entry.streamURL.absoluteString)
+                var id = base
+                var suffix = 2
+                while !usedLiveIds.insert(id).inserted {
+                    id = "\(base)-\(suffix)"
+                    suffix += 1
+                }
+                liveChannels.append(ProviderLiveChannelDTO(
+                    id: id, playlistId: playlist.id, name: entry.name, categoryId: categoryId,
+                    logoUrl: entry.logoURL, streamUrl: entry.streamURL, epgId: entry.tvgId
+                ))
+            }
         }
-
         return ProviderCatalogDTO(
-            playlistId: playlist.id,
-            playlistName: playlist.name,
-            liveChannels: channels,
-            liveCategories: categories,
-            movieCategories: [:],
-            seriesCategories: [:],
-            movies: [],
-            series: []
+            playlistId: playlist.id, playlistName: playlist.name,
+            liveChannels: liveChannels, liveCategories: liveCategories,
+            movieCategories: movieCategories, seriesCategories: seriesCategories,
+            movies: movies, series: series
         )
     }
 
@@ -2183,26 +2287,35 @@ actor SupabaseProviderCatalogService {
 
             let blockedCategories = Set(locks?.lockedCategoryKeys ?? [])
             let blockedContent = Set(locks?.lockedContentKeys ?? [])
-            let filtered = catalog.liveChannels.filter { channel in
+            let filteredLive = catalog.liveChannels.filter { channel in
                 let contentKey = "live:" + channel.id
                 let categoryKey = channel.categoryId.map { "live:" + $0 }
-                let adultCategory = channel.categoryId
-                    .flatMap { catalog.liveCategories[$0] }
+                let adult = channel.categoryId.flatMap { catalog.liveCategories[$0] }
                     .map(isAdultCategoryName) ?? false
                 return !blockedContent.contains(contentKey)
-                    && !(categoryKey.map(blockedCategories.contains) ?? false)
-                    && !adultCategory
+                    && !(categoryKey.map(blockedCategories.contains) ?? false) && !adult
             }
-
+            let filteredMovies = catalog.movies.filter { movie in
+                let contentKey = "movie:" + movie.id
+                let categoryKey = movie.categoryId.map { "movie:" + $0 }
+                let adult = movie.categoryId.flatMap { catalog.movieCategories[$0] }
+                    .map(isAdultCategoryName) ?? false
+                return !blockedContent.contains(contentKey)
+                    && !(categoryKey.map(blockedCategories.contains) ?? false) && !adult
+            }
+            let filteredSeries = catalog.series.filter { item in
+                let contentKey = "series:" + item.id
+                let categoryKey = item.categoryId.map { "series:" + $0 }
+                let adult = item.categoryId.flatMap { catalog.seriesCategories[$0] }
+                    .map(isAdultCategoryName) ?? false
+                return !blockedContent.contains(contentKey)
+                    && !(categoryKey.map(blockedCategories.contains) ?? false) && !adult
+            }
             return ProviderCatalogDTO(
-                playlistId: catalog.playlistId,
-                playlistName: catalog.playlistName,
-                liveChannels: filtered,
-                liveCategories: catalog.liveCategories,
-                movieCategories: [:],
-                seriesCategories: [:],
-                movies: [],
-                series: []
+                playlistId: catalog.playlistId, playlistName: catalog.playlistName,
+                liveChannels: filteredLive, liveCategories: catalog.liveCategories,
+                movieCategories: catalog.movieCategories, seriesCategories: catalog.seriesCategories,
+                movies: filteredMovies, series: filteredSeries
             )
         }
 
