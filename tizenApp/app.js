@@ -1150,6 +1150,7 @@
         try {
             favorites = await window.ZyvioCloud.listFavorites(currentSession, currentProfile.id);
             const visibleFavorites = favorites.filter((item) => {
+                if (String(item.playlist_id || "") !== String(currentPlaylist?.id || "")) return false;
                 if (!isChildProfile()) return true;
                 const key = contentKey(item.content_type, item.content_id);
                 if (
@@ -1283,6 +1284,10 @@
     }
 
     async function resolveProgressPlayback(progress) {
+        if (String(progress?.playlist_id || "") !== String(currentPlaylist?.id || "")) {
+            throw new Error("Ce contenu appartient à une autre playlist.");
+        }
+
         if (progress.content_type === "movie") {
             if (!movies.length) movies = await window.ZyvioProvider.loadMovies(providerConfig);
             const movie = movies.find((item) => item.id === String(progress.content_id));
