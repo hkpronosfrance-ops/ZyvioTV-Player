@@ -603,9 +603,9 @@ private struct ProfilePickerView: View {
                 ScrollView {
                     VStack(spacing: 28) {
                         VStack(spacing: 8) {
-                            Text("Qui regarde ?")
+                            Text((Locale.current.language.languageCode?.identifier == "fr" ? "Qui regarde ?" : "Who's watching?"))
                                 .font(.largeTitle.bold())
-                            Text("Choisissez votre profil ZYVIOTV.")
+                            Text((Locale.current.language.languageCode?.identifier == "fr" ? "Choisissez votre profil ZYVIOTV." : "Choose your ZYVIOTV profile."))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -648,7 +648,7 @@ private struct ProfilePickerView: View {
                                                     VStack {
                                                         HStack {
                                                             Spacer()
-                                                            Text("ENFANT")
+                                                            Text((Locale.current.language.languageCode?.identifier == "fr" ? "ENFANT" : "KIDS"))
                                                                 .font(.caption2.bold())
                                                                 .padding(.horizontal, 8)
                                                                 .padding(.vertical, 5)
@@ -672,7 +672,7 @@ private struct ProfilePickerView: View {
                                                 .lineLimit(1)
 
                                             if profile.isPrimary {
-                                                Text("Principal")
+                                                Text((Locale.current.language.languageCode?.identifier == "fr" ? "Principal" : "Main"))
                                                     .font(.caption)
                                                     .foregroundStyle(.secondary)
                                             }
@@ -711,7 +711,7 @@ private struct ProfilePickerView: View {
             _ = try await SupabaseProfileService.shared.ensurePrimaryProfile()
             profiles = try await SupabaseProfileService.shared.listProfiles()
             if profiles.isEmpty {
-                localError = "Aucun profil disponible."
+                localError = (Locale.current.language.languageCode?.identifier == "fr" ? "Aucun profil disponible." : "No profiles available.")
             }
         } catch {
             localError = error.localizedDescription
