@@ -17,6 +17,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.res.stringResource
+import fr.zyviotv.player.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -155,7 +157,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                     fontWeight = FontWeight.ExtraBold,
                 )
                 Text(
-                    text = "PIN commun au compte · restrictions propres au profil",
+                    text = stringResource(R.string.parental_header),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -165,7 +167,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Text(it, color = MaterialTheme.colorScheme.error)
             Spacer(Modifier.height(8.dp))
-            Button(onClick = { scope.launch { loadAccount() } }) { Text("Réessayer") }
+            Button(onClick = { scope.launch { loadAccount() } }) { Text(stringResource(R.string.device_retry)) }
             return@Column
         }
 
@@ -181,7 +183,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
             OutlinedTextField(
                 value = currentPin,
                 onValueChange = { currentPin = it.filter(Char::isDigit).take(4) },
-                label = { Text("PIN actuel") },
+                label = { Text(stringResource(R.string.parental_current_pin)) },
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -202,7 +204,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                     }
                 },
             ) {
-                Text("Code PIN oublié ?")
+                Text(stringResource(R.string.parental_forgot_pin))
             }
         }
 
@@ -210,7 +212,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
         OutlinedTextField(
             value = newPin,
             onValueChange = { newPin = it.filter(Char::isDigit).take(4) },
-            label = { Text("Nouveau PIN") },
+            label = { Text(stringResource(R.string.parental_new_pin)) },
             visualTransformation = PasswordVisualTransformation(),
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -239,7 +241,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                     busy = false
                 }
             },
-        ) { Text("Enregistrer le PIN") }
+        ) { Text(stringResource(R.string.parental_save_pin)) }
 
         if (settings?.hasPin == true) {
             Spacer(Modifier.height(20.dp))
@@ -271,7 +273,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
             OutlinedTextField(
                 value = actionPin,
                 onValueChange = { actionPin = it.filter(Char::isDigit).take(4) },
-                label = { Text("PIN pour confirmer les modifications") },
+                label = { Text(stringResource(R.string.parental_confirm_pin)) },
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -279,7 +281,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(20.dp))
             Text(
-                text = "Propre à chaque profil",
+                text = stringResource(R.string.parental_per_profile),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -312,7 +314,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                 )
 
                 Spacer(Modifier.height(10.dp))
-                Text("Âge maximum", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.profile_max_age), fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -349,7 +351,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                 OutlinedTextField(
                     value = dailyLimit,
                     onValueChange = { dailyLimit = it.filter(Char::isDigit).take(4) },
-                    label = { Text("Temps d’écran quotidien (minutes)") },
+                    label = { Text(stringResource(R.string.parental_screen_time)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -358,7 +360,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                 OutlinedTextField(
                     value = weekendLimit,
                     onValueChange = { weekendLimit = it.filter(Char::isDigit).take(4) },
-                    label = { Text("Limite week-end (minutes)") },
+                    label = { Text(stringResource(R.string.parental_weekend)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -367,7 +369,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                 OutlinedTextField(
                     value = warningMinutes,
                     onValueChange = { warningMinutes = it.filter(Char::isDigit).take(3) },
-                    label = { Text("Avertir avant la fin (minutes)") },
+                    label = { Text(stringResource(R.string.parental_warning)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -437,12 +439,12 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                                 }
                             },
                         ) {
-                            Text("Enregistrer les verrouillages")
+                            Text(stringResource(R.string.parental_save_locks))
                         }
                     } else {
                         Spacer(Modifier.height(14.dp))
                         Text(
-                            text = "Catalogue indisponible pour modifier les verrouillages.",
+                            text = stringResource(R.string.parental_catalog_unavailable),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -491,7 +493,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                             busy = false
                         }
                     },
-                ) { Text("Enregistrer les restrictions") }
+                ) { Text(stringResource(R.string.parental_save_restrictions)) }
             }
         }
 
@@ -503,7 +505,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
         profileSettings?.let {
             Spacer(Modifier.height(10.dp))
             Text(
-                text = "Le PIN ne déverrouille que l’action en cours. Le temps d’écran est cumulé sur tous les appareils.",
+                text = stringResource(R.string.parental_pin_explanation),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
