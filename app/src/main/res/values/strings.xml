@@ -70,4 +70,8 @@
     <string name="profile_default_disabled">Profil par défaut désactivé sur cet appareil.</string>
     <string name="profile_duplicate_name">Ce nom est déjà utilisé par un autre profil.</string>
     <string name="profile_updated">Profil modifié.</string>
+    <string name="playlist_load_error">Impossible de charger vos playlists.</string>
+    <string name="playlist_empty">Aucune playlist configurée.</string>
+    <string name="playlist_edit_error">Impossible de modifier cette playlist.</string>
+    <string name="playlist_delete_error">Impossible de supprimer cette playlist.</string>
 </resources>
