@@ -138,7 +138,7 @@ private struct AccountView: View {
                 Color.black.ignoresSafeArea()
 
                 VStack(alignment: .leading, spacing: 20) {
-                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Compte" : "Account"))
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? (Locale.current.language.languageCode?.identifier == "fr" ? "Compte" : "Account") : "Account"))
                         .font(.largeTitle.bold())
 
                     Text((Locale.current.language.languageCode?.identifier == "fr" ? "Votre compte ZYVIOTV Player synchronise vos appareils, favoris et progressions." : "Your ZYVIOTV Player account syncs your devices, favorites and watch progress."))
@@ -179,7 +179,7 @@ private struct AccountView: View {
                     NavigationLink {
                         ParentalSettingsView()
                     } label: {
-                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Contrôle parental" : "Parental controls"), systemImage: "lock.shield.fill")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? (Locale.current.language.languageCode?.identifier == "fr" ? "Contrôle parental" : "Parental controls") : "Parental controls"), systemImage: "lock.shield.fill")
                     }
                     .buttonStyle(.bordered)
 
@@ -193,7 +193,7 @@ private struct AccountView: View {
                     NavigationLink {
                         DevicesSettingsView()
                     } label: {
-                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Appareils" : "Devices"), systemImage: "laptopcomputer.and.iphone")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? (Locale.current.language.languageCode?.identifier == "fr" ? "Appareils" : "Devices") : "Devices"), systemImage: "laptopcomputer.and.iphone")
                     }
                     .buttonStyle(.bordered)
 
@@ -305,7 +305,7 @@ private struct GlobalSearchView: View {
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("Réessayer") { Task { await reload() } }
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) { Task { await reload() } }
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
                 }
@@ -658,7 +658,7 @@ private struct LibraryView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(errorMessage)
                         .foregroundStyle(.red)
-                    Button("Réessayer") { Task { await reload() } }
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) { Task { await reload() } }
                 }
             } else {
                 Section("Favoris") {
@@ -810,7 +810,7 @@ private struct DevicesSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(errorMessage)
                         .foregroundStyle(.red)
-                    Button("Réessayer") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) {
                         Task { await reload() }
                     }
                 }
@@ -825,11 +825,11 @@ private struct DevicesSettingsView: View {
                                 .textFieldStyle(.roundedBorder)
 
                             HStack {
-                                Button("Annuler") {
+                                Button((Locale.current.language.languageCode?.identifier == "fr" ? "Annuler" : "Cancel")) {
                                     editingId = nil
                                     editingName = ""
                                 }
-                                Button("Enregistrer") {
+                                Button((Locale.current.language.languageCode?.identifier == "fr" ? "Enregistrer" : "Save")) {
                                     Task { await saveRename(device) }
                                 }
                                 .buttonStyle(.borderedProminent)
@@ -880,7 +880,7 @@ private struct DevicesSettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.black)
-        .navigationTitle("Appareils")
+        .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Appareils" : "Devices"))
         .refreshable { await reload() }
         .task { await reload() }
     }
@@ -958,10 +958,10 @@ private struct ParentalPinRecoveryRequestView: View {
                 Text((Locale.current.language.languageCode?.identifier == "fr" ? "PIN oublié" : "Forgot PIN"))
                     .font(.largeTitle.bold())
 
-                Text("Un lien sécurisé sera envoyé à l’adresse e-mail de votre compte. Le lien est valable pour une réauthentification récente.")
+                Text((Locale.current.language.languageCode?.identifier == "fr" ? "Un lien sécurisé sera envoyé à l’adresse e-mail de votre compte. Le lien est valable pour une réauthentification récente." : "A secure link will be sent to your account email address. It requires recent reauthentication."))
                     .foregroundStyle(.secondary)
 
-                TextField("Adresse e-mail", text: $email)
+                TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Adresse e-mail" : "Email address"), text: $email)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
                     .textFieldStyle(.roundedBorder)
@@ -1002,7 +1002,7 @@ private struct ParentalPinRecoveryRequestView: View {
             .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Récupération du PIN" : "PIN recovery"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Fermer") { dismiss() }
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Fermer" : "Close")) { dismiss() }
                 }
             }
             .task { await loadEmail() }
@@ -1051,7 +1051,7 @@ private struct PlaylistSettingsView: View {
                     Text("\(playlists.count) / 10")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Ajouter") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Ajouter" : "Add")) {
                         showingAdd = true
                     }
                     .disabled(playlists.count >= 10)
@@ -1068,7 +1068,7 @@ private struct PlaylistSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(errorMessage)
                         .foregroundStyle(.red)
-                    Button("Réessayer") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) {
                         Task { await reload() }
                     }
                 }
@@ -1159,14 +1159,14 @@ private struct PlaylistSettingsView: View {
                 Button {
                     editingPlaylist = playlist
                 } label: {
-                    Label("Modifier", systemImage: "pencil")
+                    Label((Locale.current.language.languageCode?.identifier == "fr" ? "Modifier" : "Edit"), systemImage: "pencil")
                 }
                 .disabled(busyId != nil)
 
                 Button(role: .destructive) {
                     Task { await delete(playlist) }
                 } label: {
-                    Label("Supprimer", systemImage: "trash")
+                    Label((Locale.current.language.languageCode?.identifier == "fr" ? "Supprimer" : "Delete"), systemImage: "trash")
                 }
                 .disabled(busyId != nil)
             }
@@ -1296,11 +1296,11 @@ private struct PlaylistEditView: View {
                         .keyboardType(.URL)
                         .textFieldStyle(.roundedBorder)
 
-                        TextField("Nom d’utilisateur", text: $username)
+                        TextField((Locale.current.language.languageCode?.identifier == "fr" ? "Nom d’utilisateur" : "Username"), text: $username)
                             .textInputAutocapitalization(.never)
                             .textFieldStyle(.roundedBorder)
 
-                        SecureField("Mot de passe", text: $password)
+                        SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "Mot de passe" : "Password"), text: $password)
                             .textFieldStyle(.roundedBorder)
                     } else {
                         Text((Locale.current.language.languageCode?.identifier == "fr" ? "Remplacer la source M3U / XMLTV" : "Replace M3U / XMLTV source"))
@@ -1338,7 +1338,7 @@ private struct PlaylistEditView: View {
                         if busy {
                             ProgressView()
                         } else {
-                            Text("Enregistrer")
+                            Text((Locale.current.language.languageCode?.identifier == "fr" ? "Enregistrer" : "Save"))
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -1354,7 +1354,7 @@ private struct PlaylistEditView: View {
             .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Modifier la playlist" : "Edit playlist"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Fermer") { dismiss() }
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Fermer" : "Close")) { dismiss() }
                 }
             }
         }
@@ -1494,7 +1494,7 @@ private struct ParentalSettingsView: View {
             .padding(20)
         }
         .background(Color.black)
-        .navigationTitle("Contrôle parental")
+        .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Contrôle parental" : "Parental controls"))
         .task { await loadAll() }
         .onChange(of: selectedProfileId) { _, _ in
             Task { await loadProfile() }
@@ -1510,7 +1510,7 @@ private struct ParentalSettingsView: View {
                 .font(.title3.bold())
 
             if account?.hasPin == true {
-                SecureField("PIN actuel", text: $currentPin)
+                SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "PIN actuel" : "Current PIN"), text: $currentPin)
                     .keyboardType(.numberPad)
                     .onChange(of: currentPin) { _, value in
                         currentPin = String(value.filter(\.isNumber).prefix(4))
@@ -1518,14 +1518,14 @@ private struct ParentalSettingsView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            SecureField("Nouveau PIN", text: $newPin)
+            SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "Nouveau PIN" : "New PIN"), text: $newPin)
                 .keyboardType(.numberPad)
                 .onChange(of: newPin) { _, value in
                     newPin = String(value.filter(\.isNumber).prefix(4))
                 }
                 .textFieldStyle(.roundedBorder)
 
-            Button("Enregistrer le PIN") {
+            Button((Locale.current.language.languageCode?.identifier == "fr" ? "Enregistrer le PIN" : "Save PIN")) {
                 Task { await savePin() }
             }
             .buttonStyle(.borderedProminent)
@@ -1537,7 +1537,7 @@ private struct ParentalSettingsView: View {
             )
 
             if account?.hasPin == true {
-                Button("PIN oublié ?") {
+                Button((Locale.current.language.languageCode?.identifier == "fr" ? "PIN oublié ?" : "Forgot PIN?")) {
                     showingPinRecovery = true
                 }
                 .buttonStyle(.bordered)
@@ -1547,9 +1547,9 @@ private struct ParentalSettingsView: View {
 
     private var accountSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Compte").font(.title3.bold())
+            Text((Locale.current.language.languageCode?.identifier == "fr" ? "Compte" : "Account")).font(.title3.bold())
 
-            SecureField("PIN pour confirmer", text: $actionPin)
+            SecureField((Locale.current.language.languageCode?.identifier == "fr" ? "PIN pour confirmer" : "PIN to confirm"), text: $actionPin)
                 .keyboardType(.numberPad)
                 .onChange(of: actionPin) { _, value in
                     actionPin = String(value.filter(\.isNumber).prefix(4))
@@ -1574,7 +1574,7 @@ private struct ParentalSettingsView: View {
             Text((Locale.current.language.languageCode?.identifier == "fr" ? "Restrictions par profil" : "Restrictions by profile"))
                 .font(.title3.bold())
 
-            Picker("Profil", selection: Binding(
+            Picker((Locale.current.language.languageCode?.identifier == "fr" ? "Profil" : "Profile"), selection: Binding(
                 get: { selectedProfileId ?? profiles.first?.id ?? "" },
                 set: { selectedProfileId = $0 }
             )) {
@@ -1594,7 +1594,7 @@ private struct ParentalSettingsView: View {
                         get: { maxAge ?? 0 },
                         set: { maxAge = $0 == 0 ? nil : $0 }
                     )) {
-                        Text("Tous").tag(0)
+                        Text((Locale.current.language.languageCode?.identifier == "fr" ? "Tous" : "All")).tag(0)
                         ForEach([7, 10, 12, 16, 18], id: \.self) { age in
                             Text("\(age)+").tag(age)
                         }

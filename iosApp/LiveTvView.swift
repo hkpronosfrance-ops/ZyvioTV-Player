@@ -28,11 +28,11 @@ struct LiveTvView: View {
                     ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Chargement des chaînes…" : "Loading channels…")).tint(.red)
                 } else if let error {
                     ContentUnavailableView {
-                        Label("TV indisponible", systemImage: "exclamationmark.triangle")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "TV indisponible" : "TV unavailable"), systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(error)
                     } actions: {
-                        Button("Réessayer") { Task { await load() } }
+                        Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) { Task { await load() } }
                             .buttonStyle(.borderedProminent)
                             .tint(.red)
                     }
@@ -192,7 +192,7 @@ struct LiveTvView: View {
                 }
 
                 if let next = next(for: channel.id) {
-                    Text("À suivre : \(next.title)")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "À suivre : " : "Up next: ") + next.title)
                         .foregroundStyle(.secondary)
                 }
 
@@ -343,7 +343,7 @@ private struct GuideList: View {
                             )
 
                             if let next {
-                                Text("À suivre · \(next.title)")
+                                Text((Locale.current.language.languageCode?.identifier == "fr" ? "À suivre · " : "Up next · ") + next.title)
                                     .foregroundStyle(.secondary)
                             }
                         }

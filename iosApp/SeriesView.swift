@@ -22,11 +22,11 @@ struct SeriesView: View {
                         .tint(.red)
                 } else if let errorMessage {
                     ContentUnavailableView {
-                        Label("Catalogue indisponible", systemImage: "exclamationmark.triangle")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Catalogue indisponible" : "Catalog unavailable"), systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(errorMessage)
                     } actions: {
-                        Button("Réessayer") {
+                        Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) {
                             Task { await reload() }
                         }
                         .buttonStyle(.borderedProminent)
@@ -193,11 +193,11 @@ struct SeriesDetailView: View {
                     .tint(.red)
             } else if let errorMessage {
                 ContentUnavailableView {
-                    Label("Épisodes indisponibles", systemImage: "exclamationmark.triangle")
+                    Label((Locale.current.language.languageCode?.identifier == "fr" ? "Épisodes indisponibles" : "Episodes unavailable"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("Réessayer") {
+                    Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) {
                         Task { await reload() }
                     }
                     .buttonStyle(.borderedProminent)
@@ -391,7 +391,7 @@ private struct EpisodeRow: View {
                     )
                     .tint(.red)
                 } else if progress?.completed == true {
-                    Label("Vu", systemImage: "checkmark.circle.fill")
+                    Label((Locale.current.language.languageCode?.identifier == "fr" ? "Vu" : "Watched"), systemImage: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

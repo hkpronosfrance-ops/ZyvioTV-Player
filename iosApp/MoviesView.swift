@@ -22,11 +22,11 @@ struct MoviesView: View {
                         .tint(.red)
                 } else if let errorMessage {
                     ContentUnavailableView {
-                        Label("Catalogue indisponible", systemImage: "exclamationmark.triangle")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Catalogue indisponible" : "Catalog unavailable"), systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(errorMessage)
                     } actions: {
-                        Button("Réessayer") {
+                        Button((Locale.current.language.languageCode?.identifier == "fr" ? "Réessayer" : "Try again")) {
                             Task { await reload() }
                         }
                         .buttonStyle(.borderedProminent)
