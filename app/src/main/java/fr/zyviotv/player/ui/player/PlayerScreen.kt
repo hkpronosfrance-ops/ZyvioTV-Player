@@ -57,6 +57,7 @@ import fr.zyviotv.player.shared.playback.PlaybackState
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.theme.ZyvioBase
 import fr.zyviotv.player.ui.theme.ZyvioSpace
+import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
@@ -338,8 +339,8 @@ private fun VideoSurfacePlaceholder() {
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF151515),
-                        Color(0xFF050506),
+                        ZyvioSurface2,
+                        ZyvioBase,
                     ),
                 ),
             ),
@@ -815,7 +816,7 @@ private fun ResumePanel(
             color = ZyvioSurface1,
             shape = RoundedCornerShape(18.dp),
         ) {
-            Column(Modifier.padding(22.dp)) {
+            Column(Modifier.padding(ZyvioSpace.s6)) {
                 Text(
                     text = "Reprendre la lecture ?",
                     style = MaterialTheme.typography.titleLarge,
@@ -882,7 +883,7 @@ private fun ChannelNumberPanel(
             color = ZyvioSurface1,
             shape = RoundedCornerShape(14.dp),
         ) {
-            Column(Modifier.padding(18.dp)) {
+            Column(Modifier.padding(ZyvioSpace.s5)) {
                 Text(
                     text = "ALLER À LA CHAÎNE",
                     color = ZyvioTextSecondary,
