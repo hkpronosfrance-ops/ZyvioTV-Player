@@ -47,3 +47,6 @@
 
 .pin-actions{display:flex;gap:14px;margin-top:22px}
 .pin-actions .card{width:auto;height:auto;min-height:0;padding:15px 24px;align-items:center}
+
+.device-card.current{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+.device-card.current strong::after{content:" · CET APPAREIL";font-size:12px;letter-spacing:.7px;color:#bbb}

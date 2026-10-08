@@ -132,3 +132,20 @@ The LG webOS client now also supports:
 - true HTML5 playback-state reporting: paused, ended and buffering time do not count as screen time
 
 No database migration is required; the existing parental runtime RPCs are reused.
+
+
+## Devices + system states
+
+The LG webOS client now also supports:
+- stable per-TV device registration with platform=webos
+- device list with current-TV marker
+- remote-friendly device rename flow
+- disconnecting another registered device with the red key
+- protection against disconnecting the current TV from itself
+- account-suspended blocking state
+- blocking maintenance state
+- dismissible planned-maintenance notice
+- periodic system-state refresh while signed in
+- device registration refresh on sign-in/session restore
+
+No database migration is required; existing device/account/service-state tables and RLS policies are reused.

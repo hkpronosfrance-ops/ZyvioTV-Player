@@ -28,6 +28,17 @@
   const liveGrid = document.getElementById("live-grid");
   const liveCount = document.getElementById("live-count");
   const accountPanel = document.getElementById("account-panel");
+  const devicesPanel = document.getElementById("devices-panel");
+  const devicesGrid = document.getElementById("devices-grid");
+  const devicesCount = document.getElementById("devices-count");
+  const deviceEditScreen = document.getElementById("device-edit-screen");
+  const deviceNameInput = document.getElementById("device-name-input");
+  const deviceEditStatus = document.getElementById("device-edit-status");
+  const systemScreen = document.getElementById("system-screen");
+  const systemTitle = document.getElementById("system-title");
+  const systemCopy = document.getElementById("system-copy");
+  const systemContinue = document.getElementById("system-continue");
+  const systemSignout = document.getElementById("system-signout");
   const catalogPanel = document.getElementById("catalog-panel");
   const catalogTitle = document.getElementById("catalog-title");
   const catalogCount = document.getElementById("catalog-count");
@@ -56,6 +67,10 @@
   let parentalRuntime = null;
   let runtimeBlocked = false;
   let runtimeExceptionUntilMs = 0;
+  let devices = [];
+  let editingDeviceId = null;
+  let systemState = { type: "normal", message: null, blocking: false };
+  let plannedMaintenanceDismissed = false;
 
   const PROFILE_STORAGE_KEY = "zyviotv.webos.profile.v1";
   const DEVICE_UID_STORAGE_KEY = "zyviotv.webos.device_uid.v1";
@@ -79,6 +94,16 @@
   }
 
   const deviceUid = stableDeviceUid();
+
+  function webosAppVersion() {
+    return "0.1.0";
+  }
+
+  function webosDeviceName() {
+    const ua = String(navigator.userAgent || "");
+    const match = ua.match(/LG[^;)]*/i);
+    return match ? "LG TV " + match[0].trim() : "LG Smart TV";
+  }
 
   function runtimeCacheKey(profileId) {
     return RUNTIME_CACHE_PREFIX + String(profileId || "");
@@ -398,6 +423,10 @@
     parentalRuntime = null;
     runtimeBlocked = false;
     runtimeExceptionUntilMs = 0;
+    devices = [];
+    editingDeviceId = null;
+    systemState = { type: "normal", message: null, blocking: false };
+    plannedMaintenanceDismissed = false;
     liveChannels = [];
     movies = [];
     series = [];
@@ -406,8 +435,12 @@
     if (catalogGrid) catalogGrid.replaceChildren();
     if (livePanel) livePanel.hidden = true;
     if (accountPanel) accountPanel.hidden = true;
+    if (devicesPanel) devicesPanel.hidden = true;
     if (profileScreen) profileScreen.hidden = true;
     if (pinScreen) pinScreen.hidden = true;
+    if (deviceEditScreen) deviceEditScreen.hidden = true;
+    if (systemScreen) systemScreen.hidden = true;
+    if (devicesPanel) devicesPanel.hidden = true;
     if (appShell) appShell.hidden = true;
     if (authScreen) authScreen.hidden = false;
     setAuthStatus(message);
@@ -619,6 +652,174 @@
     setStatus(section);
   }
 
+  function showSystemState(state) {
+    systemState = state || { type: "normal", message: null, blocking: false };
+    if (!systemScreen) return true;
+
+    if (systemState.type === "normal") {
+      systemScreen.hidden = true;
+      return true;
+    }
+
+    if (systemState.type === "maintenance_planned" && plannedMaintenanceDismissed) {
+      systemScreen.hidden = true;
+      return true;
+    }
+
+    if (systemTitle) {
+      systemTitle.textContent =
+        systemState.type === "account_suspended" ? "Compte suspendu" :
+        systemState.type === "maintenance_blocking" ? "Maintenance en cours" :
+        "Maintenance programmée";
+    }
+
+    if (systemCopy) {
+      systemCopy.textContent = systemState.message ||
+        (systemState.type === "account_suspended"
+          ? "L’accès au service est actuellement suspendu pour ce compte."
+          : systemState.type === "maintenance_blocking"
+            ? "Le service est momentanément indisponible pendant la maintenance."
+            : "Une maintenance est prévue prochainement. Vous pouvez continuer à utiliser ZYVIOTV.");
+    }
+
+    if (systemContinue) systemContinue.hidden = systemState.type !== "maintenance_planned";
+    if (systemSignout) systemSignout.hidden = !systemState.blocking;
+    systemScreen.hidden = false;
+    setTimeout(() => systemScreen.querySelector("[data-focusable]:not([hidden])")?.focus(), 0);
+    return !systemState.blocking;
+  }
+
+  async function refreshSystemState() {
+    if (!currentSession) return true;
+    try {
+      const state = await window.ZyvioCloud.getSystemState(currentSession);
+      return showSystemState(state);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  async function registerCurrentDevice() {
+    if (!currentSession) return;
+    try {
+      await window.ZyvioCloud.registerDevice(currentSession, {
+        deviceUid,
+        displayName: webosDeviceName(),
+        appVersion: webosAppVersion(),
+      });
+    } catch (_) {}
+  }
+
+  function renderDevices() {
+    if (!devicesGrid || !devicesPanel) return;
+    hidePanels();
+    devicesPanel.hidden = false;
+    if (devicesCount) {
+      devicesCount.textContent = devices.length + " appareil" + (devices.length > 1 ? "s" : "");
+    }
+    devicesGrid.replaceChildren();
+
+    devices.forEach((device) => {
+      const button = document.createElement("button");
+      button.className = "catalog-card device-card";
+      button.dataset.focusable = "";
+      button.dataset.deviceId = device.id;
+      if (device.device_uid === deviceUid) button.classList.add("current");
+
+      const strong = document.createElement("strong");
+      strong.textContent = device.display_name || "Appareil";
+
+      const small = document.createElement("small");
+      const platform =
+        device.platform === "webos" ? "LG webOS" :
+        device.platform === "tizen" ? "Samsung TV" :
+        device.platform || "Appareil";
+      small.textContent = platform +
+        (device.app_version ? " · v" + device.app_version : "") +
+        (device.device_uid === deviceUid ? " · Cet appareil" : "");
+
+      button.append(strong, small);
+      devicesGrid.append(button);
+    });
+
+    setStatus("OK : renommer · touche rouge : déconnecter un autre appareil.");
+    setTimeout(() => devicesGrid.querySelector("[data-focusable]")?.focus(), 0);
+  }
+
+  function setDeviceEditStatus(message) {
+    if (deviceEditStatus) deviceEditStatus.textContent = message || "";
+  }
+
+  function openDeviceRename(device) {
+    if (!deviceEditScreen || !deviceNameInput || !device) return;
+    editingDeviceId = device.id;
+    deviceNameInput.value = device.display_name || "";
+    setDeviceEditStatus("");
+    deviceEditScreen.hidden = false;
+    setTimeout(() => deviceNameInput.focus(), 0);
+  }
+
+  function closeDeviceRename() {
+    editingDeviceId = null;
+    if (deviceNameInput) deviceNameInput.value = "";
+    setDeviceEditStatus("");
+    if (deviceEditScreen) deviceEditScreen.hidden = true;
+  }
+
+  async function saveDeviceRename() {
+    if (!editingDeviceId || !currentSession) return;
+    const clean = String(deviceNameInput?.value || "").trim();
+    if (!clean) {
+      setDeviceEditStatus("Le nom de l’appareil ne peut pas être vide.");
+      return;
+    }
+
+    setDeviceEditStatus("Enregistrement…");
+    try {
+      await window.ZyvioCloud.renameDevice(currentSession, editingDeviceId, clean);
+      devices = devices.map((item) =>
+        item.id === editingDeviceId ? { ...item, display_name: clean } : item
+      );
+      closeDeviceRename();
+      renderDevices();
+      setStatus("Appareil renommé.");
+    } catch (_) {
+      setDeviceEditStatus("Impossible de renommer cet appareil.");
+    }
+  }
+
+  async function loadDevices() {
+    if (!currentSession) return;
+    setStatus("Chargement des appareils…");
+    try {
+      devices = await window.ZyvioCloud.listDevices(currentSession);
+      renderDevices();
+    } catch (_) {
+      setStatus("Impossible de charger les appareils.");
+    }
+  }
+
+  async function disconnectFocusedDevice() {
+    const target = document.activeElement?.closest?.("[data-device-id]");
+    if (!target || !currentSession) return;
+    const device = devices.find((item) => item.id === target.dataset.deviceId);
+    if (!device) return;
+
+    if (device.device_uid === deviceUid) {
+      setStatus("Impossible de déconnecter cet appareil depuis lui-même.");
+      return;
+    }
+
+    try {
+      await window.ZyvioCloud.deleteDevice(currentSession, device.id);
+      devices = devices.filter((item) => item.id !== device.id);
+      renderDevices();
+      setStatus("Appareil déconnecté.");
+    } catch (_) {
+      setStatus("Impossible de déconnecter cet appareil.");
+    }
+  }
+
   async function restoreProvider(session) {
     setStatus("Synchronisation du compte…");
     await window.ZyvioCloud.ensurePrimaryProfile(session);
@@ -670,6 +871,9 @@
         showAuth("");
         return;
       }
+      await registerCurrentDevice();
+      const allowed = await refreshSystemState();
+      if (!allowed) return;
       await restoreProvider(currentSession);
     } catch (_) {
       currentSession = null;
@@ -691,6 +895,12 @@
     try {
       currentSession = await window.ZyvioAuth.signIn(email, password);
       if (passwordInput) passwordInput.value = "";
+      await registerCurrentDevice();
+      const allowed = await refreshSystemState();
+      if (!allowed) {
+        setAuthStatus("");
+        return;
+      }
       await restoreProvider(currentSession);
       setAuthStatus("");
     } catch (error) {
@@ -1506,7 +1716,11 @@
 
     if (event.key === "ColorF0Red" || event.keyCode === 403) {
       event.preventDefault();
-      await toggleFavoriteForFocused();
+      if (document.activeElement?.closest?.("[data-device-id]")) {
+        await disconnectFocusedDevice();
+      } else {
+        await toggleFavoriteForFocused();
+      }
       return;
     }
 
@@ -1527,6 +1741,21 @@
         return;
       }
 
+      if (deviceEditScreen && !deviceEditScreen.hidden) {
+        closeDeviceRename();
+        return;
+      }
+
+      if (systemScreen && !systemScreen.hidden) {
+        if (systemState.type === "maintenance_planned") {
+          plannedMaintenanceDismissed = true;
+          systemScreen.hidden = true;
+          showApp();
+          return;
+        }
+        return;
+      }
+
       if (await stopPlayback()) return;
 
       if (livePanel && !livePanel.hidden) {
@@ -1540,6 +1769,13 @@
         catalogPanel.hidden = true;
         activate("home");
         setTimeout(() => document.querySelector('[data-section="home"]')?.focus(), 0);
+        return;
+      }
+
+      if (devicesPanel && !devicesPanel.hidden) {
+        devicesPanel.hidden = true;
+        if (accountPanel) accountPanel.hidden = false;
+        setTimeout(() => accountPanel?.querySelector("[data-focusable]")?.focus(), 0);
         return;
       }
 
@@ -1587,8 +1823,14 @@
   });
 
   document.addEventListener("click", async (event) => {
-    const target = event.target.closest("[data-section], [data-action], [data-channel-id], [data-catalog-kind], [data-profile-id], [data-home-kind]");
+    const target = event.target.closest("[data-section], [data-action], [data-channel-id], [data-catalog-kind], [data-profile-id], [data-home-kind], [data-device-id]");
     if (!target) return;
+
+    if (target.dataset.deviceId) {
+      const device = devices.find((item) => item.id === target.dataset.deviceId);
+      if (device) openDeviceRename(device);
+      return;
+    }
 
     if (target.dataset.profileId) {
       try {
@@ -1750,6 +1992,33 @@
       return;
     }
 
+    if (target.dataset.action === "devices") {
+      await loadDevices();
+      return;
+    }
+
+    if (target.dataset.action === "device-save") {
+      await saveDeviceRename();
+      return;
+    }
+
+    if (target.dataset.action === "device-cancel") {
+      closeDeviceRename();
+      return;
+    }
+
+    if (target.dataset.action === "system-continue") {
+      plannedMaintenanceDismissed = true;
+      if (systemScreen) systemScreen.hidden = true;
+      showApp();
+      return;
+    }
+
+    if (target.dataset.action === "system-signout") {
+      await signOut();
+      return;
+    }
+
     if (target.dataset.action === "verify-pin") {
       await verifyPendingPin();
       return;
@@ -1789,5 +2058,8 @@
       syncActivePlayback();
       parentalRuntimeTick();
     }, 30_000);
+    setInterval(() => {
+      if (currentSession) refreshSystemState();
+    }, 5 * 60_000);
   });
 })();
