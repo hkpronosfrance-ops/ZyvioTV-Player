@@ -1,0 +1,8 @@
+dist/
+.build/
+*.ipk
+*.pem
+*.p12
+*.pfx
+*.key
+*.crt

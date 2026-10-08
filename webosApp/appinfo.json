@@ -9,5 +9,8 @@
   "largeIcon": "icon-large.png",
   "bgColor": "#070707",
   "transparent": false,
-  "disableBackHistoryAPI": true
+  "disableBackHistoryAPI": true,
+  "requiredACG": [],
+  "appDescription": "Lecteur ZYVIOTV pour LG webOS",
+  "resolution": "1920x1080"
 }
