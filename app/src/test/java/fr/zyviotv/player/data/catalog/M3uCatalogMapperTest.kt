@@ -77,4 +77,74 @@ class M3uCatalogMapperTest {
             snapshot.liveChannels[1].categoryId,
         )
     }
+    @Test
+    fun fullM3uCatalogMapsLiveMoviesSeriesAndEpisodes() {
+        val snapshot = M3uCatalogMapper.map(
+            listOf(
+                M3uEntry(
+                    name = "Actu 24",
+                    streamUrl = "https://stream.example/live/1.ts",
+                    tvgId = "news.fr",
+                    groupTitle = "FR - LIVE",
+                ),
+                M3uEntry(
+                    name = "Film Exemple",
+                    streamUrl = "https://stream.example/movie/2.mkv",
+                    groupTitle = "FR - FILMS",
+                    logoUrl = "https://img.example/movie.jpg",
+                ),
+                M3uEntry(
+                    name = "Ma Serie S01E01 Pilote",
+                    streamUrl = "https://stream.example/series/3.mkv",
+                    groupTitle = "FR - SERIES",
+                ),
+                M3uEntry(
+                    name = "Ma Serie S01E02 Suite",
+                    streamUrl = "https://stream.example/series/4.mkv",
+                    groupTitle = "FR - SERIES",
+                ),
+            ),
+        )
+
+        assertEquals(1, snapshot.liveChannels.size)
+        assertEquals(1, snapshot.movies.size)
+        assertEquals(1, snapshot.series.size)
+
+        val series = snapshot.series.single()
+        assertEquals("Ma Serie", series.title)
+
+        val detail = M3uSeriesDetailRegistry.load(series.id)
+        requireNotNull(detail)
+        assertEquals(2, detail.episodes.size)
+        assertEquals(1, detail.episodes[0].season)
+        assertEquals(1, detail.episodes[0].number)
+        assertEquals(2, detail.episodes[1].number)
+        assertEquals("Pilote", detail.episodes[0].title)
+        assertEquals("Suite", detail.episodes[1].title)
+    }
+
+    @Test
+    fun alternateEpisodeNamingConventionsAreRecognized() {
+        val snapshot = M3uCatalogMapper.map(
+            listOf(
+                M3uEntry(
+                    name = "Autre Serie 2x03 Episode Trois",
+                    streamUrl = "https://stream.example/series/a.mp4",
+                    groupTitle = "TV SHOWS",
+                ),
+                M3uEntry(
+                    name = "Troisieme Serie Saison 3 Episode 4 Finale",
+                    streamUrl = "https://stream.example/series/b.mp4",
+                    groupTitle = "SERIES",
+                ),
+            ),
+        )
+
+        assertEquals(2, snapshot.series.size)
+        val details = snapshot.series.mapNotNull { M3uSeriesDetailRegistry.load(it.id) }
+        assertEquals(2, details.size)
+        assertEquals(setOf(2, 3), details.flatMap { it.episodes }.map { it.season }.toSet())
+        assertEquals(setOf(3, 4), details.flatMap { it.episodes }.map { it.number }.toSet())
+    }
+
 }

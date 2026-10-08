@@ -63,7 +63,8 @@ import fr.zyviotv.player.data.settings.ProfileRepository
 import fr.zyviotv.player.data.system.SystemGateState
 import fr.zyviotv.player.data.system.SystemStatePreferences
 import fr.zyviotv.player.data.system.SystemStateRepository
-import fr.zyviotv.player.data.catalog.AndroidXtreamSeriesDetailLoader
+import fr.zyviotv.player.data.catalog.AndroidSeriesDetailLoader
+import fr.zyviotv.player.shared.xtream.XtreamCredentials
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
 import fr.zyviotv.player.data.epg.AndroidXmlTvGuideLoader
@@ -119,7 +120,6 @@ import fr.zyviotv.player.shared.sync.PlaylistSecret
 import fr.zyviotv.player.shared.sync.ProgressContentType
 import fr.zyviotv.player.shared.sync.SyncedFavorite
 import fr.zyviotv.player.shared.sync.SyncedWatchProgress
-import fr.zyviotv.player.shared.xtream.XtreamCredentials
 import fr.zyviotv.player.ui.search.SearchScreen
 import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.ui.sync.DeviceSyncEffect
@@ -1394,22 +1394,14 @@ fun ZyvioTVPlayerApp(
                             return@LaunchedEffect
                         }
 
-                    val xtream = secret as? PlaylistSecret.Xtream
-                    if (xtream == null) {
-                        seriesDetailState = SeriesDetailState.Error(
-                            "Les saisons et épisodes détaillés sont disponibles pour les playlists Xtream.",
-                        )
-                        return@LaunchedEffect
-                    }
-
                     when (
-                        val result = AndroidXtreamSeriesDetailLoader(
-                            credentials = XtreamCredentials(
-                                serverUrl = xtream.serverUrl,
-                                username = xtream.username,
-                                password = xtream.password,
-                            ),
-                        ).load(series.id)
+                        val result = AndroidSeriesDetailLoader.load(
+                            secret = secret ?: run {
+                                seriesDetailState = SeriesDetailState.Error("Configuration de playlist absente.")
+                                return@LaunchedEffect
+                            },
+                            seriesId = series.id,
+                        )
                     ) {
                         is SeriesDetailLoadResult.Failure -> {
                             seriesDetailState = SeriesDetailState.Error(result.message)
@@ -1757,18 +1749,15 @@ fun ZyvioTVPlayerApp(
                                                         )
                                                         val secret = repository
                                                             .getPlaylistSecret(ready.playlistId)
-                                                            .getOrNull() as? PlaylistSecret.Xtream
+                                                            .getOrNull()
                                                         if (secret == null) {
                                                             navController.navigate("continue-watching")
                                                             return@launch
                                                         }
-                                                        val result = AndroidXtreamSeriesDetailLoader(
-                                                            XtreamCredentials(
-                                                                serverUrl = secret.serverUrl,
-                                                                username = secret.username,
-                                                                password = secret.password,
-                                                            ),
-                                                        ).load(seriesId)
+                                                        val result = AndroidSeriesDetailLoader.load(
+                                                            secret = secret,
+                                                            seriesId = seriesId,
+                                                        )
                                                         val detail = (
                                                             result as? SeriesDetailLoadResult.Success
                                                             )?.detail
