@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.catalog.D6MediaDetailHero
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
@@ -105,28 +106,10 @@ private fun MovieDetailReady(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (isLarge) 300.dp else 220.dp),
-            color = ZyvioSurface1,
-            shape = RoundedCornerShape(20.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(ZyvioSurface2),
-            ) {
-                if (movie.backdropUrl.isNullOrBlank()) {
-                    Icon(
-                        imageVector = Icons.Default.Movie,
-                        contentDescription = null,
-                        modifier = Modifier.align(Alignment.Center),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-        }
+        D6MediaDetailHero(
+            title = movie.title,
+            height = if (isLarge) 300.dp else 220.dp,
+        )
 
         Spacer(Modifier.height(20.dp))
 
