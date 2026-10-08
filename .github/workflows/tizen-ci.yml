@@ -50,6 +50,9 @@ jobs:
       - name: Validate stable device identity
         run: node tizenApp/device-uid.test.cjs
 
+      - name: Validate canonical Home parity
+        run: node tizenApp/home-parity.test.cjs
+
       - name: Validate Tizen manifest XML
         run: |
           python - <<'PY'
