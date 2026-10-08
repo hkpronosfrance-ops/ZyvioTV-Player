@@ -26,6 +26,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.res.stringResource
+import fr.zyviotv.player.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -126,14 +128,14 @@ fun DevicesSettingsScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = { reload() }) {
-                        Text("Réessayer")
+                        Text(stringResource(R.string.device_retry))
                     }
                 }
             }
 
             devices.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "Aucun appareil enregistré.",
+                    text = stringResource(R.string.device_empty),
                     color = ZyvioTextSecondary,
                 )
             }
@@ -233,7 +235,7 @@ private fun DeviceRow(
                         value = editingName,
                         onValueChange = onEditingNameChanged,
                         singleLine = true,
-                        label = { Text("Nom de l’appareil") },
+                        label = { Text(stringResource(R.string.device_name)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Row(
@@ -241,13 +243,13 @@ private fun DeviceRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         TextButton(onClick = onCancelEdit) {
-                            Text("Annuler")
+                            Text(stringResource(R.string.action_cancel))
                         }
                         Button(
                             enabled = editingName.isNotBlank(),
                             onClick = onSaveEdit,
                         ) {
-                            Text("Enregistrer")
+                            Text(stringResource(R.string.action_save))
                         }
                     }
                 } else {
@@ -276,13 +278,13 @@ private fun DeviceRow(
 
             if (!isEditing) {
                 IconButton(onClick = onStartEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Renommer")
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.device_rename))
                 }
                 IconButton(
                     enabled = !isCurrent,
                     onClick = onDelete,
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Déconnecter")
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.device_disconnect))
                 }
             }
         }
