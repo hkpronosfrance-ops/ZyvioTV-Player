@@ -222,3 +222,16 @@ Additional safeguards:
 - live-history de-duplication is scoped by playlist
 
 No database migration is required; this matches the existing backend uniqueness model.
+
+
+## Stable Samsung device identity
+
+The Tizen client now derives its device UID from Samsung ProductInfo DUID when available, without sending or storing the raw DUID:
+- raw DUID stays local
+- a deterministic app-scoped hash is used as the registered device UID
+- existing productinfo privilege is reused
+- localStorage keeps the derived UID when available
+- if ProductInfo is unavailable, a locally generated UUID-like value is used
+- if localStorage is unavailable, the app still avoids the old shared `tizen-session` collision fallback
+
+No database migration is required.
