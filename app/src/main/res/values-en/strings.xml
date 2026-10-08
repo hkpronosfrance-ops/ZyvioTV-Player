@@ -74,4 +74,7 @@
     <string name="playlist_empty">No playlists configured.</string>
     <string name="playlist_edit_error">Unable to update this playlist.</string>
     <string name="playlist_delete_error">Unable to delete this playlist.</string>
+    <string name="parental_profile_restrictions">Restrictions for %1$s · specific to this profile</string>
+    <string name="profile_load_error">Unable to load your profiles.</string>
+    <string name="profile_screen_preparing">%1$s screen is being prepared.</string>
 </resources>
