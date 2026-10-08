@@ -56,12 +56,12 @@ struct LiveTvView: View {
                             selectedPanel
                             channelList
                         }
-                        .padding(16)
+                        .padding(ZyvioDesign.Space.s4)
                     }
                     .refreshable { await load() }
                 }
             }
-            .background(Color.black)
+            .background(ZyvioDesign.Palette.base)
             .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "TV en direct" : "Live TV"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -282,7 +282,7 @@ private struct LivePlayer: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+            ZyvioDesign.Palette.base.ignoresSafeArea()
 
             ParentalProtectedPlayerView(
                 title: channel.name,
@@ -305,7 +305,7 @@ private struct LivePlayer: View {
             if let error {
                 Text(error)
                     .padding(20)
-                    .background(Color.black.opacity(0.9))
+                    .background(ZyvioDesign.Palette.surface1.opacity(0.96))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         }
@@ -352,9 +352,9 @@ private struct GuideList: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                     }
                 }
-                .padding(16)
+                .padding(ZyvioDesign.Space.s4)
             }
-            .background(Color.black)
+            .background(ZyvioDesign.Palette.base)
             .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Guide TV" : "TV guide"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
