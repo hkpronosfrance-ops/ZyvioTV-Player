@@ -49,6 +49,12 @@ jobs:
           if (!data.id || !data.version || data.type !== "web" || data.main !== "index.html") {
             throw new Error("Invalid webOS appinfo.json");
           }
+          if (!Array.isArray(data.requiredACG)) {
+            throw new Error("requiredACG must be declared");
+          }
+          if (data.icon !== "icon.png" || data.largeIcon !== "icon-large.png") {
+            throw new Error("Expected webOS icon metadata is missing");
+          }
           console.log("webOS manifest structure OK");
           NODE
 
@@ -62,3 +68,46 @@ jobs:
           test -s webosApp/provider.js
           test -s webosApp/player.js
           test -s webosApp/appinfo.json
+          test -s webosApp/icon.png
+          test -s webosApp/icon-large.png
+          test -s webosApp/package-ipk.sh
+          test -s webosApp/PHYSICAL_QA.md
+
+      - name: Validate LG icon dimensions
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          function pngSize(path) {
+            const b = fs.readFileSync(path);
+            if (b.toString("hex", 0, 8) !== "89504e470d0a1a0a") throw new Error(path + " is not PNG");
+            return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
+          }
+          const small = pngSize("webosApp/icon.png");
+          const large = pngSize("webosApp/icon-large.png");
+          if (small.width !== 80 || small.height !== 80) throw new Error("icon.png must be 80x80");
+          if (large.width !== 130 || large.height !== 130) throw new Error("icon-large.png must be 130x130");
+          console.log("LG icon dimensions OK");
+          NODE
+
+      - name: Validate package script
+        run: bash -n webosApp/package-ipk.sh
+
+      - name: Install current webOS CLI
+        run: npm install --global @webos-tools/cli
+
+      - name: Build IPK
+        run: bash webosApp/package-ipk.sh
+
+      - name: Verify packaged artifact
+        run: |
+          IPK="$(find webosApp/dist -maxdepth 1 -type f -name '*.ipk' -print -quit)"
+          test -n "$IPK"
+          ares-package --info "$IPK"
+
+      - name: Upload IPK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zyviotv-webos-ipk
+          path: webosApp/dist/*.ipk
+          if-no-files-found: error
+          retention-days: 14
