@@ -61,7 +61,7 @@ struct SeriesView: View {
                     }
                 }
             }
-            .background(Color.black)
+            .background(ZyvioDesign.Palette.base)
             .navigationTitle("Séries")
             .preferredColorScheme(.dark)
             .navigationDestination(item: $selectedSeries) { item in
@@ -269,7 +269,7 @@ struct SeriesDetailView: View {
                 )
             }
         }
-        .background(Color.black)
+        .background(ZyvioDesign.Palette.base)
         .navigationTitle(series.title)
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(.dark)
@@ -441,7 +441,7 @@ private struct EpisodePlayerScreen: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+            ZyvioDesign.Palette.base.ignoresSafeArea()
 
             ParentalProtectedPlayerView(
                 title: series.title + " — S\(episode.season) E\(episode.number)",
@@ -504,8 +504,8 @@ private struct EpisodePlayerScreen: View {
                     }
                     .buttonStyle(.bordered)
                 }
-                .padding(24)
-                .background(Color.black.opacity(0.92))
+                .padding(ZyvioDesign.Space.s6)
+                .background(ZyvioDesign.Palette.surface1.opacity(0.96))
                 .clipShape(RoundedRectangle(cornerRadius: 20))
             }
         }
