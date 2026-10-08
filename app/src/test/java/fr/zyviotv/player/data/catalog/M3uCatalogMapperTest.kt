@@ -147,4 +147,27 @@ class M3uCatalogMapperTest {
         assertEquals(setOf(3, 4), details.flatMap { it.episodes }.map { it.number }.toSet())
     }
 
+    @Test
+    fun unnamedSeriesEntriesDoNotFabricateEpisodes() {
+        val snapshot = M3uCatalogMapper.map(
+            listOf(
+                M3uEntry(
+                    name = "Série sans numéro",
+                    streamUrl = "https://stream.example/series/unknown.mkv",
+                    groupTitle = "FR - SERIES",
+                ),
+                M3uEntry(
+                    name = "Série identifiée S01E02",
+                    streamUrl = "https://stream.example/series/real.mkv",
+                    groupTitle = "FR - SERIES",
+                ),
+            ),
+        )
+        assertEquals(1, snapshot.series.size)
+        val detail = M3uSeriesDetailRegistry.load(snapshot.series.single().id)
+        requireNotNull(detail)
+        assertEquals(1, detail.episodes.size)
+        assertEquals(2, detail.episodes.single().number)
+    }
+
 }
