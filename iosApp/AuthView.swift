@@ -19,7 +19,7 @@ struct AuthView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                ZyvioDesign.Palette.base.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 16) {
@@ -99,7 +99,7 @@ struct AuthView: View {
                             .disabled(isLoading)
                         }
                     }
-                    .padding(24)
+                    .padding(ZyvioDesign.Space.s6)
                     .frame(maxWidth: 480)
                     .frame(maxWidth: .infinity)
                 }
