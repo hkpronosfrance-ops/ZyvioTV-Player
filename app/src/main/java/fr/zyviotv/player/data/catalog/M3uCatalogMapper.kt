@@ -68,7 +68,7 @@ object M3uCatalogMapper {
                 }
 
                 Kind.Episode -> {
-                    val identity = parseEpisode(entry.name) ?: continue
+                    val identity = parseEpisode(entry.name) ?: return@forEachIndexed
                     val seriesKey = identity.seriesTitle.lowercase()
                     val categoryId = group?.let { ensureCategory(seriesCategories, "m3u-series", it).id }
                     val builder = seriesBuilders.getOrPut(seriesKey) {
