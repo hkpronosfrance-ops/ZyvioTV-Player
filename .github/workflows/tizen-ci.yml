@@ -47,6 +47,9 @@ jobs:
       - name: Validate multi-playlist library isolation
         run: node tizenApp/multiplaylist.test.cjs
 
+      - name: Validate stable device identity
+        run: node tizenApp/device-uid.test.cjs
+
       - name: Validate Tizen manifest XML
         run: |
           python - <<'PY'
