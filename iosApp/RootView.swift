@@ -17,7 +17,7 @@ struct RootView: View {
         Group {
             if isCheckingSession || isLoadingProfile {
                 ZStack {
-                    Color.black.ignoresSafeArea()
+                    ZyvioDesign.Palette.base.ignoresSafeArea()
                     ProgressView()
                         .tint(.red)
                 }
@@ -197,10 +197,10 @@ private struct ParentalPinRecoveryView: View {
                     }
                 }
             }
-            .padding(24)
+            .padding(ZyvioDesign.Space.s6)
             .frame(maxWidth: 560)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black)
+            .background(ZyvioDesign.Palette.base)
             .preferredColorScheme(.dark)
             .task { await consumeLink() }
         }
@@ -253,7 +253,7 @@ private struct AppleSystemGateContainer<Content: View>: View {
         Group {
             if loading {
                 ZStack {
-                    Color.black.ignoresSafeArea()
+                    ZyvioDesign.Palette.base.ignoresSafeArea()
                     ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Vérification du service…" : "Checking service…"))
                         .tint(.red)
                 }
@@ -296,7 +296,7 @@ private struct AppleSystemGateContainer<Content: View>: View {
         blocking: Bool
     ) -> some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            ZyvioDesign.Palette.base.ignoresSafeArea()
 
             VStack(spacing: 18) {
                 Image(systemName: blocking ? "exclamationmark.octagon.fill" : "wrench.and.screwdriver.fill")
@@ -365,7 +365,7 @@ private struct PlaylistBootstrapView: View {
         Group {
             if loading {
                 ZStack {
-                    Color.black.ignoresSafeArea()
+                    ZyvioDesign.Palette.base.ignoresSafeArea()
                     ProgressView((Locale.current.language.languageCode?.identifier == "fr" ? "Vérification de vos playlists…" : "Checking your playlists…"))
                         .tint(.red)
                 }
@@ -490,7 +490,7 @@ struct PlaylistOnboardingView: View {
                 .frame(maxWidth: 680)
                 .frame(maxWidth: .infinity)
             }
-            .background(Color.black)
+            .background(ZyvioDesign.Palette.base)
             .navigationTitle((Locale.current.language.languageCode?.identifier == "fr" ? "Configurer ZYVIOTV" : "Set up ZYVIOTV"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -598,7 +598,7 @@ private struct ProfilePickerView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                ZyvioDesign.Palette.base.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 28) {
@@ -628,7 +628,7 @@ private struct ProfilePickerView: View {
                                 .buttonStyle(.borderedProminent)
                                 .tint(.red)
                             }
-                            .padding(24)
+                            .padding(ZyvioDesign.Space.s6)
                         } else {
                             LazyVGrid(columns: columns, spacing: 22) {
                                 ForEach(profiles) { profile in
