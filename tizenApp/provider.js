@@ -214,6 +214,92 @@
     }));
   }
 
+  function stableId(value) {
+    const text = String(value || "");
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function normalizeLabel(value) {
+    return String(value || "")
+      .toLowerCase()
+      .normalize?.("NFD")
+      .replace?.(/[\u0300-\u036f]/g, "") || String(value || "").toLowerCase();
+  }
+
+  function parseEpisodeIdentity(name) {
+    const original = String(name || "").trim();
+    const patterns = [
+      /^(.*?)[\s._-]+s(\d{1,2})[\s._-]*e(\d{1,3})(?:\b|[\s._-])(.*)$/i,
+      /^(.*?)[\s._-]+(\d{1,2})x(\d{1,3})(?:\b|[\s._-])(.*)$/i,
+      /^(.*?)[\s._-]+saison[\s._-]*(\d{1,2})[\s._-]+(?:episode|ep)[\s._-]*(\d{1,3})(?:\b|[\s._-])(.*)$/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = pattern.exec(original);
+      if (!match) continue;
+      const seriesTitle = String(match[1] || "").replace(/[._]+/g, " ").replace(/\s+/g, " ").trim();
+      if (!seriesTitle) continue;
+      return {
+        seriesTitle,
+        season: Number(match[2] || 0),
+        episode: Number(match[3] || 0),
+        episodeTitle: String(match[4] || "").replace(/^[\s._-]+/, "").replace(/[._]+/g, " ").trim(),
+      };
+    }
+    return null;
+  }
+
+  function classifyM3uEntry(entry) {
+    const group = normalizeLabel(entry.categoryName);
+    const name = normalizeLabel(entry.name);
+    const episode = parseEpisodeIdentity(entry.name);
+
+    if (episode) return { type: "episode", episode };
+
+    const seriesGroup = /(^|\b)(series|serie|tv shows?|episodes?|saisons?)(\b|$)/i.test(group);
+    if (seriesGroup) {
+      return {
+        type: "episode",
+        episode: {
+          seriesTitle: String(entry.name || "Série").trim(),
+          season: 1,
+          episode: 1,
+          episodeTitle: "",
+        },
+      };
+    }
+
+    const movieGroup = /(^|\b)(vod|movies?|films?|cinema|ciné)(\b|$)/i.test(group);
+    const liveGroup = /(^|\b)(live|tv|chaines?|channels?|sports?|news|infos?|radio)(\b|$)/i.test(group);
+
+    if (movieGroup) return { type: "movie" };
+    if (liveGroup) return { type: "live" };
+
+    const pathname = (() => {
+      try { return new URL(entry.streamUrl).pathname.toLowerCase(); } catch (_) { return ""; }
+    })();
+
+    if (/\/(movie|vod)\//.test(pathname)) return { type: "movie" };
+    if (/\/(series)\//.test(pathname)) {
+      return episode
+        ? { type: "episode", episode }
+        : { type: "movie" };
+    }
+    if (/\/(live)\//.test(pathname)) return { type: "live" };
+
+    if (/\.(mp4|mkv|avi|mov|m4v|webm)(?:$|\?)/i.test(entry.streamUrl)) {
+      return { type: "movie" };
+    }
+
+    // M3U defaults to Live only when metadata gives no reliable VOD/Series signal.
+    return { type: "live" };
+  }
+
   function parseM3u(text) {
     const lines = String(text || "").split(/\r?\n/);
     const items = [];
@@ -224,18 +310,20 @@
       if (!line) continue;
 
       if (line.startsWith("#EXTINF:")) {
-        const name = line.includes(",") ? line.slice(line.lastIndexOf(",") + 1).trim() : "Chaîne";
+        const name = line.includes(",") ? line.slice(line.lastIndexOf(",") + 1).trim() : "Contenu";
         const logo = /tvg-logo="([^"]*)"/i.exec(line)?.[1] || null;
         const group = /group-title="([^"]*)"/i.exec(line)?.[1] || "Sans catégorie";
         const tvgId = /tvg-id="([^"]*)"/i.exec(line)?.[1] || null;
-        meta = { name, logo, categoryName: group, epgChannelId: tvgId };
+        const tvgName = /tvg-name="([^"]*)"/i.exec(line)?.[1] || null;
+        meta = { name, logo, categoryName: group, epgChannelId: tvgId, tvgName };
         continue;
       }
 
       if (!line.startsWith("#") && meta) {
         assertHttpsOrHttp(line);
+        const id = "m3u-" + stableId([meta.epgChannelId, meta.name, meta.categoryName, line].join("|"));
         items.push({
-          id: String(items.length + 1),
+          id,
           number: items.length + 1,
           ...meta,
           streamUrl: line,
@@ -247,37 +335,165 @@
     return items;
   }
 
+  const m3uCache = new Map();
+
   async function loadM3u(config) {
     const url = String(config.url || "").trim();
     assertHttpsOrHttp(url);
+
+    if (m3uCache.has(url)) return m3uCache.get(url);
+
+    const promise = (async () => {
+      try {
+        const response = await fetch(url, {
+          cache: "no-store",
+          credentials: "omit",
+          referrerPolicy: "no-referrer",
+        });
+        if (!response.ok) throw new Error();
+        return parseM3u(await response.text());
+      } catch (_) {
+        throw new Error("Impossible de charger la playlist M3U.");
+      }
+    })();
+
+    m3uCache.set(url, promise);
     try {
-      const response = await fetch(url, {
-        cache: "no-store",
-        credentials: "omit",
-        referrerPolicy: "no-referrer",
-      });
-      if (!response.ok) throw new Error();
-      return parseM3u(await response.text());
-    } catch (_) {
-      throw new Error("Impossible de charger la playlist M3U.");
+      return await promise;
+    } catch (error) {
+      m3uCache.delete(url);
+      throw error;
     }
+  }
+
+  async function loadM3uCatalog(config) {
+    const entries = await loadM3u(config);
+    const live = [];
+    const movies = [];
+    const seriesMap = new Map();
+
+    entries.forEach((entry) => {
+      const classification = classifyM3uEntry(entry);
+
+      if (classification.type === "live") {
+        live.push({
+          id: entry.id,
+          name: entry.name,
+          number: entry.number,
+          categoryId: "m3u-group-" + stableId(entry.categoryName),
+          categoryName: entry.categoryName,
+          logo: entry.logo,
+          epgChannelId: entry.epgChannelId,
+          streamUrl: entry.streamUrl,
+        });
+        return;
+      }
+
+      if (classification.type === "movie") {
+        movies.push({
+          id: entry.id,
+          title: entry.name,
+          categoryId: "m3u-group-" + stableId(entry.categoryName),
+          categoryName: entry.categoryName,
+          poster: entry.logo,
+          rating: 0,
+          added: 0,
+          streamUrl: entry.streamUrl,
+        });
+        return;
+      }
+
+      const episode = classification.episode;
+      const seriesKey = normalizeLabel(episode.seriesTitle);
+      let series = seriesMap.get(seriesKey);
+      if (!series) {
+        series = {
+          id: "m3u-series-" + stableId(seriesKey + "|" + entry.categoryName),
+          title: episode.seriesTitle,
+          categoryId: "m3u-group-" + stableId(entry.categoryName),
+          categoryName: entry.categoryName,
+          poster: entry.logo,
+          rating: 0,
+          added: 0,
+          episodesBySeason: {},
+        };
+        seriesMap.set(seriesKey, series);
+      }
+
+      const seasonKey = String(Math.max(1, Number(episode.season || 1)));
+      if (!series.episodesBySeason[seasonKey]) series.episodesBySeason[seasonKey] = [];
+      series.episodesBySeason[seasonKey].push({
+        id: entry.id,
+        season: Number(seasonKey),
+        number: Math.max(1, Number(episode.episode || series.episodesBySeason[seasonKey].length + 1)),
+        title: episode.episodeTitle || ("Épisode " + Math.max(1, Number(episode.episode || 1))),
+        synopsis: "",
+        streamUrl: entry.streamUrl,
+      });
+    });
+
+    const series = Array.from(seriesMap.values()).map((item) => ({
+      ...item,
+      episodesBySeason: Object.fromEntries(
+        Object.entries(item.episodesBySeason).map(([season, values]) => [
+          season,
+          values.sort((a, b) => a.number - b.number),
+        ])
+      ),
+    }));
+
+    return { live, movies, series };
+  }
+
+  async function loadM3uSeriesInfo(config, seriesId) {
+    const catalog = await loadM3uCatalog(config);
+    const series = catalog.series.find((item) => item.id === String(seriesId));
+    if (!series) throw new Error("Série M3U introuvable.");
+
+    return {
+      info: {
+        name: series.title,
+        cover: series.poster || null,
+      },
+      seasons: Object.keys(series.episodesBySeason)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .map((seasonNumber) => ({
+          seasonNumber,
+          name: "Saison " + seasonNumber,
+        })),
+      episodesBySeason: series.episodesBySeason,
+    };
   }
 
   async function loadLive(config) {
     if (!config || !config.type) throw new Error("Fournisseur non configuré.");
     if (config.type === "xtream") return loadXtreamLive(config);
-    if (config.type === "m3u") return loadM3u(config);
+    if (config.type === "m3u") return (await loadM3uCatalog(config)).live;
     throw new Error("Type de fournisseur non pris en charge.");
   }
 
   async function loadMovies(config) {
-    if (!config || config.type !== "xtream") return [];
-    return loadXtreamMovies(config);
+    if (!config || !config.type) throw new Error("Fournisseur non configuré.");
+    if (config.type === "xtream") return loadXtreamMovies(config);
+    if (config.type === "m3u") return (await loadM3uCatalog(config)).movies;
+    return [];
   }
 
   async function loadSeries(config) {
-    if (!config || config.type !== "xtream") return [];
-    return loadXtreamSeries(config);
+    if (!config || !config.type) throw new Error("Fournisseur non configuré.");
+    if (config.type === "xtream") return loadXtreamSeries(config);
+    if (config.type === "m3u") {
+      return (await loadM3uCatalog(config)).series.map(({ episodesBySeason, ...item }) => item);
+    }
+    return [];
+  }
+
+  async function loadSeriesInfo(config, seriesId) {
+    if (!config || !config.type) throw new Error("Fournisseur non configuré.");
+    if (config.type === "xtream") return loadXtreamSeriesInfo(config, seriesId);
+    if (config.type === "m3u") return loadM3uSeriesInfo(config, seriesId);
+    throw new Error("Type de fournisseur non pris en charge.");
   }
 
   const api = {
@@ -290,6 +506,11 @@
     loadXtreamSeriesInfo,
     loadXtreamShortEpg,
     loadM3u,
+    loadM3uCatalog,
+    loadM3uSeriesInfo,
+    loadSeriesInfo,
+    classifyM3uEntry,
+    parseEpisodeIdentity,
     parseM3u,
     redactUrl,
     xtreamApiUrl,
