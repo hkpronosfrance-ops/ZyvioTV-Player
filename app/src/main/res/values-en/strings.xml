@@ -19,4 +19,18 @@
     <string name="auth_forgot_password">Forgot password?</string>
     <string name="auth_signup">Sign up</string>
     <string name="auth_back_to_signin">Back to sign in</string>
+    <string name="settings_account_title">My account</string>
+    <string name="settings_account_storage">Your ZyvioTV Player session is stored encrypted on this device.</string>
+    <string name="settings_devices">Devices</string>
+    <string name="settings_playback_data">Playback and data</string>
+    <string name="settings_data_cache">Data and cache</string>
+    <string name="settings_parental">Parental controls</string>
+    <string name="settings_profiles">Profiles</string>
+    <string name="settings_switch_profile">Switch profile</string>
+    <string name="settings_sign_out">Sign out</string>
+    <string name="settings_device_storage">Local storage on this device</string>
+    <string name="settings_temporary_cache">Temporary cache</string>
+    <string name="settings_cache_explanation">The cache contains only temporary files. Your synced playlists, favorites and watch progress will not be deleted.</string>
+    <string name="settings_about_storage">About storage</string>
+    <string name="settings_secure_storage">Provider credentials remain in their dedicated secure storage and are not erased by this action.</string>
 </resources>
