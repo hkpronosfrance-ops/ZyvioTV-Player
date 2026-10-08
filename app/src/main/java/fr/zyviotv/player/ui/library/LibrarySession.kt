@@ -69,17 +69,17 @@ class LibrarySession internal constructor(
         }
 
         if (result is SyncResult.Success && (state.value as? LibraryState.Ready)?.snapshot?.profileId == ready.snapshot.profileId) {
-            val current = (state.value as LibraryState.Ready)
+            val current = state.value as LibraryState.Ready
             val next = if (exists) {
-                (state.value as LibraryState.Ready).snapshot.favorites.filterNot {
+                current.snapshot.favorites.filterNot {
                     it.playlistId == favorite.playlistId &&
                         it.contentType == favorite.contentType &&
                         it.contentId == favorite.contentId
                 }
             } else {
-                listOf(scopedFavorite) + ready.snapshot.favorites
+                listOf(scopedFavorite) + current.snapshot.favorites
             }
-            updateState((state.value as LibraryState.Ready).let { it.copy(snapshot = it.snapshot.copy(favorites = next)) } )
+            updateState(current.copy(snapshot = current.snapshot.copy(favorites = next)))
         }
         return result
     }
@@ -93,17 +93,18 @@ class LibrarySession internal constructor(
         val scopedProgress = progress.copy(profileId = ready.snapshot.profileId)
         val result = repository.upsertWatchProgress(scopedProgress)
         if (result is SyncResult.Success && (state.value as? LibraryState.Ready)?.snapshot?.profileId == ready.snapshot.profileId) {
-            val next = listOf(scopedProgress) + (state.value as LibraryState.Ready).snapshot.progress.filterNot {
+            val current = state.value as LibraryState.Ready
+            val next = listOf(scopedProgress) + current.snapshot.progress.filterNot {
                     it.playlistId == scopedProgress.playlistId &&
                         it.contentType == scopedProgress.contentType &&
                         it.contentId == scopedProgress.contentId
                 }
             updateState(
-                (state.value as LibraryState.Ready).let { current -> current.copy(
+                current.copy(
                     snapshot = current.snapshot.copy(
                         progress = next.take(MAX_PROGRESS),
                     ),
-                ) },
+                ),
             )
         }
         return result
@@ -129,15 +130,16 @@ class LibrarySession internal constructor(
         )
         val result = repository.recordLiveHistory(item)
         if (result is SyncResult.Success && (state.value as? LibraryState.Ready)?.snapshot?.profileId == ready.snapshot.profileId) {
-            val next = listOf(item) + (state.value as LibraryState.Ready).snapshot.liveHistory.filterNot {
+            val current = state.value as LibraryState.Ready
+            val next = listOf(item) + current.snapshot.liveHistory.filterNot {
                 it.playlistId == playlistId && it.channelId == channelId
             }
             updateState(
-                (state.value as LibraryState.Ready).let { current -> current.copy(
+                current.copy(
                     snapshot = current.snapshot.copy(
                         liveHistory = next.take(MAX_LIVE_HISTORY),
                     ),
-                ) },
+                ),
             )
         }
         return result
@@ -156,16 +158,17 @@ class LibrarySession internal constructor(
             contentId = progress.contentId,
         )
         if (result is SyncResult.Success && (state.value as? LibraryState.Ready)?.snapshot?.profileId == ready.snapshot.profileId) {
+            val current = state.value as LibraryState.Ready
             updateState(
-                (state.value as LibraryState.Ready).let { current -> current.copy(
+                current.copy(
                     snapshot = current.snapshot.copy(
-                        progress = (state.value as LibraryState.Ready).snapshot.progress.filterNot {
+                        progress = current.snapshot.progress.filterNot {
                             it.playlistId == progress.playlistId &&
                                 it.contentType == progress.contentType &&
                                 it.contentId == progress.contentId
                         },
                     ),
-                ) },
+                ),
             )
         }
         return result
