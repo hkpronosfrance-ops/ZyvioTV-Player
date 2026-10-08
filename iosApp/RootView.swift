@@ -610,7 +610,7 @@ private struct ProfilePickerView: View {
                         }
 
                         if isLoading {
-                            ProgressView("Chargement des profils…")
+                            ProgressView(Locale.current.language.languageCode?.identifier == "fr" ? "Chargement des profils…" : "Loading profiles…")
                                 .tint(.red)
                                 .padding(.top, 40)
                         } else if let message = localError ?? errorMessage {
