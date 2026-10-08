@@ -503,7 +503,7 @@
 
     currentProfile = profile;
     persistProfileId(profile.id);
-    setProfileStatus("Chargement de " + profile.name + "…");
+    setProfileStatus(tvText("Chargement de ", "Loading ") + profile.name + "…");
 
     const [
       loadedFavorites,
@@ -808,7 +808,7 @@
 
   async function loadDevices() {
     if (!currentSession) return;
-    setStatus("Chargement des appareils…");
+    setStatus(tvText("Chargement des appareils…", "Loading devices…"));
     try {
       devices = await window.ZyvioCloud.listDevices(currentSession);
       renderDevices();
@@ -860,7 +860,7 @@
 
     if (!providerConfig) {
       showApp();
-      setStatus("Aucune playlist active configurée sur ce compte.");
+      setStatus(tvText("Aucune playlist active configurée sur ce compte.", "No active playlist configured for this account."));
       return;
     }
 
@@ -976,7 +976,7 @@
       return liveChannels;
     }
 
-    setStatus("Chargement des chaînes…");
+    setStatus(tvText("Chargement des chaînes…", "Loading channels…"));
     try {
       liveChannels = filterForProfile("live", await window.ZyvioProvider.loadLive(providerConfig));
       renderLive();
@@ -1033,15 +1033,15 @@
       return [];
     }
     if (movies.length) {
-      renderCatalog("Films", movies, "movie");
+      renderCatalog(tvText("Films", "Movies"), movies, "movie");
       setStatus(movies.length + " films chargés.");
       return movies;
     }
 
-    setStatus("Chargement des films…");
+    setStatus(tvText("Chargement des films…", "Loading movies…"));
     try {
       movies = filterForProfile("movie", await window.ZyvioProvider.loadMovies(providerConfig));
-      renderCatalog("Films", movies, "movie");
+      renderCatalog(tvText("Films", "Movies"), movies, "movie");
       setStatus(movies.length + " films chargés.");
       return movies;
     } catch (error) {
@@ -1057,15 +1057,15 @@
       return [];
     }
     if (series.length) {
-      renderCatalog("Séries", series, "series");
+      renderCatalog(tvText("Séries", "Series"), series, "series");
       setStatus(series.length + " séries chargées.");
       return series;
     }
 
-    setStatus("Chargement des séries…");
+    setStatus(tvText("Chargement des séries…", "Loading series…"));
     try {
       series = filterForProfile("series", await window.ZyvioProvider.loadSeries(providerConfig));
-      renderCatalog("Séries", series, "series");
+      renderCatalog(tvText("Séries", "Series"), series, "series");
       setStatus(series.length + " séries chargées.");
       return series;
     } catch (error) {
@@ -1460,7 +1460,7 @@
     if (resumeExistingPlayback) player?.pause();
     runtimeBlocked = true;
     showPinPrompt(
-      reason || "Lecture bloquée",
+      reason || tvText("Lecture bloquée", "Playback blocked"),
       "Saisissez le PIN parental pour continuer ce contenu pendant 30 minutes.",
       async () => {
         runtimeBlocked = false;
@@ -1654,7 +1654,7 @@
       player.seekToMs(resumeMs);
       setStatus("Reprise : " + metadata.title);
     } else {
-      setStatus("Lecture : " + metadata.title);
+      setStatus(tvText("Lecture : ", "Playing: ") + metadata.title);
     }
   }
 
@@ -1803,7 +1803,7 @@
           if (current?.title) epgSuffix = " — " + current.title;
         } catch (_) {}
       }
-      setStatus("Lecture : " + channel.name + epgSuffix);
+      setStatus(tvText("Lecture : ", "Playing: ") + channel.name + epgSuffix);
     } catch (_) {
       activePlayback = null;
       setStatus("Flux indisponible.");
@@ -1816,7 +1816,7 @@
     try { await finishParentalPlayback(); } catch (_) {}
     player?.stop();
     activePlayback = null;
-    setStatus("Lecture arrêtée.");
+    setStatus(tvText("Lecture arrêtée.", "Playback stopped."));
     setTimeout(() => document.querySelector('[data-section="home"]')?.focus(), 0);
     return true;
   }
@@ -1947,7 +1947,7 @@
       if (profileScreen && !profileScreen.hidden) {
         if (currentProfile && isChildProfile()) {
           showPinPrompt(
-            "Retour au profil Enfant",
+            tvText("Retour au profil Enfant", "Return to child profile"),
             "Le code PIN parental est requis pour quitter le profil Enfant.",
             async () => {
               profileScreen.hidden = true;
@@ -2189,7 +2189,7 @@
     if (target.dataset.catalogKind === "series") {
       const seriesItem = series.find((item) => item.id === target.dataset.catalogId);
       if (!seriesItem) return;
-      setStatus("Chargement : " + seriesItem.title + "…");
+      setStatus(tvText("Chargement : ", "Loading: ") + seriesItem.title + "…");
       try {
         const info = await window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesItem.id);
         renderEpisodes(seriesItem, info);
@@ -2230,11 +2230,11 @@
       } else if (kind === "favorites") {
         await loadFavorites();
       } else if (kind === "recent-movies") {
-        renderCatalog("Films récents", recentByAdded(movies), "movie");
+        renderCatalog(tvText("Films récents", "Recent movies"), recentByAdded(movies), "movie");
       } else if (kind === "recent-series") {
-        renderCatalog("Séries récentes", recentByAdded(series), "series");
+        renderCatalog(tvText("Séries récentes", "Recent series"), recentByAdded(series), "series");
       } else if (kind === "next-episodes") {
-        renderCatalog("Épisodes suivants", nextEpisodes.map((item) => ({
+        renderCatalog(tvText("Épisodes suivants", "Next episodes"), nextEpisodes.map((item) => ({
           ...item,
           title: item.seriesTitle + " — S" + item.season + "E" + item.number,
         })), "episode");
