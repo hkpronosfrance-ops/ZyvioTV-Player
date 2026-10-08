@@ -23,19 +23,9 @@ Phase 25 adds the functional provider/playback runtime for live TV:
 - provider URLs/credentials are never written to UI status or logs
 - CI regression tests for provider parsing and URL redaction
 
-This still does not claim Store readiness or physical model-year certification.
+The functional integration phases below now cover account restore, catalogs, EPG, profiles, library sync, parental controls, devices, system states and canonical Home behavior.
 
-Remaining integration includes:
-
-- ZyvioTV account authentication
-- secure account-based playlist restoration into the TV runtime
-- real Movies / Series catalog UI wiring
-- EPG UI wiring
-- favorites/history/resume UI wiring
-- webOS codec/model playback validation
-- model-year compatibility testing
-- packaging/signing for LG Seller Lounge
-- physical LG TV/emulator QA
+Physical model-year certification and Seller Lounge acceptance still require external LG hardware/store validation.
 
 
 ## Account + secure provider restoration
@@ -175,3 +165,32 @@ Additional behavior:
 - M3U remains limited to compatible Home shelves
 
 No database migration is required.
+
+
+## Release readiness
+
+The repository now includes:
+- current LG webOS CLI packaging via `@webos-tools/cli`
+- reproducible `webosApp/package-ipk.sh`
+- FHD `1920x1080` and HD `1280x720` package variants
+- real `.ipk` creation in webOS CI
+- CI artifact upload for both package variants
+- required 80x80 and 130x130 PNG launcher icons
+- explicit `requiredACG: []` declaration for current/future LG compliance
+- package/certificate/private-key exclusions
+- physical LG TV QA checklist
+- Seller Lounge preparation checklist
+
+Local package examples:
+
+```bash
+npm install -g @webos-tools/cli
+
+WEBOS_RESOLUTION=1920x1080 bash webosApp/package-ipk.sh
+WEBOS_RESOLUTION=1280x720 bash webosApp/package-ipk.sh
+
+# Install + launch on a configured Developer Mode TV:
+WEBOS_RESOLUTION=1920x1080 bash webosApp/package-ipk.sh my-lg-tv
+```
+
+A green CI package is not equivalent to physical-TV or LG Seller Lounge certification. The final external gate is documented in `PHYSICAL_QA.md`.
