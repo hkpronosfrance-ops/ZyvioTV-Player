@@ -138,10 +138,10 @@ private struct AccountView: View {
                 Color.black.ignoresSafeArea()
 
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Compte")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Compte" : "Account"))
                         .font(.largeTitle.bold())
 
-                    Text("Votre compte ZYVIOTV Player synchronise vos appareils, favoris et progressions.")
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Votre compte ZYVIOTV Player synchronise vos appareils, favoris et progressions." : "Your ZYVIOTV Player account syncs your devices, favorites and watch progress."))
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 14) {
@@ -157,7 +157,7 @@ private struct AccountView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(profile.name)
                                 .font(.headline)
-                            Text(profile.isChild ? "Profil enfant" : (profile.isPrimary ? "Profil principal" : "Profil standard"))
+                            Text(profile.isChild ? (Locale.current.language.languageCode?.identifier == "fr" ? "Profil enfant" : "Kids profile") : (profile.isPrimary ? (Locale.current.language.languageCode?.identifier == "fr" ? "Profil principal" : "Main profile") : (Locale.current.language.languageCode?.identifier == "fr" ? "Profil standard" : "Standard profile")))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -171,7 +171,7 @@ private struct AccountView: View {
                     Button {
                         onSwitchProfile()
                     } label: {
-                        Label("Changer de profil", systemImage: "person.2.fill")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Changer de profil" : "Switch profile"), systemImage: "person.2.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
@@ -179,7 +179,7 @@ private struct AccountView: View {
                     NavigationLink {
                         ParentalSettingsView()
                     } label: {
-                        Label("Contrôle parental", systemImage: "lock.shield.fill")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Contrôle parental" : "Parental controls"), systemImage: "lock.shield.fill")
                     }
                     .buttonStyle(.bordered)
 
@@ -193,21 +193,21 @@ private struct AccountView: View {
                     NavigationLink {
                         DevicesSettingsView()
                     } label: {
-                        Label("Appareils", systemImage: "laptopcomputer.and.iphone")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Appareils" : "Devices"), systemImage: "laptopcomputer.and.iphone")
                     }
                     .buttonStyle(.bordered)
 
                     NavigationLink {
                         GlobalSearchView()
                     } label: {
-                        Label("Recherche", systemImage: "magnifyingglass")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Recherche" : "Search"), systemImage: "magnifyingglass")
                     }
                     .buttonStyle(.bordered)
 
                     NavigationLink {
                         LibraryView()
                     } label: {
-                        Label("Bibliothèque", systemImage: "books.vertical.fill")
+                        Label((Locale.current.language.languageCode?.identifier == "fr" ? "Bibliothèque" : "Library"), systemImage: "books.vertical.fill")
                     }
                     .buttonStyle(.bordered)
 
@@ -217,7 +217,7 @@ private struct AccountView: View {
                         if isSigningOut {
                             ProgressView()
                         } else {
-                            Label("Se déconnecter", systemImage: "rectangle.portrait.and.arrow.right")
+                            Label((Locale.current.language.languageCode?.identifier == "fr" ? "Se déconnecter" : "Sign out"), systemImage: "rectangle.portrait.and.arrow.right")
                         }
                     }
                     .buttonStyle(.bordered)
