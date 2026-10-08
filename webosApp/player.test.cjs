@@ -22,6 +22,9 @@ const video = {
   assert.equal(player.isPlaying(), false);
   listeners.playing();
   assert.equal(player.isPlaying(), true);
+  listeners.error();
+  assert.equal(player.isPlaying(), false);
+  assert.equal(player.buffering, false);
   listeners.ended();
   assert.equal(player.isPlaying(), false);
   player.stop();

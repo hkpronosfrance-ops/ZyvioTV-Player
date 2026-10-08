@@ -42,7 +42,7 @@
     }
 
     resume() {
-      this.video?.play().catch(() => {});
+      this.video?.play().catch(() => { this.buffering = false; });
     }
 
     getPositionMs() {
