@@ -79,7 +79,7 @@ fun PlaylistSettingsScreen(
         loading = true
         error = null
         playlists = repository.listPlaylists().getOrElse {
-            error = "Impossible de charger vos playlists."
+            error = context.getString(R.string.playlist_load_error)
             emptyList()
         }
         loading = false
@@ -127,14 +127,14 @@ fun PlaylistSettingsScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = { reload() }) {
-                        Text("Réessayer")
+                        Text(stringResource(R.string.device_retry))
                     }
                 }
             }
 
             playlists.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "Aucune playlist configurée.",
+                    text = stringResource(R.string.playlist_empty),
                     color = ZyvioTextSecondary,
                 )
             }
@@ -160,7 +160,7 @@ fun PlaylistSettingsScreen(
                                         }
                                         onChanged()
                                     }
-                                    is SyncResult.Failure -> error = "Impossible de modifier cette playlist."
+                                    is SyncResult.Failure -> error = context.getString(R.string.playlist_edit_error)
                                 }
                             }
                         },
@@ -201,7 +201,7 @@ fun PlaylistSettingsScreen(
                                         reload()
                                         onChanged()
                                     }
-                                    is SyncResult.Failure -> error = "Impossible de supprimer cette playlist."
+                                    is SyncResult.Failure -> error = context.getString(R.string.playlist_delete_error)
                                 }
                             }
                         },
