@@ -25,6 +25,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.res.stringResource
+import fr.zyviotv.player.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -145,7 +147,7 @@ fun ProfilesSettingsScreen(
                 enabled = !busy && profiles.size < 5,
                 onClick = { showCreate = !showCreate },
             ) {
-                Text(if (showCreate) "Annuler" else "Ajouter")
+                Text(if (showCreate) stringResource(R.string.action_cancel) else "Ajouter")
             }
         }
 
@@ -251,7 +253,7 @@ fun ProfilesSettingsScreen(
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it.take(40) },
-                        label = { Text("Nom du profil") },
+                        label = { Text(stringResource(R.string.profile_name)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -264,11 +266,11 @@ fun ProfilesSettingsScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = "Profil Enfant",
+                                text = stringResource(R.string.profile_child),
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = "Applique les restrictions d’âge du profil.",
+                                text = stringResource(R.string.profile_child_help),
                                 color = ZyvioTextSecondary,
                                 style = MaterialTheme.typography.bodySmall,
                             )
@@ -282,7 +284,7 @@ fun ProfilesSettingsScreen(
                     if (child) {
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            text = "Âge maximum",
+                            text = stringResource(R.string.profile_max_age),
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(8.dp))
@@ -322,13 +324,13 @@ fun ProfilesSettingsScreen(
                             enabled = avatarIndex > 1,
                             onClick = { avatarIndex -= 1 },
                         ) {
-                            Text("Précédent")
+                            Text(stringResource(R.string.action_previous))
                         }
                         OutlinedButton(
                             enabled = avatarIndex < 16,
                             onClick = { avatarIndex += 1 },
                         ) {
-                            Text("Suivant")
+                            Text(stringResource(R.string.action_next))
                         }
                     }
 
@@ -372,7 +374,7 @@ fun ProfilesSettingsScreen(
                             }
                         },
                     ) {
-                        Text("Créer le profil")
+                        Text(stringResource(R.string.profile_create))
                     }
                 }
             }
@@ -401,7 +403,7 @@ fun ProfilesSettingsScreen(
                     )
                     Spacer(Modifier.height(10.dp))
                     Button(onClick = { reload() }) {
-                        Text("Réessayer")
+                        Text(stringResource(R.string.device_retry))
                     }
                 }
             }
@@ -515,18 +517,18 @@ private fun ProfileRow(
             }
 
             TextButton(onClick = onEdit) {
-                Text("Modifier")
+                Text(stringResource(R.string.action_edit))
             }
 
             if (!isDefault) {
                 TextButton(onClick = onSetDefault) {
-                    Text("Par défaut")
+                    Text(stringResource(R.string.profile_default))
                 }
             }
 
             if (!item.isPrimary) {
                 TextButton(onClick = onDelete) {
-                    Text("Supprimer")
+                    Text(stringResource(R.string.action_delete))
                 }
             }
         }
