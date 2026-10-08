@@ -46,6 +46,7 @@ import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
 import fr.zyviotv.player.shared.sync.SyncResult
 import fr.zyviotv.player.shared.sync.SyncedPlaylist
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
@@ -231,7 +232,7 @@ private fun PlaylistRow(
         shape = RoundedCornerShape(16.dp),
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(ZyvioSpace.s4),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
@@ -240,7 +241,7 @@ private fun PlaylistRow(
             ) {
                 Text(
                     text = "P${playlist.priority}",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = ZyvioSpace.s2, vertical = ZyvioSpace.s1),
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -248,7 +249,7 @@ private fun PlaylistRow(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 12.dp),
+                    .padding(start = ZyvioSpace.s3),
             ) {
                 Text(
                     text = playlist.name,

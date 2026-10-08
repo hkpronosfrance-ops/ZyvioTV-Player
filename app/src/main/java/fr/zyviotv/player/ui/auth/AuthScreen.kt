@@ -55,6 +55,7 @@ import fr.zyviotv.player.shared.auth.AuthResult
 import fr.zyviotv.player.shared.auth.AuthValidator
 import fr.zyviotv.player.shared.auth.RegistrationCredentials
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -205,7 +206,7 @@ fun AuthScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 24.dp),
+                        .padding(horizontal = ZyvioSpace.s5, vertical = ZyvioSpace.s6),
                     contentAlignment = Alignment.Center,
                 ) {
                     AuthFormCard(
@@ -262,7 +263,7 @@ private fun AuthAmbientPanel(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .background(MaterialTheme.colorScheme.background)
-            .padding(48.dp),
+            .padding(ZyvioSpace.s12),
         contentAlignment = Alignment.BottomStart,
     ) {
         Column(
@@ -310,7 +311,7 @@ private fun AuthFormCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 28.dp, vertical = 32.dp),
+                .padding(horizontal = ZyvioSpace.s7, vertical = ZyvioSpace.s8),
         ) {
             ZyvioWordmark()
 

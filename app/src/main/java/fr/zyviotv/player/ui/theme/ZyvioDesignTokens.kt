@@ -13,6 +13,7 @@ object ZyvioSpace {
     val s4 = 16.dp
     val s5 = 20.dp
     val s6 = 24.dp
+    val s7 = 28.dp
     val s8 = 32.dp
     val s10 = 40.dp
     val s12 = 48.dp

@@ -47,6 +47,7 @@ import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
 import fr.zyviotv.player.shared.sync.SyncResult
 import fr.zyviotv.player.shared.sync.SyncedDevice
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
@@ -216,7 +217,7 @@ private fun DeviceRow(
         shape = RoundedCornerShape(16.dp),
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(ZyvioSpace.s4),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -228,7 +229,7 @@ private fun DeviceRow(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 12.dp),
+                    .padding(start = ZyvioSpace.s3),
             ) {
                 if (isEditing) {
                     OutlinedTextField(
@@ -239,7 +240,7 @@ private fun DeviceRow(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Row(
-                        modifier = Modifier.padding(top = 8.dp),
+                        modifier = Modifier.padding(top = ZyvioSpace.s2),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         TextButton(onClick = onCancelEdit) {
