@@ -1032,11 +1032,6 @@
       setStatus("Aucun fournisseur configuré.");
       return [];
     }
-    if (providerConfig.type !== "xtream") {
-      renderCatalog("Films", [], "movie");
-      setStatus("Films indisponibles pour cette playlist M3U.");
-      return [];
-    }
     if (movies.length) {
       renderCatalog("Films", movies, "movie");
       setStatus(movies.length + " films chargés.");
@@ -1059,11 +1054,6 @@
   async function loadSeries() {
     if (!providerConfig) {
       setStatus("Aucun fournisseur configuré.");
-      return [];
-    }
-    if (providerConfig.type !== "xtream") {
-      renderCatalog("Séries", [], "series");
-      setStatus("Séries indisponibles pour cette playlist M3U.");
       return [];
     }
     if (series.length) {
@@ -1236,7 +1226,7 @@
   }
 
   async function buildNextEpisodes() {
-    if (!providerConfig || providerConfig.type !== "xtream") {
+    if (!providerConfig) {
       nextEpisodes = [];
       return;
     }
@@ -1252,7 +1242,7 @@
     const candidates = [];
     for (const [seriesId, progress] of Array.from(latestBySeries.entries()).slice(0, 12)) {
       try {
-        const detail = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesId);
+        const detail = await window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesId);
         const ordered = Object.values(detail.episodesBySeason || {})
           .flat()
           .sort((a, b) => a.season - b.season || a.number - b.number);
@@ -1289,7 +1279,7 @@
   }
 
   async function refreshHomeCatalogShelves() {
-    if (!providerConfig || providerConfig.type !== "xtream") {
+    if (!providerConfig) {
       if (nextEpisodesShelf) nextEpisodesShelf.hidden = true;
       if (recentMoviesShelf) recentMoviesShelf.hidden = true;
       if (recentSeriesShelf) recentSeriesShelf.hidden = true;
@@ -1683,7 +1673,7 @@
 
     if (progress.content_type === "episode" && progress.series_id) {
       if (isLibraryItemLocked(progress)) throw new Error("Contenu bloqué.");
-      const detail = await window.ZyvioProvider.loadXtreamSeriesInfo(
+      const detail = await window.ZyvioProvider.loadSeriesInfo(
         providerConfig,
         String(progress.series_id)
       );
@@ -2069,7 +2059,7 @@
       const seriesItem = series.find((item) => String(item.id) === String(target.dataset.homeId));
       if (seriesItem) {
         try {
-          const info = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id);
+          const info = await window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesItem.id);
           renderEpisodes(seriesItem, info);
           setStatus(seriesItem.title + " — " + episodes.length + " épisode(s).");
         } catch (_) {
@@ -2116,7 +2106,7 @@
         const seriesItem = series.find((entry) => entry.id === String(item.content_id));
         if (seriesItem) {
           try {
-            const info = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id);
+            const info = await window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesItem.id);
             renderEpisodes(seriesItem, info);
           } catch (_) {
             setStatus("Détails de série indisponibles.");
@@ -2158,7 +2148,7 @@
         const seriesItem = series.find((item) => item.id === id);
         if (seriesItem) {
           try {
-            const info = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id);
+            const info = await window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesItem.id);
             renderEpisodes(seriesItem, info);
           } catch (_) {
             setStatus("Détails de série indisponibles.");
@@ -2201,7 +2191,7 @@
       if (!seriesItem) return;
       setStatus("Chargement : " + seriesItem.title + "…");
       try {
-        const info = await window.ZyvioProvider.loadXtreamSeriesInfo(providerConfig, seriesItem.id);
+        const info = await window.ZyvioProvider.loadSeriesInfo(providerConfig, seriesItem.id);
         renderEpisodes(seriesItem, info);
         setStatus(seriesItem.title + " — " + episodes.length + " épisode(s).");
       } catch (_) {
