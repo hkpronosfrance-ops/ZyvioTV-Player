@@ -50,3 +50,7 @@
 
 .device-card.current{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.18)}
 .device-card.current strong::after{content:" · CET APPAREIL";font-size:12px;letter-spacing:.7px;color:#bbb}
+
+.shelf-header{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.shelf-more{border:0;background:transparent;color:#aaa;font-weight:800;font-size:14px;padding:10px 14px;border-radius:10px}
+.shelf-more:focus{outline:2px solid #fff;color:#fff;background:#171717}
