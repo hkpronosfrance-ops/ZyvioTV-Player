@@ -101,6 +101,25 @@ function createVideoMock() {
     assert.equal(player.ended, false);
   }
 
+
+  {
+    let state = "NONE";
+    const avplay = {
+      setListener() {}, open() { state = "IDLE"; },
+      setDisplayRect() {}, setDisplayMethod() {},
+      prepareAsync(_ok, fail) { fail(); },
+      play() { throw new Error("Must not start after prepare failure"); },
+      stop() { state = "IDLE"; }, close() { state = "NONE"; },
+      getState() { return state; },
+    };
+    const api = loadPlayer({ webapis: { avplay } });
+    const player = api.create(null);
+    await assert.rejects(player.play("https://example.test/bad.ts"));
+    assert.equal(player.isActive(), false, "Failed AVPlay prepare must release the stream");
+    assert.equal(player.buffering, false, "Failed AVPlay prepare must clear buffering");
+    assert.equal(state, "NONE", "Failed AVPlay prepare must close the player");
+  }
+
   delete global.window;
   console.log("Tizen player state tests passed");
 })().catch((error) => {
