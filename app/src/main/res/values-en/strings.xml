@@ -64,4 +64,10 @@
     <string name="parental_catalog_unavailable">Catalog unavailable for editing locks.</string>
     <string name="parental_save_restrictions">Save restrictions</string>
     <string name="parental_pin_explanation">The PIN only unlocks the current action. Screen time is cumulative across devices.</string>
+    <string name="device_disconnect_error">Unable to disconnect this device.</string>
+    <string name="profile_prepare_error">Unable to prepare the main profile.</string>
+    <string name="profile_default_saved">Default profile saved on this device.</string>
+    <string name="profile_default_disabled">Default profile disabled on this device.</string>
+    <string name="profile_duplicate_name">This name is already used by another profile.</string>
+    <string name="profile_updated">Profile updated.</string>
 </resources>
