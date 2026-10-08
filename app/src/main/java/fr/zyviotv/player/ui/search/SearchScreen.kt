@@ -2,6 +2,8 @@ package fr.zyviotv.player.ui.search
 
 import android.content.Context
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +23,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -46,6 +48,7 @@ import fr.zyviotv.player.shared.search.SearchKind
 import fr.zyviotv.player.shared.search.SearchResultItem
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
@@ -99,8 +102,8 @@ fun SearchScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(
-                horizontal = if (profile == DeviceProfile.Television) 36.dp else 4.dp,
-                vertical = 8.dp,
+                horizontal = if (profile == DeviceProfile.Television) ZyvioSpace.s10 else ZyvioSpace.s2,
+                vertical = ZyvioSpace.s2,
             ),
     ) {
         Row(
@@ -139,9 +142,14 @@ fun SearchScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(ZyvioSpace.s2),
+        ) {
             SearchFilter.entries.forEach { item ->
-                AssistChip(
+                FilterChip(
+                    selected = filter == item,
+                    modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 999),
                     onClick = { filter = item },
                     label = { Text(item.label) },
                 )
