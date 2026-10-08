@@ -1321,13 +1321,13 @@
   }
 
   function renderHomeShelves() {
-    const resumable = watchProgress
+    const allResumable = watchProgress
       .filter((item) =>
         !item.completed &&
         Number(item.position_ms || 0) >= 10_000 &&
         !isLibraryItemLocked(item)
-      )
-      .slice(0, 20);
+      );
+    const resumable = allResumable.slice(0, 20);
     clearHomeContainer(continueCards);
     resumable.forEach((item) => {
       const duration = Number(item.duration_ms || 0);
@@ -1338,13 +1338,13 @@
       continueCards?.append(createHomeCard(item, "continue", label, fraction));
     });
     if (continueShelf) continueShelf.hidden = resumable.length === 0;
-    setShelfMore("continue", resumable.length);
+    setShelfMore("continue", allResumable.length);
 
-    const recentChannels = liveHistory
+    const allRecentChannels = liveHistory
       .filter((item) => !isChildProfile() || liveChannels.some(
         (channel) => String(channel.id) === String(item.channel_id)
-      ))
-      .slice(0, 20);
+      ));
+    const recentChannels = allRecentChannels.slice(0, 20);
     clearHomeContainer(recentChannelCards);
     recentChannels.forEach((item) => {
       recentChannelCards?.append(createHomeCard(
@@ -1359,17 +1359,17 @@
       ));
     });
     if (recentChannelsShelf) recentChannelsShelf.hidden = recentChannels.length === 0;
-    setShelfMore("recent-live", recentChannels.length);
+    setShelfMore("recent-live", allRecentChannels.length);
 
-    const favoriteItems = favorites
+    const allFavoriteItems = favorites
       .filter((item) => {
         if (isLibraryItemLocked(item)) return false;
         if (isChildProfile() && item.content_type === "live") {
           return liveChannels.some((channel) => String(channel.id) === String(item.content_id));
         }
         return true;
-      })
-      .slice(0, 20);
+      });
+    const favoriteItems = allFavoriteItems.slice(0, 20);
     clearHomeContainer(favoriteCards);
     favoriteItems.forEach((item) => {
       favoriteCards?.append(createHomeCard(
@@ -1380,7 +1380,7 @@
       ));
     });
     if (favoritesShelf) favoritesShelf.hidden = favoriteItems.length === 0;
-    setShelfMore("favorites", favorites.length);
+    setShelfMore("favorites", allFavoriteItems.length);
 
     refreshHomeCatalogShelves();
   }
