@@ -64,4 +64,10 @@
     <string name="parental_catalog_unavailable">Catalogue indisponible pour modifier les verrouillages.</string>
     <string name="parental_save_restrictions">Enregistrer les restrictions</string>
     <string name="parental_pin_explanation">Le PIN ne déverrouille que l’action en cours. Le temps d’écran est cumulé sur tous les appareils.</string>
+    <string name="device_disconnect_error">Impossible de déconnecter cet appareil.</string>
+    <string name="profile_prepare_error">Impossible de préparer le profil principal.</string>
+    <string name="profile_default_saved">Profil par défaut enregistré sur cet appareil.</string>
+    <string name="profile_default_disabled">Profil par défaut désactivé sur cet appareil.</string>
+    <string name="profile_duplicate_name">Ce nom est déjà utilisé par un autre profil.</string>
+    <string name="profile_updated">Profil modifié.</string>
 </resources>

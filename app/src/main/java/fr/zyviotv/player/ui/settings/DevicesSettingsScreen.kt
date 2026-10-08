@@ -95,7 +95,7 @@ fun DevicesSettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = onBack) {
-                Text("Retour")
+                Text(stringResource(R.string.nav_back))
             }
             Column(Modifier.weight(1f)) {
                 Text(
@@ -182,7 +182,7 @@ fun DevicesSettingsScreen(
                                     when (repository.deleteDevice(device.id)) {
                                         SyncResult.Success -> reload()
                                         is SyncResult.Failure -> {
-                                            error = "Impossible de déconnecter cet appareil."
+                                            error = context.getString(R.string.device_disconnect_error)
                                         }
                                     }
                                 }
