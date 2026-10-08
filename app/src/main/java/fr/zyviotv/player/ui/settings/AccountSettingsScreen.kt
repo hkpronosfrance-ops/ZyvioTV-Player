@@ -11,6 +11,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
+import fr.zyviotv.player.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,13 +57,13 @@ fun AccountSettingsScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Mon compte",
+            text = stringResource(R.string.settings_account_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Votre session ZyvioTV Player est stockée de façon chiffrée sur cet appareil.",
+            text = stringResource(R.string.settings_account_storage),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(20.dp))
@@ -79,7 +81,7 @@ fun AccountSettingsScreen(
             modifier = Modifier.fillMaxWidth(0.6f),
             onClick = onOpenDevices,
         ) {
-            Text("Appareils")
+            Text(stringResource(R.string.settings_devices))
         }
 
         Spacer(Modifier.height(12.dp))
@@ -88,7 +90,7 @@ fun AccountSettingsScreen(
             modifier = Modifier.fillMaxWidth(0.6f),
             onClick = onOpenPlaybackData,
         ) {
-            Text("Lecture et données")
+            Text(stringResource(R.string.settings_playback_data))
         }
 
         Spacer(Modifier.height(12.dp))
@@ -97,7 +99,7 @@ fun AccountSettingsScreen(
             modifier = Modifier.fillMaxWidth(0.6f),
             onClick = onOpenCache,
         ) {
-            Text("Données et cache")
+            Text(stringResource(R.string.settings_data_cache))
         }
 
         Spacer(Modifier.height(12.dp))
@@ -106,7 +108,7 @@ fun AccountSettingsScreen(
             modifier = Modifier.fillMaxWidth(0.6f),
             onClick = onOpenParentalControls,
         ) {
-            Text("Contrôle parental")
+            Text(stringResource(R.string.settings_parental))
         }
 
         Spacer(Modifier.height(12.dp))
@@ -115,7 +117,7 @@ fun AccountSettingsScreen(
             modifier = Modifier.fillMaxWidth(0.6f),
             onClick = onOpenProfiles,
         ) {
-            Text("Profils")
+            Text(stringResource(R.string.settings_profiles))
         }
 
         Spacer(Modifier.height(12.dp))
@@ -124,7 +126,7 @@ fun AccountSettingsScreen(
             modifier = Modifier.fillMaxWidth(0.6f),
             onClick = onSwitchProfile,
         ) {
-            Text("Changer de profil")
+            Text(stringResource(R.string.settings_switch_profile))
         }
 
         Spacer(Modifier.height(12.dp))
@@ -154,7 +156,7 @@ fun AccountSettingsScreen(
             if (isLoading) {
                 CircularProgressIndicator(strokeWidth = 2.dp)
             } else {
-                Text("Se déconnecter")
+                Text(stringResource(R.string.settings_sign_out))
             }
         }
     }
