@@ -274,7 +274,7 @@
       };
     }
 
-    const movieGroup = /(^|\b)(vod|movies?|films?|cinema|ciné)(\b|$)/i.test(group);
+    const movieGroup = /(^|\b)(vod|movies?|films?|cinema|cine)(\b|$)/i.test(group);
     const liveGroup = /(^|\b)(live|tv|chaines?|channels?|sports?|news|infos?|radio)(\b|$)/i.test(group);
 
     if (movieGroup) return { type: "movie" };
@@ -286,9 +286,15 @@
 
     if (/\/(movie|vod)\//.test(pathname)) return { type: "movie" };
     if (/\/(series)\//.test(pathname)) {
-      return episode
-        ? { type: "episode", episode }
-        : { type: "movie" };
+      return {
+        type: "episode",
+        episode: episode || {
+          seriesTitle: String(entry.name || "Série").trim(),
+          season: 1,
+          episode: 1,
+          episodeTitle: "",
+        },
+      };
     }
     if (/\/(live)\//.test(pathname)) return { type: "live" };
 
