@@ -10,7 +10,7 @@ class XtreamCatalogValidationTest {
     fun bodyKindIsReadFromItsFirstCharacters() {
         assertEquals(XtreamBodyKind.JsonArray, XtreamBodyKind.of(" [{\"stream_id\":1}]"))
         assertEquals(XtreamBodyKind.EmptyArray, XtreamBodyKind.of("[ ]"))
-        assertEquals(XtreamBodyKind.EmptyArray, XtreamBodyKind.of("﻿[]"))
+        assertEquals(XtreamBodyKind.EmptyArray, XtreamBodyKind.of("\uFEFF[]"))
         assertEquals(XtreamBodyKind.JsonObject, XtreamBodyKind.of("{\"user_info\":{\"auth\":0}}"))
         assertEquals(XtreamBodyKind.Html, XtreamBodyKind.of("<html>Prohibited</html>"))
         assertEquals(XtreamBodyKind.Empty, XtreamBodyKind.of("   "))

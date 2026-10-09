@@ -12,7 +12,7 @@ enum class XtreamBodyKind(val logName: String) {
 
     companion object {
         fun of(body: String): XtreamBodyKind {
-            val start = body.indexOfFirst { !it.isWhitespace() && it != '﻿' }
+            val start = body.indexOfFirst { !it.isWhitespace() && it != '\uFEFF' }
             if (start < 0) return Empty
             return when (body[start]) {
                 '[' -> {
