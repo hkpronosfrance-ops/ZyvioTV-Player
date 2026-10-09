@@ -722,3 +722,12 @@ button:disabled, [data-focusable][aria-disabled="true"] {
 @media(max-width:1280px){:root{--d6-safe:24px}.app-shell{grid-template-columns:182px minmax(0,1fr)}.hero{min-height:245px;padding:28px}.cards .card{flex-basis:195px;min-height:138px}.catalog-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,156px),1fr))}}
 @media(min-width:2560px){:root{--d6-safe:64px}.app-shell{grid-template-columns:330px minmax(0,1fr)}.catalog-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}}
 @media(prefers-reduced-motion:reduce){[data-focusable]:focus,.nav-item:focus,.card:focus,.catalog-card:focus{transform:none!important}.content,.cards{scroll-behavior:auto!important}}
+
+/* D7 #199: accessible focus, text readability and small-screen overscan. */
+[data-focusable]:focus-visible,button:focus-visible,input:focus-visible{outline:4px solid #F4F4F6;outline-offset:4px;z-index:5}
+button:disabled,[data-focusable][aria-disabled="true"]{opacity:.45;cursor:default}
+input:focus-visible{box-shadow:0 0 0 7px rgba(224,16,47,.16)}
+.hero h1,.auth-card h1,.pin-card h1{overflow-wrap:break-word}
+.catalog-card,.card,.nav-item{scroll-margin:18px}
+@media (max-width:1280px){.content{padding-left:24px;padding-right:24px}.cards{scroll-padding-inline:16px}}
+@media (prefers-reduced-motion: reduce){[data-focusable],button,.card,.catalog-card,.nav-item{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
