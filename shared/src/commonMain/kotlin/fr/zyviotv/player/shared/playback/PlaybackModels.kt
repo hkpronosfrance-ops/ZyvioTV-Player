@@ -25,7 +25,7 @@ enum class PlaybackState {
 
 object PlaybackMediaTypeResolver {
     fun resolve(request: PlaybackRequest): PlaybackMediaType {
-        val lowerUrl = request.streamUrl.substringBefore('#').lowercase()
+        val lowerUrl = PlaybackSource.parse(request.streamUrl).url.substringBefore('#').lowercase()
         val cleanUrl = lowerUrl.substringBefore('?')
         val query = lowerUrl.substringAfter('?', "")
 
@@ -79,7 +79,7 @@ sealed interface PlaybackValidationResult {
 
 object PlaybackValidator {
     fun validate(request: PlaybackRequest): PlaybackValidationResult {
-        val url = request.streamUrl.trim()
+        val url = PlaybackSource.parse(request.streamUrl).url
 
         if (url.isBlank()) {
             return PlaybackValidationResult.Invalid("Le flux vidéo est introuvable.")

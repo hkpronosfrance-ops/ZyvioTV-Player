@@ -40,7 +40,7 @@ class AndroidPlayback207Test(unittest.TestCase):
 
     def test_every_play_action_goes_through_launch_policy(self):
         app = read("ZyvioTVPlayerApp.kt")
-        self.assertIn("PlaybackLaunchPolicy.decide(request, networkAvailability)", app)
+        self.assertIn("PlaybackLaunchPolicy.decide(\n            request = request,\n            network = networkAvailability,", app)
         # Only startPlayback assigns a request and opens the player route.
         self.assertEqual(app.count("playbackRequest = decision.request"), 1)
         self.assertEqual(len(re.findall(r"playbackRequest = PlaybackRequest\(", app)), 0)

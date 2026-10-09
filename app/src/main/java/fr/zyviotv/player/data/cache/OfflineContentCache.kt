@@ -18,28 +18,39 @@ import fr.zyviotv.player.shared.sync.SyncedFavorite
 import fr.zyviotv.player.shared.sync.SyncedWatchProgress
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.DataInputStream
-import java.io.DataOutputStream
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.security.KeyStore
 import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.CipherInputStream
-import javax.crypto.CipherOutputStream
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
+
+/** Where a restored catalog came from. */
+enum class CatalogCacheOrigin {
+    /** Encrypted, compressed cache (PR #206): stream URLs are stored. */
+    Encrypted,
+
+    /**
+     * SharedPreferences JSON written before PR #206. It never stored stream
+     * URLs, so it can be browsed but never played (bloc #208).
+     */
+    LegacyWithoutSources,
+}
 
 data class CachedCatalog(
     val playlistId: String,
     val playlistName: String,
     val snapshot: CatalogSnapshot,
     val seriesDetails: Map<String, SeriesDetailSource> = emptyMap(),
-)
+    val origin: CatalogCacheOrigin = CatalogCacheOrigin.Encrypted,
+) {
+    val sourceReport: CatalogSourceReport by lazy {
+        CatalogSourceReport.of(snapshot, seriesDetails)
+    }
+
+    /** Restored data that may be offered for playback without a refresh. */
+    val isPlayable: Boolean
+        get() = origin == CatalogCacheOrigin.Encrypted && sourceReport.isPlayable
+}
 
 data class CachedLibrary(
     val profileId: String,
@@ -53,51 +64,64 @@ class OfflineContentCache(context: Context) {
     private val preferences =
         applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val catalogDirectory = File(applicationContext.filesDir, CATALOG_DIRECTORY)
+    private val encryptedFile = EncryptedCatalogFile(::secretKey)
 
-    fun saveCatalog(profileId: String, catalog: CachedCatalog) {
+    /**
+     * Replaces the cached catalog only with a validated one: every channel,
+     * film and indexed episode must carry its source. Returns false (and keeps
+     * the previous cache) otherwise or when the write fails.
+     */
+    fun saveCatalog(profileId: String, catalog: CachedCatalog): Boolean {
         val startedAt = CatalogPerformanceDiagnostics.startedAt()
-        catalogDirectory.mkdirs()
-        val target = catalogFile(profileId)
-        val temporary = File(target.parentFile, target.name + ".tmp")
-        val backup = File(target.parentFile, target.name + ".bak")
-        runCatching {
-            val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-                init(Cipher.ENCRYPT_MODE, secretKey())
-            }
-            FileOutputStream(temporary).use { fileOutput ->
-                fileOutput.write(MAGIC)
-                fileOutput.write(cipher.iv.size)
-                fileOutput.write(cipher.iv)
-                CipherOutputStream(fileOutput, cipher).use { encrypted ->
-                    GZIPOutputStream(encrypted, STREAM_BUFFER_BYTES).use { compressed ->
-                        DataOutputStream(compressed).use { output ->
-                            CatalogCacheCodec.write(output, catalog)
-                        }
-                    }
-                }
-            }
-            backup.delete()
-            if (target.exists()) check(target.renameTo(backup))
-            if (!temporary.renameTo(target)) {
-                backup.renameTo(target)
-                error("Unable to commit catalog cache")
-            }
-            backup.delete()
+        val report = catalog.sourceReport
+        if (catalog.origin != CatalogCacheOrigin.Encrypted || !report.isPlayable) {
+            CatalogPerformanceDiagnostics.event(
+                name = "catalog_persist_rejected",
+                fields = "reason=missing_sources " + report.logFields(),
+                warning = true,
+            )
+            return false
+        }
+        return try {
+            encryptedFile.write(catalogFile(profileId), catalog)
             preferences.edit().remove(catalogKey(profileId)).apply()
             CatalogPerformanceDiagnostics.phase(
                 name = "catalog_persist",
                 startedAtMs = startedAt,
                 itemCount = catalog.snapshot.itemCount(),
             )
-        }.onFailure {
-            temporary.delete()
-            if (!target.exists()) backup.renameTo(target)
+            true
+        } catch (error: Exception) {
+            CatalogPerformanceDiagnostics.event(
+                name = "catalog_persist_failed",
+                fields = "failure=" + error.javaClass.simpleName,
+                warning = true,
+            )
+            false
         }
     }
 
     fun loadCatalog(profileId: String): CachedCatalog? {
         val startedAt = CatalogPerformanceDiagnostics.startedAt()
-        val stored = loadEncryptedCatalog(profileId) ?: loadLegacyCatalog(profileId)
+        val encrypted = try {
+            encryptedFile.read(catalogFile(profileId))
+        } catch (error: Exception) {
+            // Unreadable (key reset, truncation): never hide it behind the
+            // legacy fallback silently. The next validated refresh rewrites it.
+            CatalogPerformanceDiagnostics.event(
+                name = "catalog_cache_unreadable",
+                fields = "failure=" + error.javaClass.simpleName,
+                warning = true,
+            )
+            null
+        }
+        if (encrypted != null && preferences.contains(catalogKey(profileId))) {
+            // A pre-#206 JSON copy next to a valid encrypted cache is dead
+            // weight loaded with every SharedPreferences access.
+            preferences.edit().remove(catalogKey(profileId)).apply()
+            CatalogPerformanceDiagnostics.event(name = "legacy_catalog_removed")
+        }
+        val stored = encrypted ?: loadLegacyCatalog(profileId)
         if (stored != null) {
             M3uSeriesDetailRegistry.replace(stored.seriesDetails)
             CatalogPerformanceDiagnostics.phase(
@@ -105,32 +129,15 @@ class OfflineContentCache(context: Context) {
                 startedAtMs = startedAt,
                 itemCount = stored.snapshot.itemCount(),
             )
+            CatalogPerformanceDiagnostics.event(
+                name = "catalog_cache_sources",
+                fields = "origin=" + stored.origin.name.lowercase() +
+                    " playable=" + stored.isPlayable + " " + stored.sourceReport.logFields(),
+                warning = !stored.isPlayable,
+            )
         }
         return stored
     }
-
-    private fun loadEncryptedCatalog(profileId: String): CachedCatalog? = runCatching {
-        val target = catalogFile(profileId).let { file ->
-            if (file.exists()) file else File(file.parentFile, file.name + ".bak")
-        }
-        if (!target.exists()) return null
-        FileInputStream(target).use { fileInput ->
-            val magic = ByteArray(MAGIC.size)
-            check(fileInput.read(magic) == magic.size && magic.contentEquals(MAGIC))
-            val ivLength = fileInput.read()
-            check(ivLength == IV_LENGTH_BYTES)
-            val iv = ByteArray(ivLength)
-            check(fileInput.read(iv) == ivLength)
-            val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-                init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
-            }
-            CipherInputStream(fileInput, cipher).use { decrypted ->
-                GZIPInputStream(decrypted, STREAM_BUFFER_BYTES).use { decompressed ->
-                    DataInputStream(decompressed).use(CatalogCacheCodec::read)
-                }
-            }
-        }
-    }.getOrNull()
 
     private fun loadLegacyCatalog(profileId: String): CachedCatalog? = runCatching {
         val raw = preferences.getString(catalogKey(profileId), null) ?: return null
@@ -139,6 +146,7 @@ class OfflineContentCache(context: Context) {
             playlistId = root.getString("playlist_id"),
             playlistName = root.optString("playlist_name"),
             snapshot = root.getJSONObject("snapshot").toCatalogSnapshot(),
+            origin = CatalogCacheOrigin.LegacyWithoutSources,
         )
     }.getOrNull()
 
@@ -177,48 +185,6 @@ class OfflineContentCache(context: Context) {
 
     private fun catalogKey(profileId: String) = "catalog_" + profileId
     private fun libraryKey(profileId: String) = "library_" + profileId
-
-    private fun CatalogSnapshot.toJson() = JSONObject()
-        .put("live_categories", categoriesToJson(liveCategories))
-        .put("live_channels", JSONArray().apply {
-            liveChannels.forEach { channel ->
-                put(
-                    JSONObject()
-                        .put("id", channel.id)
-                        .put("name", channel.name)
-                        .putNullable("category_id", channel.categoryId)
-                        .putNullable("logo_url", channel.logoUrl)
-                        .putNullable("epg_id", channel.epgId),
-                )
-            }
-        })
-        .put("movie_categories", categoriesToJson(movieCategories))
-        .put("movies", JSONArray().apply {
-            movies.forEach { movie ->
-                put(
-                    JSONObject()
-                        .put("id", movie.id)
-                        .put("title", movie.title)
-                        .putNullable("category_id", movie.categoryId)
-                        .putNullable("poster_url", movie.posterUrl)
-                        .put("container_extension", movie.containerExtension)
-                        .putNullable("added_at", movie.addedAtEpochSeconds),
-                )
-            }
-        })
-        .put("series_categories", categoriesToJson(seriesCategories))
-        .put("series", JSONArray().apply {
-            series.forEach { series ->
-                put(
-                    JSONObject()
-                        .put("id", series.id)
-                        .put("title", series.title)
-                        .putNullable("category_id", series.categoryId)
-                        .putNullable("poster_url", series.posterUrl)
-                        .putNullable("added_at", series.addedAtEpochSeconds),
-                )
-            }
-        })
 
     private fun JSONObject.toCatalogSnapshot() = CatalogSnapshot(
         liveCategories = getJSONArray("live_categories").mapObjects { it.toCategory() },
@@ -317,10 +283,6 @@ class OfflineContentCache(context: Context) {
         logoUrl = optNullableString("logo_url"),
     )
 
-    private fun categoriesToJson(items: List<CatalogCategory>) = JSONArray().apply {
-        items.forEach { put(JSONObject().put("id", it.id).put("name", it.name)) }
-    }
-
     private fun JSONObject.toCategory() = CatalogCategory(
         id = getString("id"),
         name = getString("name"),
@@ -381,10 +343,5 @@ class OfflineContentCache(context: Context) {
         const val CATALOG_DIRECTORY = "offline-catalogs"
         const val ANDROID_KEY_STORE = "AndroidKeyStore"
         const val CATALOG_KEY_ALIAS = "zyviotv_player_catalog_key"
-        const val TRANSFORMATION = "AES/GCM/NoPadding"
-        const val IV_LENGTH_BYTES = 12
-        const val GCM_TAG_LENGTH_BITS = 128
-        const val STREAM_BUFFER_BYTES = 64 * 1024
-        val MAGIC = byteArrayOf('Z'.code.toByte(), 'V'.code.toByte(), 'C'.code.toByte(), 1)
     }
 }

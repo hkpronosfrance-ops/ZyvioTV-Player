@@ -6,6 +6,7 @@ import fr.zyviotv.player.shared.catalog.CatalogMovie
 import fr.zyviotv.player.shared.catalog.CatalogSeries
 import fr.zyviotv.player.shared.catalog.CatalogSnapshot
 import fr.zyviotv.player.shared.m3u.M3uEntry
+import fr.zyviotv.player.shared.playback.PlaybackSource
 
 object M3uCatalogMapper {
     private data class EpisodeIdentity(
@@ -70,8 +71,10 @@ object M3uCatalogMapper {
                         categoryId = categoryId,
                         posterUrl = entry.logoUrl?.trim()?.takeIf(String::isNotBlank),
                         streamUrl = streamUrl,
-                        containerExtension = streamUrl.substringAfterLast('.', "")
+                        containerExtension = PlaybackSource.parse(streamUrl).url
                             .substringBefore('?')
+                            .substringAfterLast('/')
+                            .substringAfterLast('.', "")
                             .takeIf { it.length in 2..5 }
                             ?: "mp4",
                     )
@@ -144,7 +147,7 @@ object M3uCatalogMapper {
         if (MOVIE_TOKENS.any(group::contains)) return Kind.Movie
         if (LIVE_TOKENS.any(group::contains)) return Kind.Live
 
-        val url = entry.streamUrl.lowercase()
+        val url = PlaybackSource.parse(entry.streamUrl).url.lowercase()
         if ("/movie/" in url || "/vod/" in url) return Kind.Movie
         if ("/live/" in url) return Kind.Live
 

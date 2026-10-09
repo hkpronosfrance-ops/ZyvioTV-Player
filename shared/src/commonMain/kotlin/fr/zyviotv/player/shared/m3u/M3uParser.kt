@@ -1,5 +1,7 @@
 package fr.zyviotv.player.shared.m3u
 
+import fr.zyviotv.player.shared.playback.PlaybackSource
+
 object M3uParser {
     data class ParseReport(
         val emitted: Int,
@@ -42,6 +44,7 @@ object M3uParser {
         val iterator = lines.iterator()
         var headerSeen = false
         var metadata: String? = null
+        var vlcHeaders: MutableMap<String, String>? = null
         var emitted = 0
 
         while (iterator.hasNext() && emitted < maxEntries) {
@@ -60,14 +63,27 @@ object M3uParser {
             }
 
             when {
-                line.startsWith("#EXTINF:", ignoreCase = true) -> metadata = line
+                line.startsWith("#EXTINF:", ignoreCase = true) -> {
+                    metadata = line
+                    vlcHeaders = null
+                }
+                line.startsWith("#EXTVLCOPT:", ignoreCase = true) -> {
+                    // Provider access headers announced before the URL line.
+                    val option = line.substringAfter(':')
+                    val header = VLC_HEADER_OPTIONS[option.substringBefore('=').trim().lowercase()]
+                    val value = option.substringAfter('=', "").trim()
+                    if (metadata != null && header != null && value.isNotEmpty()) {
+                        (vlcHeaders ?: LinkedHashMap<String, String>().also { vlcHeaders = it })[header] = value
+                    }
+                }
                 line.startsWith("#") -> Unit
                 metadata != null -> {
-                    parseEntry(metadata, line)?.let { entry ->
+                    parseEntry(metadata, line, vlcHeaders.orEmpty())?.let { entry ->
                         onEntry(entry)
                         emitted += 1
                     }
                     metadata = null
+                    vlcHeaders = null
                 }
             }
         }
@@ -80,7 +96,11 @@ object M3uParser {
         )
     }
 
-    private fun parseEntry(metadata: String, streamUrl: String): M3uEntry? {
+    private fun parseEntry(
+        metadata: String,
+        streamUrl: String,
+        headers: Map<String, String>,
+    ): M3uEntry? {
         if (!streamUrl.startsWith("http://") && !streamUrl.startsWith("https://")) {
             return null
         }
@@ -98,7 +118,7 @@ object M3uParser {
 
         return M3uEntry(
             name = name,
-            streamUrl = streamUrl.trim(),
+            streamUrl = PlaybackSource.compose(streamUrl.trim(), headers),
             tvgId = attributes["tvg-id"],
             tvgName = tvgName,
             logoUrl = attributes["tvg-logo"],
@@ -122,6 +142,12 @@ object M3uParser {
 
     private val ATTRIBUTE_PATTERN = Regex(
         """(?:^|\s)([A-Za-z0-9_-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""",
+    )
+    private val VLC_HEADER_OPTIONS = mapOf(
+        "http-user-agent" to "User-Agent",
+        "http-referrer" to "Referer",
+        "http-referer" to "Referer",
+        "http-origin" to "Origin",
     )
     private val SUPPORTED_ATTRIBUTES = setOf("tvg-id", "tvg-name", "tvg-logo", "group-title")
 }
