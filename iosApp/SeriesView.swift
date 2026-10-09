@@ -10,8 +10,8 @@ struct SeriesView: View {
     @State private var errorMessage: String?
 
     private var columns: [GridItem] {
-        let count = horizontalSizeClass == .regular ? 5 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: 14), count: count)
+        let minimumPosterWidth: CGFloat = horizontalSizeClass == .regular ? 168 : 132
+        return [GridItem(.adaptive(minimum: minimumPosterWidth), spacing: ZyvioDesign.Space.s3)]
     }
 
     var body: some View {
@@ -40,7 +40,7 @@ struct SeriesView: View {
                     )
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: columns, spacing: 18) {
+                        LazyVGrid(columns: columns, spacing: ZyvioDesign.Space.s5) {
                             ForEach(series) { item in
                                 Button {
                                     selectedSeries = item
@@ -53,7 +53,7 @@ struct SeriesView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(horizontalSizeClass == .regular ? 28 : 16)
+                        .padding(.horizontal, horizontalSizeClass == .regular ? ZyvioDesign.Space.s7 : ZyvioDesign.Space.s4)
                         .padding(.vertical, 18)
                     }
                     .refreshable {
