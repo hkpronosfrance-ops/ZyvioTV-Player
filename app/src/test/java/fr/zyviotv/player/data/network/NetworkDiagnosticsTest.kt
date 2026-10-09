@@ -12,12 +12,12 @@ class NetworkDiagnosticsTest {
     @Test
     fun safeEndpointRemovesEverySecretBearingUrlPart() {
         val original =
-            "http://alice:super-secret@iptv.example:8080/live/alice/super-secret/42.ts" +
-                "?username=alice&password=super-secret&token=private"
+            "http://alice:super-secret@provider.example:8080/live/alice/super-secret/42.ts" +
+                "?username=alice&password=super-secret&token=private" // [REDACTED] fixture
 
         val diagnostic = NetworkDiagnostics.safeEndpoint(original)
 
-        assertEquals("http://iptv.example:8080", diagnostic)
+        assertEquals("http://provider.example:8080", diagnostic)
         assertFalse(diagnostic.contains("alice"))
         assertFalse(diagnostic.contains("super-secret"))
         assertFalse(diagnostic.contains("private"))
