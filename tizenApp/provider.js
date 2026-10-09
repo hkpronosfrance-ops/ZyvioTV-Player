@@ -390,7 +390,7 @@
       }
 
       const episode = classification.episode;
-      const seriesKey = normalizeLabel(episode.seriesTitle);
+      const seriesKey = normalizeLabel(episode.seriesTitle) + "|" + normalizeLabel(entry.categoryName);
       let series = seriesMap.get(seriesKey);
       if (!series) {
         series = {
