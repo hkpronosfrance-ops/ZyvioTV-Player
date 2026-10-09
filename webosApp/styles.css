@@ -139,3 +139,50 @@ button:disabled, [data-focusable][aria-disabled="true"] {
   .rail { padding-left: var(--zyvio-tv-safe); }
   .content { padding-right: max(68px, var(--zyvio-tv-safe)); }
 }
+
+
+/* D6 LG webOS ten-foot responsive shell, active navigation and catalogue focus. */
+.shell { grid-template-columns: clamp(188px, 16vw, 268px) minmax(0, 1fr); }
+.rail { padding-top: max(40px, var(--zyvio-tv-safe)); padding-bottom: var(--zyvio-tv-safe); }
+.nav { min-height: 58px; width: 100%; text-align: left; border-radius: 14px; }
+.nav.active {
+  background: var(--zyvio-red-tint);
+  color: var(--zyvio-text);
+  border-left: 4px solid var(--zyvio-red);
+}
+.hero {
+  position: relative;
+  overflow: hidden;
+  min-height: clamp(270px, 34vh, 470px);
+  border-radius: 24px;
+  background: linear-gradient(105deg, #2A0A10 0%, #121215 60%, #050506 100%);
+}
+.hero h1 { max-width: 680px; line-height: 1.12; text-wrap: balance; }
+.hero p { max-width: 600px; }
+.hero .primary { min-height: 52px; padding-inline: 26px; }
+.shelf { min-width: 0; margin-block: 28px; }
+.shelf h2 { color: var(--zyvio-text); }
+.cards { gap: 18px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; }
+.cards > .card { scroll-snap-align: start; min-height: 108px; }
+.catalog-panel, .account-panel, .devices-panel { min-width: 0; }
+.catalog-card:focus-visible, .profile-card:focus-visible, .nav:focus-visible {
+  outline: 4px solid var(--zyvio-focus-ring);
+  outline-offset: 4px;
+  transform: scale(1.02);
+}
+@media (max-width: 1280px) {
+  .shell { grid-template-columns: 180px minmax(0, 1fr); }
+  .nav { min-height: 48px; }
+  .hero { min-height: 250px; }
+  .cards { gap: 12px; }
+}
+@media (min-width: 2560px) {
+  .shell { grid-template-columns: 280px minmax(0, 1fr); }
+  .nav { min-height: 78px; font-size: 1.25em; }
+  .hero { min-height: 480px; }
+  .cards { gap: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cards { scroll-snap-type: none; }
+  .catalog-card:focus-visible, .profile-card:focus-visible, .nav:focus-visible { transform: none; }
+}
