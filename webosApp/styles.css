@@ -24,3 +24,5 @@
 button:focus-visible, [data-focusable]:focus-visible { outline: 4px solid var(--zyvio-focus-ring); }
 .catalog-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 176px), 1fr)); }
 .cards { overflow-x: auto; }
+
+@media (prefers-reduced-motion: reduce) { .content { scroll-behavior: auto; } }
