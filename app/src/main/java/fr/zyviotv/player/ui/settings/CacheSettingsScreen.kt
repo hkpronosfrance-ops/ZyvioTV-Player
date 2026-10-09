@@ -141,7 +141,8 @@ fun CacheSettingsScreen(
 }
 
 private fun Context.computeCacheSize(): Long =
-    cacheDir.walkTopDown()
+    sequenceOf(cacheDir, java.io.File(filesDir, OFFLINE_CATALOG_DIRECTORY))
+        .flatMap { it.walkTopDown() }
         .filter { it.isFile }
         .sumOf { it.length() }
 
@@ -150,8 +151,12 @@ private fun Context.clearCacheSafely(): Boolean {
     cacheDir.listFiles().orEmpty().forEach { file ->
         if (!file.deleteRecursively()) success = false
     }
+    val catalogDirectory = java.io.File(filesDir, OFFLINE_CATALOG_DIRECTORY)
+    if (catalogDirectory.exists() && !catalogDirectory.deleteRecursively()) success = false
     return success
 }
+
+private const val OFFLINE_CATALOG_DIRECTORY = "offline-catalogs"
 
 private fun formatBytes(value: Long): String {
     if (value < 1024L) return "$value o"

@@ -20,6 +20,9 @@ object M3uSeriesDetailRegistry {
     fun load(seriesId: String): SeriesDetailSource? = details[seriesId]
 
     @Synchronized
+    fun snapshot(): Map<String, SeriesDetailSource> = LinkedHashMap(details)
+
+    @Synchronized
     fun clear() {
         details.clear()
     }

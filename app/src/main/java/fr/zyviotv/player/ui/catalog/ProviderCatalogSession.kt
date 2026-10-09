@@ -13,19 +13,24 @@ import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.cache.CachedCatalog
 import fr.zyviotv.player.data.cache.OfflineContentCache
 import fr.zyviotv.player.data.catalog.AndroidXtreamCatalogLoader
+import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
+import fr.zyviotv.player.data.catalog.CatalogSingleFlight
 import fr.zyviotv.player.data.catalog.M3uCatalogMapper
+import fr.zyviotv.player.data.catalog.M3uSeriesDetailRegistry
 import fr.zyviotv.player.data.m3u.AndroidM3uClient
+import fr.zyviotv.player.data.m3u.M3uStreamingResult
 import fr.zyviotv.player.data.settings.ParentalControlsRepository
 import fr.zyviotv.player.data.settings.ProfileContentLocks
 import fr.zyviotv.player.data.settings.ProfilePreferences
 import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
 import fr.zyviotv.player.shared.catalog.CatalogLoadResult
 import fr.zyviotv.player.shared.catalog.CatalogSnapshot
-import fr.zyviotv.player.shared.m3u.M3uImportResult
 import fr.zyviotv.player.shared.m3u.M3uSource
 import fr.zyviotv.player.shared.sync.PlaylistSecret
 import fr.zyviotv.player.shared.sync.SyncedPlaylist
 import fr.zyviotv.player.shared.xtream.XtreamCredentials
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 sealed interface ProviderCatalogState {
     data object Loading : ProviderCatalogState
@@ -38,6 +43,7 @@ sealed interface ProviderCatalogState {
         val contentLocks: ProfileContentLocks? = null,
         val isOffline: Boolean = false,
         val syncWarning: String? = null,
+        val isRefreshing: Boolean = false,
     ) : ProviderCatalogState
 
     data class Empty(val message: String) : ProviderCatalogState
@@ -50,6 +56,17 @@ class ProviderCatalogSession internal constructor(
     private val onReload: () -> Unit,
 ) {
     fun reload() = onReload()
+}
+
+private object ProviderCatalogSyncCoordinator {
+    private val singleFlight = CatalogSingleFlight<ProviderCatalogState>()
+
+    suspend fun run(
+        key: String,
+        loader: suspend () -> ProviderCatalogState,
+    ): ProviderCatalogState {
+        return singleFlight.run(key, loader)
+    }
 }
 
 @Composable
@@ -70,7 +87,9 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
     val profilePreferences = remember(applicationContext) {
         ProfilePreferences(applicationContext)
     }
-    val m3uClient = remember { AndroidM3uClient() }
+    val m3uClient = remember(applicationContext) {
+        AndroidM3uClient(tempDirectory = applicationContext.cacheDir)
+    }
     val offlineCache = remember(applicationContext) {
         OfflineContentCache(applicationContext)
     }
@@ -81,64 +100,36 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
     var reloadToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(reloadToken) {
-        val previousReady = state.value as? ProviderCatalogState.Ready
-        state.value = ProviderCatalogState.Loading
-
         val profileId = profilePreferences.selectedProfileId()
-        val playlists = repository.listPlaylists().getOrElse {
-            val cached = profileId?.let(offlineCache::loadCatalog)
+        if (profileId.isNullOrBlank()) {
+            state.value = ProviderCatalogState.Loading
+            return@LaunchedEffect
+        }
+
+        var previousReady = state.value as? ProviderCatalogState.Ready
+        if (previousReady == null) {
+            val cached = withContext(Dispatchers.IO) { offlineCache.loadCatalog(profileId) }
             if (cached != null) {
-                state.value = ProviderCatalogState.Ready(
+                previousReady = ProviderCatalogState.Ready(
                     playlistId = cached.playlistId,
                     playlistName = cached.playlistName,
                     snapshot = cached.snapshot,
                     rawSnapshot = cached.snapshot,
-                    isOffline = true,
+                    isOffline = !cached.snapshot.hasPlaybackSources(),
+                    isRefreshing = true,
                 )
+                state.value = previousReady
             } else {
-                state.value = ProviderCatalogState.Error(
-                    "Impossible de récupérer les playlists de votre compte.",
-                )
+                state.value = ProviderCatalogState.Loading
             }
-            return@LaunchedEffect
-        }
-
-        val playlist = playlists
-            .filter { it.isEnabled && it.secretStatus == "configured" }
-            .minWithOrNull(compareBy<SyncedPlaylist> { it.priority }.thenBy { it.name.lowercase() })
-
-        if (playlist == null) {
-            state.value = ProviderCatalogState.Empty(
-                "Aucune playlist active et configurée n’est disponible.",
-            )
-            return@LaunchedEffect
-        }
-
-        val secret = repository.getPlaylistSecret(playlist.id).getOrElse {
-            state.value = ProviderCatalogState.Error(
-                "Impossible de restaurer la configuration sécurisée de la playlist.",
-            )
-            return@LaunchedEffect
-        }
-
-        if (secret == null) {
-            state.value = ProviderCatalogState.Error(
-                "La configuration sécurisée de cette playlist est absente.",
-            )
-            return@LaunchedEffect
-        }
-
-        val loaded = loadCatalog(
-            playlist = playlist,
-            secret = secret,
-            m3uClient = m3uClient,
-        )
-
-        val locks = if (profileId != null) {
-            parentalRepository.loadContentLocks(profileId).getOrNull()
         } else {
-            null
+            state.value = previousReady.copy(isRefreshing = true, syncWarning = null)
         }
+
+        val loaded = ProviderCatalogSyncCoordinator.run(profileId) {
+            refreshCatalog(repository, m3uClient)
+        }
+        val locks = parentalRepository.loadContentLocks(profileId).getOrNull()
 
         state.value = when (loaded) {
             is ProviderCatalogState.Ready -> {
@@ -146,13 +137,16 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     snapshot = loaded.snapshot,
                     locks = locks,
                 )
-                if (profileId != null) {
+                withContext(Dispatchers.IO) {
+                    val visibleSeriesIds = filtered.series.mapTo(HashSet()) { it.id }
                     offlineCache.saveCatalog(
                         profileId = profileId,
                         catalog = CachedCatalog(
                             playlistId = loaded.playlistId,
                             playlistName = loaded.playlistName,
                             snapshot = filtered,
+                            seriesDetails = M3uSeriesDetailRegistry.snapshot()
+                                .filterKeys(visibleSeriesIds::contains),
                         ),
                     )
                 }
@@ -160,21 +154,26 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     snapshot = filtered,
                     rawSnapshot = loaded.snapshot,
                     contentLocks = locks,
+                    isRefreshing = false,
                 )
             }
             is ProviderCatalogState.Error -> {
-                if (previousReady != null && previousReady.playlistId == playlist.id) {
-                    previousReady.copy(syncWarning = loaded.message)
+                if (previousReady != null) {
+                    previousReady.copy(
+                        syncWarning = loaded.message,
+                        isRefreshing = false,
+                    )
                 } else {
-                    val cached = profileId?.let(offlineCache::loadCatalog)
+                    val cached = withContext(Dispatchers.IO) { offlineCache.loadCatalog(profileId) }
                     if (cached != null) {
                         ProviderCatalogState.Ready(
                             playlistId = cached.playlistId,
                             playlistName = cached.playlistName,
                             snapshot = cached.snapshot,
                             rawSnapshot = cached.snapshot,
-                            isOffline = true,
+                            isOffline = !cached.snapshot.hasPlaybackSources(),
                             syncWarning = loaded.message,
+                            isRefreshing = false,
                         )
                     } else {
                         loaded
@@ -193,6 +192,32 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
     }
 }
 
+private suspend fun refreshCatalog(
+    repository: SupabaseCloudSyncRepository,
+    m3uClient: AndroidM3uClient,
+): ProviderCatalogState {
+    val playlists = repository.listPlaylists().getOrElse {
+        return ProviderCatalogState.Error(
+            "Impossible de récupérer les playlists de votre compte.",
+        )
+    }
+    val playlist = playlists
+        .asSequence()
+        .filter { it.isEnabled && it.secretStatus == "configured" }
+        .minWithOrNull(compareBy<SyncedPlaylist> { it.priority }.thenBy { it.name.lowercase() })
+        ?: return ProviderCatalogState.Empty(
+            "Aucune playlist active et configurée n’est disponible.",
+        )
+    val secret = repository.getPlaylistSecret(playlist.id).getOrElse {
+        return ProviderCatalogState.Error(
+            "Impossible de restaurer la configuration sécurisée de la playlist.",
+        )
+    } ?: return ProviderCatalogState.Error(
+        "La configuration sécurisée de cette playlist est absente.",
+    )
+    return loadCatalog(playlist, secret, m3uClient)
+}
+
 private suspend fun loadCatalog(
     playlist: SyncedPlaylist,
     secret: PlaylistSecret,
@@ -200,6 +225,7 @@ private suspend fun loadCatalog(
 ): ProviderCatalogState {
     val snapshot = when (secret) {
         is PlaylistSecret.Xtream -> {
+            M3uSeriesDetailRegistry.clear()
             val result = AndroidXtreamCatalogLoader(
                 credentials = XtreamCredentials(
                     serverUrl = secret.serverUrl,
@@ -217,14 +243,19 @@ private suspend fun loadCatalog(
         }
 
         is PlaylistSecret.M3u -> {
-            when (
-                val result = m3uClient.import(
-                    source = M3uSource(secret.url),
-                    maxEntries = Int.MAX_VALUE,
-                )
-            ) {
-                is M3uImportResult.Success -> M3uCatalogMapper.map(result.entries)
-                is M3uImportResult.Failure -> {
+            val builder = M3uCatalogMapper.builder()
+            when (val result = m3uClient.importStreaming(M3uSource(secret.url), builder::add)) {
+                is M3uStreamingResult.Success -> {
+                    val startedAt = CatalogPerformanceDiagnostics.startedAt()
+                    builder.build().also {
+                        CatalogPerformanceDiagnostics.phase(
+                            name = "m3u_map_finalize",
+                            startedAtMs = startedAt,
+                            itemCount = result.totalParsed,
+                        )
+                    }
+                }
+                is M3uStreamingResult.Failure -> {
                     return ProviderCatalogState.Error(result.message)
                 }
             }
@@ -304,6 +335,13 @@ private fun isAdultCategory(name: String): Boolean {
 
     return ADULT_CATEGORY_TOKENS.any { token -> normalized.contains(token) }
 }
+
+private fun CatalogSnapshot.hasPlaybackSources(): Boolean =
+    liveChannels.any { it.streamUrl.isNotBlank() } ||
+        movies.any { it.streamUrl.isNotBlank() } ||
+        M3uSeriesDetailRegistry.snapshot().values.any { detail ->
+            detail.episodes.any { it.streamUrl.isNotBlank() }
+        }
 
 private val ADULT_CATEGORY_TOKENS = listOf(
     "adult",

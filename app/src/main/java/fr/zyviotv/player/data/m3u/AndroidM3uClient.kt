@@ -1,6 +1,7 @@
 package fr.zyviotv.player.data.m3u
 
 import fr.zyviotv.player.data.network.NetworkDiagnostics
+import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
 import fr.zyviotv.player.shared.m3u.M3uClient
 import fr.zyviotv.player.shared.m3u.M3uEntry
 import fr.zyviotv.player.shared.m3u.M3uImportResult
@@ -12,6 +13,8 @@ import java.io.EOFException
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.ProtocolException
 import java.net.SocketException
@@ -27,6 +30,7 @@ import kotlinx.coroutines.withContext
 class AndroidM3uClient(
     private val connectTimeoutMs: Int = CONNECT_TIMEOUT_MS,
     private val readTimeoutMs: Int = READ_TIMEOUT_MS,
+    private val tempDirectory: File? = null,
 ) : M3uClient {
     override suspend fun import(
         source: M3uSource,
@@ -68,6 +72,130 @@ class AndroidM3uClient(
         }
 
         M3uImportResult.Failure("Impossible de télécharger complètement la playlist M3U.")
+    }
+
+    /**
+     * Full-catalog path: finish and validate the download before emitting the first entry.
+     * This prevents retaining both a huge M3U entry list and the mapped catalog in memory.
+     */
+    suspend fun importStreaming(
+        source: M3uSource,
+        onEntry: (M3uEntry) -> Unit,
+    ): M3uStreamingResult = withContext(Dispatchers.IO) {
+        when (val validation = M3uValidator.validate(source)) {
+            is M3uValidationResult.Invalid ->
+                return@withContext M3uStreamingResult.Failure(validation.message)
+            M3uValidationResult.Valid -> Unit
+        }
+
+        val url = source.url.trim()
+        val job = currentCoroutineContext()[Job]
+        var downloaded: File? = null
+        for (attempt in 1..MAX_ATTEMPTS) {
+            try {
+                downloaded = downloadCompleteFile(url, job, attempt)
+                break
+            } catch (error: CancellationException) {
+                NetworkDiagnostics.failure("m3u", url, error, terminal = true)
+                throw error
+            } catch (error: M3uHttpStatusException) {
+                val retry = attempt < MAX_ATTEMPTS && error.statusCode in RETRYABLE_HTTP_CODES
+                if (retry) continue
+                return@withContext M3uStreamingResult.Failure(
+                    "Le serveur M3U a répondu avec le code ${error.statusCode}.",
+                )
+            } catch (error: IOException) {
+                val retry = attempt < MAX_ATTEMPTS && error.isRetryableReadFailure()
+                NetworkDiagnostics.failure("m3u", url, error, terminal = !retry)
+                if (retry) continue
+                return@withContext M3uStreamingResult.Failure(error.userMessage())
+            } catch (error: Exception) {
+                NetworkDiagnostics.failure("m3u", url, error)
+                return@withContext M3uStreamingResult.Failure(
+                    "Impossible d’ouvrir la playlist M3U. Vérifiez l’adresse et votre connexion.",
+                )
+            }
+        }
+
+        val file = downloaded
+            ?: return@withContext M3uStreamingResult.Failure(
+                "Impossible de télécharger complètement la playlist M3U.",
+            )
+        try {
+            val parseStartedAt = CatalogPerformanceDiagnostics.startedAt()
+            val report = file.bufferedReader(Charsets.UTF_8).use { reader ->
+                val lines = sequence {
+                    var lineNumber = 0
+                    while (true) {
+                        if (lineNumber % CANCELLATION_CHECK_INTERVAL == 0 && job?.isActive == false) {
+                            throw CancellationException("M3U import cancelled")
+                        }
+                        val line = reader.readLine() ?: break
+                        yield(line)
+                        lineNumber += 1
+                    }
+                }
+                M3uParser.parseLinesDetailed(lines, Int.MAX_VALUE, onEntry)
+            }
+            CatalogPerformanceDiagnostics.phase("m3u_parse", parseStartedAt, report.emitted)
+            if (report.danglingMetadata) {
+                return@withContext M3uStreamingResult.Failure(
+                    "Le téléchargement M3U s’est terminé avant la fin du contenu. Réessayez.",
+                )
+            }
+            if (!report.headerSeen || report.emitted == 0) {
+                return@withContext M3uStreamingResult.Failure("La playlist M3U est vide ou invalide.")
+            }
+            M3uStreamingResult.Success(report.emitted)
+        } finally {
+            file.delete()
+        }
+    }
+
+    private fun downloadCompleteFile(
+        url: String,
+        job: Job?,
+        attempt: Int,
+    ): File {
+        val startedAt = CatalogPerformanceDiagnostics.startedAt()
+        val file = File.createTempFile("zyviotv-m3u-", ".tmp", tempDirectory)
+        val connection = open(url)
+        try {
+            val code = connection.responseCode
+            NetworkDiagnostics.response("m3u", url, code, attempt)
+            if (code !in 200..299) throw M3uHttpStatusException(code)
+
+            val expectedBytes = connection.contentLengthLong
+            val counted = CountingInputStream(connection.inputStream)
+            val decoded: InputStream = if (
+                connection.contentEncoding.equals("gzip", ignoreCase = true)
+            ) {
+                GZIPInputStream(counted)
+            } else {
+                counted
+            }
+            decoded.use { input ->
+                FileOutputStream(file).buffered().use { output ->
+                    val buffer = ByteArray(COPY_BUFFER_BYTES)
+                    while (true) {
+                        if (job?.isActive == false) throw CancellationException("M3U import cancelled")
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+            if (expectedBytes >= 0L && counted.count < expectedBytes) {
+                throw M3uTruncatedException()
+            }
+            CatalogPerformanceDiagnostics.phase("m3u_download", startedAt)
+            return file
+        } catch (error: Throwable) {
+            file.delete()
+            throw error
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun download(
@@ -170,7 +298,13 @@ class AndroidM3uClient(
         const val MAX_ATTEMPTS = 2
         const val INITIAL_CAPACITY = 256
         const val CANCELLATION_CHECK_INTERVAL = 256
+        const val COPY_BUFFER_BYTES = 64 * 1024
         const val PRIMARY_USER_AGENT = "ZYVIOTV-Player/0.1 (Android)"
         val RETRYABLE_HTTP_CODES = setOf(408, 425, 429, 500, 502, 503, 504)
     }
+}
+
+sealed interface M3uStreamingResult {
+    data class Success(val totalParsed: Int) : M3uStreamingResult
+    data class Failure(val message: String) : M3uStreamingResult
 }

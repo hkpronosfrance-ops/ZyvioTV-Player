@@ -972,6 +972,8 @@ fun ZyvioTVPlayerApp(
                 },
             ) {
                 ParentalControlsScreen(
+                    catalogState = providerState,
+                    onCatalogReload = providerCatalog::reload,
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -1833,9 +1835,12 @@ fun ZyvioTVPlayerApp(
                         }
 
                         AppDestination.Live -> {
+                            val liveScreenState = remember(providerState) {
+                                providerState.toLiveState()
+                            }
                             LiveTvScreen(
                                 profile = profile,
-                                state = providerState.toLiveState(),
+                                state = liveScreenState,
                                 isOffline = (providerState as? ProviderCatalogState.Ready)?.isOffline == true,
                                 onRetry = providerCatalog::reload,
                                 onTuneChannel = { channel ->
@@ -1872,9 +1877,12 @@ fun ZyvioTVPlayerApp(
                         }
 
                         AppDestination.Movies -> {
+                            val moviesScreenState = remember(providerState, movieProgressById) {
+                                providerState.toMoviesState(movieProgressById)
+                            }
                             MoviesScreen(
                                 profile = profile,
-                                state = providerState.toMoviesState(movieProgressById),
+                                state = moviesScreenState,
                                 onRetry = providerCatalog::reload,
                                 onMovieSelected = { movieUi ->
                                     selectedMovie = providerState
@@ -1889,9 +1897,12 @@ fun ZyvioTVPlayerApp(
                         }
 
                         AppDestination.Series -> {
+                            val seriesScreenState = remember(providerState, seriesProgressById) {
+                                providerState.toSeriesState(seriesProgressById)
+                            }
                             SeriesScreen(
                                 profile = profile,
-                                state = providerState.toSeriesState(seriesProgressById),
+                                state = seriesScreenState,
                                 onRetry = providerCatalog::reload,
                                 onSeriesSelected = { seriesUi ->
                                     selectedSeries = providerState
