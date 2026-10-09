@@ -47,6 +47,7 @@ import fr.zyviotv.player.shared.sync.PlayerProfile
 import fr.zyviotv.player.shared.sync.PlayerProfileType
 import fr.zyviotv.player.shared.sync.ProfileWriteResult
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioRadius
 import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
@@ -248,7 +249,7 @@ fun ProfilesSettingsScreen(
         if (showCreate) {
             Surface(
                 color = ZyvioSurface1,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(ZyvioRadius.lg),
             ) {
                 Column(Modifier.padding(ZyvioSpace.s4)) {
                     OutlinedTextField(
@@ -469,7 +470,7 @@ private fun ProfileRow(
             .fillMaxWidth()
             .tvFocusEffect(isTelevision, cornerRadiusDp = 16),
         color = ZyvioSurface1,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(ZyvioRadius.lg),
     ) {
         Row(
             modifier = Modifier.padding(ZyvioSpace.s4),
