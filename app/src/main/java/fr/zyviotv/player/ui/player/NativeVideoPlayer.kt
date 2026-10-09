@@ -30,6 +30,7 @@ import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackMediaType
 import fr.zyviotv.player.shared.playback.PlaybackMediaTypeResolver
 import fr.zyviotv.player.shared.playback.PlaybackRequest
+import fr.zyviotv.player.shared.playback.PlaybackSource
 import fr.zyviotv.player.shared.playback.PlaybackState
 import fr.zyviotv.player.shared.playback.PlaybackValidationResult
 import fr.zyviotv.player.shared.playback.PlaybackValidator
@@ -89,7 +90,10 @@ fun NativeVideoPlayer(
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(
-                    DefaultDataSource.Factory(context, providerHttpDataSourceFactory()),
+                    DefaultDataSource.Factory(
+                        context,
+                        providerHttpDataSourceFactory(PlaybackSource.parse(request.streamUrl).headers),
+                    ),
                 ),
             )
             .build()
@@ -410,9 +414,12 @@ enum class NativePlayerCommand {
  * Media3 default refuses. Cleartext stays governed by the app network policy.
  */
 @UnstableApi
-private fun providerHttpDataSourceFactory(): HttpDataSource.Factory =
+private fun providerHttpDataSourceFactory(headers: Map<String, String>): HttpDataSource.Factory =
     DefaultHttpDataSource.Factory()
-        .setUserAgent(PROVIDER_USER_AGENT)
+        // A playlist-provided User-Agent/Referer is an access requirement of
+        // the provider (M3U `|User-Agent=` or #EXTVLCOPT, bloc #208).
+        .setUserAgent(headers[USER_AGENT_HEADER] ?: PROVIDER_USER_AGENT)
+        .setDefaultRequestProperties(headers - USER_AGENT_HEADER)
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(PROVIDER_CONNECT_TIMEOUT_MS)
         .setReadTimeoutMs(PROVIDER_READ_TIMEOUT_MS)
@@ -427,7 +434,7 @@ private fun buildMediaItem(request: PlaybackRequest, mediaType: PlaybackMediaTyp
     }
 
     return MediaItem.Builder()
-        .setUri(request.streamUrl)
+        .setUri(PlaybackSource.parse(request.streamUrl).url)
         .apply {
             if (mimeType != null) setMimeType(mimeType)
         }
@@ -435,6 +442,7 @@ private fun buildMediaItem(request: PlaybackRequest, mediaType: PlaybackMediaTyp
 }
 
 
+private const val USER_AGENT_HEADER = "User-Agent"
 private const val PROVIDER_USER_AGENT = "ZYVIOTV-Player/0.1 (Android)"
 private const val PROVIDER_CONNECT_TIMEOUT_MS = 15_000
 private const val PROVIDER_READ_TIMEOUT_MS = 20_000

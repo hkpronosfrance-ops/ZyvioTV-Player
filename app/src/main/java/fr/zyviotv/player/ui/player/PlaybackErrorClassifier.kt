@@ -5,6 +5,7 @@ import androidx.media3.common.PlaybackException
 import fr.zyviotv.player.data.network.NetworkDiagnostics
 import fr.zyviotv.player.shared.playback.PlaybackMediaType
 import fr.zyviotv.player.shared.playback.PlaybackRequest
+import fr.zyviotv.player.shared.playback.PlaybackSource
 
 enum class PlaybackErrorKind(val logName: String) {
     Network("network"),
@@ -113,10 +114,12 @@ internal object PlaybackDiagnostics {
     private const val TAG = "ZyvioPlayback"
 
     fun launch(request: PlaybackRequest) {
+        val source = PlaybackSource.parse(request.streamUrl)
         Log.i(
             TAG,
             "launch kind=${request.kind.name.lowercase()} " +
-                "transport=${NetworkDiagnostics.safeEndpoint(request.streamUrl)} " +
+                "transport=${NetworkDiagnostics.safeEndpoint(source.url)} " +
+                "provider_headers=${source.headers.size} " +
                 "resume=${request.resumePositionMs > 0L}",
         )
     }

@@ -260,7 +260,13 @@ fun ZyvioTVPlayerApp(
         request: PlaybackRequest,
         syncContext: PlaybackSyncContext?,
         syncedPositionMs: Long = 0L,
-    ): Boolean = when (val decision = PlaybackLaunchPolicy.decide(request, networkAvailability)) {
+    ): Boolean = when (
+        val decision = PlaybackLaunchPolicy.decide(
+            request = request,
+            network = networkAvailability,
+            catalogSourcesPending = (providerState as? ProviderCatalogState.Ready)?.sourcesPending == true,
+        )
+    ) {
         is PlaybackLaunchDecision.Launch -> {
             playbackRequest = decision.request
             playbackSyncContext = syncContext
@@ -1357,10 +1363,18 @@ fun ZyvioTVPlayerApp(
                             ),
                         ),
                         onPlay = { _, resume ->
+                            // The detail page may have been opened on the
+                            // restored catalog: play the source of the
+                            // current snapshot (bloc #208).
+                            val playable = (providerState as? ProviderCatalogState.Ready)
+                                ?.snapshot
+                                ?.movies
+                                ?.firstOrNull { it.id == movie.id }
+                                ?: movie
                             startPlayback(
                                 request = PlaybackRequest(
-                                    title = movie.title,
-                                    streamUrl = movie.streamUrl,
+                                    title = playable.title,
+                                    streamUrl = playable.streamUrl,
                                     kind = PlaybackKind.Movie,
                                     resumePositionMs = if (resume) {
                                         movieProgress?.positionMs ?: 0L
@@ -1416,7 +1430,15 @@ fun ZyvioTVPlayerApp(
                     )
                 }
 
-                LaunchedEffect(series.id, readyProvider.playlistId, seriesDetailReloadToken, deviceOffline) {
+                LaunchedEffect(
+                    series.id,
+                    readyProvider.playlistId,
+                    seriesDetailReloadToken,
+                    deviceOffline,
+                    // Re-read the episode index once a refresh replaces the
+                    // restored catalog (bloc #208).
+                    readyProvider.isFromCache,
+                ) {
                     seriesDetailState = SeriesDetailState.Loading
                     seriesEpisodeSources = emptyMap()
 

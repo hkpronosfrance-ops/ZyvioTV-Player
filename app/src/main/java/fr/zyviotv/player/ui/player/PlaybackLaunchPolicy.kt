@@ -7,6 +7,9 @@ import fr.zyviotv.player.shared.playback.PlaybackValidator
 
 enum class PlaybackBlockReason {
     MissingSource,
+
+    /** Source absent because the restored catalog must be resynchronised. */
+    SourcesPending,
     InvalidSource,
     NoNetwork,
 }
@@ -32,7 +35,14 @@ object PlaybackLaunchPolicy {
     fun decide(
         request: PlaybackRequest,
         network: NetworkAvailability,
+        catalogSourcesPending: Boolean = false,
     ): PlaybackLaunchDecision {
+        if (request.streamUrl.isBlank() && catalogSourcesPending) {
+            return PlaybackLaunchDecision.Blocked(
+                reason = PlaybackBlockReason.SourcesPending,
+                message = SOURCES_PENDING_MESSAGE,
+            )
+        }
         if (request.streamUrl.isBlank()) {
             return PlaybackLaunchDecision.Blocked(
                 reason = PlaybackBlockReason.MissingSource,
@@ -60,6 +70,9 @@ object PlaybackLaunchPolicy {
 
     const val MISSING_SOURCE_MESSAGE =
         "Source de lecture indisponible pour ce contenu. Actualisez la playlist puis réessayez."
+    const val SOURCES_PENDING_MESSAGE =
+        "Les sources de lecture de ce catalogue doivent être resynchronisées. " +
+            "Patientez pendant la synchronisation ou actualisez la playlist."
     const val NO_NETWORK_MESSAGE =
         "Aucune connexion Internet détectée sur l’appareil. Reconnectez-vous puis réessayez."
 }

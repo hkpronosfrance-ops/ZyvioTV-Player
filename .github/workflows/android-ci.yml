@@ -45,6 +45,9 @@ jobs:
       - name: Android playback wiring contracts (#207)
         run: python3 -m unittest discover -s tests -p 'test_android_playback_207.py' -v
 
+      - name: Android playback source contracts (#208)
+        run: python3 -m unittest discover -s tests -p 'test_android_playback_sources_208.py' -v
+
       - name: Shared and Android unit tests
         run: gradle testDebugUnitTest --stacktrace
 

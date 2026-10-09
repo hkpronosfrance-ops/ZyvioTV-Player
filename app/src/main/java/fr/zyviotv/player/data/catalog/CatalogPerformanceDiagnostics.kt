@@ -31,6 +31,12 @@ object CatalogPerformanceDiagnostics {
         Log.i(TAG, fields)
     }
 
+    /** Counts and failure kinds only: callers must never pass URLs or titles. */
+    fun event(name: String, fields: String = "", warning: Boolean = false) {
+        val message = "catalog event=" + name + if (fields.isBlank()) "" else " " + fields
+        if (warning) Log.w(TAG, message) else Log.i(TAG, message)
+    }
+
     private const val TAG = "ZyvioCatalog"
     private const val BYTES_PER_MEBIBYTE = 1024L * 1024L
 }

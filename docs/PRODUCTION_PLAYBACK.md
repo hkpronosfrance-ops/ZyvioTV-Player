@@ -53,3 +53,12 @@ Behaviour now:
 - Logcat `tag:ZyvioPlayback` records launch/blocked/attempt/failure events without URL, title or credentials.
 
 Not yet verified: real provider streams on Pixel 7 emulator, physical phone, tablet and TV; codec coverage; Xtream HTTP 512 provider issue.
+
+## Bloc #208 — M3U playback sources (October 2026)
+
+- A blank `streamUrl` can only come from the pre-#206 SharedPreferences JSON cache, which never stored stream URLs. It is now restored as `CatalogCacheOrigin.LegacyWithoutSources`: browsable, never playable (`Ready.sourcesPending`, French `SourcesPending` message) until a refresh succeeds.
+- `OfflineContentCache.saveCatalog` replaces the encrypted cache only with a catalog whose every channel, film and indexed episode has a source (`CatalogSourceReport`). Read and write failures are logged under `ZyvioCatalog` with counts and exception types only.
+- The on-disk format of #206 is unchanged; it moved to `EncryptedCatalogFile` so the full parse → encrypt/gzip → restore → play path runs in JVM tests (`M3uPlaybackSourcePipelineTest`).
+- Provider access headers from M3U playlists (`url|User-Agent=…&Referer=…`, `#EXTVLCOPT:http-user-agent`/`http-referrer`) are kept in the stream line (`PlaybackSource`) and sent by Media3 as HTTP headers. Only User-Agent, Referer and Origin are honoured; header values are never logged.
+- Logcat: `tag:ZyvioCatalog` shows `catalog event=catalog_cache_sources origin=… playable=… live=a/b movies=c/d episodes=e/f`.
+- Not verified yet: real playback on the Pixel 7 with the provider.

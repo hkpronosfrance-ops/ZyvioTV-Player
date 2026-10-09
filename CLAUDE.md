@@ -1,7 +1,7 @@
 # ZYVIOTV Player — Instructions permanentes pour Claude Code
 
 > Référence du projet depuis sa création. À lire AVANT toute analyse, modification, PR ou fusion.
-> État de référence documentaire : 9 octobre 2026, `main` vérifié après PR #206 : `c8f9fd3819056434474fda56eafaddfe3abd68bd`.
+> État de référence documentaire : 9 octobre 2026, `main` après PR #207 : `65b9fa8cf967ce92994ae9f114c7f058ef6827d1` (bloc #208 en cours, voir §8).
 > Ce document décrit la vision, les décisions immuables, les réalisations observées et les anomalies connues. **Il ne constitue pas une attestation que chaque fonctionnalité est opérationnelle.**
 
 ## 0. Règles de travail non négociables
@@ -150,12 +150,19 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 **Crash historique avant #206 (preuve sur Pixel 7)**
 - `FATAL EXCEPTION: main`, `java.lang.OutOfMemoryError` à ~191/192 Mo, stack Jetpack Compose `SemanticsConfiguration` / `LayoutNode.attach` / `ScaffoldLayout` le **09/10/2026 ~18:03:14**. Des ANR/frames sautées ont été observées. Le haut de stack OOM désigne le lieu d'échec d'allocation, pas nécessairement l'origine de toutes les allocations.
 
-**Bloc #207 — Lecture Android Live / VOD / Séries** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état réel de la PR et de la fusion)
+**Bloc #207 — Lecture Android Live / VOD / Séries** (PR #207 fusionnée, `main` = `65b9fa8cf967ce92994ae9f114c7f058ef6827d1`)
 - Symptômes Pixel 7 : appuyer sur une chaîne ne faisait qu'une sélection ; fiche film « Lecture et modification des favoris indisponibles hors connexion » malgré des réponses HTTP 200.
 - Causes vérifiées dans le code : (1) la carte chaîne n'appelait que `onChannelSelected` ; (2) « hors connexion » n'était pas la connectivité : `ProviderCatalogState.Ready.isOffline` valait vrai dès qu'un catalogue restauré n'avait pas d'URL de flux (cache JSON hérité d'avant #206), et `LibrarySnapshot.isOffline` dès qu'une requête bibliothèque Supabase échouait ; tous les callbacks de lecture retournaient alors **sans message**. Le déclencheur exact sur le Pixel 7 (cache hérité, échec de synchronisation compte) reste à confirmer par Logcat.
 - Décisions : la connectivité vient uniquement de `NetworkAvailability` (`ConnectivityManager`, état inconnu = non bloquant) ; `isFromCache` décrit l'origine des données et ne bloque jamais la lecture ; toute lecture passe par `PlaybackLaunchPolicy` (refus = source absente/invalide ou appareil sans réseau, toujours avec message FR) ; tap/OK sur une chaîne ouvre le lecteur, le focus D-pad ne fait que sélectionner ; épisodes M3U lus depuis le registre local avant tout appel Supabase ; Media3 avec user-agent ZYVIOTV, redirections HTTP↔HTTPS, repli HLS unique, erreurs typées (`tag:ZyvioPlayback`, sans URL).
 - Cache #206 conservé (lecture du cache désormais mutualisée pour éviter le double chargement au démarrage). Aucun changement Supabase.
 - Non vérifié à ce stade : lecture réelle sur Pixel 7 / téléphone / TV avec le fournisseur.
+
+**Bloc #208 — Sources de lecture M3U** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état de la PR)
+- Symptôme Pixel 7 après #207 : tap/Lire ouvrent bien la décision de lecture, mais Logcat `ZyvioPlayback blocked reason=missingsource` pour tout le catalogue.
+- Preuve dans le code : la seule origine possible d'une `streamUrl` vide est `OfflineContentCache.loadLegacyCatalog` (cache JSON SharedPreferences d'avant #206, qui n'a jamais stocké d'URL). Le parser M3U, le mapper, le codec #206 et la construction des `PlaybackRequest` conservent les URL (tests de bout en bout). Ce cache hérité restait chargé comme catalogue « prêt » quand le cache chiffré était absent ou illisible, et un échec d'écriture du cache chiffré était silencieux, donc l'ancien JSON n'était jamais supprimé. Le déclenchement exact sur le Pixel 7 reste à confirmer par la ligne `ZyvioCatalog catalog event=catalog_cache_sources origin=…`.
+- Décisions : `CachedCatalog.origin` (`Encrypted` / `LegacyWithoutSources`) et `CatalogSourceReport` (comptes seulement) ; un cache sans sources est affiché mais `Ready.sourcesPending` bloque la lecture avec un message FR (`SourcesPending`) jusqu'à la synchronisation ; le cache n'est remplacé que par un catalogue dont toutes les sources sont présentes ; échecs de lecture/écriture du cache journalisés (`catalog_persist_failed`, `catalog_cache_unreadable`) ; l'ancien JSON est supprimé dès qu'un cache chiffré valide existe ; format `EncryptedCatalogFile` inchangé (extrait pour être testé en JVM).
+- Paramètres d'accès : en-têtes M3U `url|User-Agent=…&Referer=…` (Kodi) et `#EXTVLCOPT:http-user-agent/http-referrer` conservés dans la ligne de flux (`PlaybackSource`), transmis à Media3 comme en-têtes HTTP (liste blanche User-Agent/Referer/Origin, jamais journalisés) ; requêtes/jetons d'URL inchangés.
+- Non vérifié : lecture réelle Pixel 7 / fournisseur.
 
 **Xtream fournisseur réel — problème ouvert**
 - Même abonnement déclaré fonctionnel en M3U **et Xtream** sur IPTV Smarters Pro, ainsi que Zen IPTV et SET IPTV.
@@ -187,6 +194,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 
 **P0 — indispensable avant toute déclaration d'application opérationnelle**
 - Corrigé dans le code par #207, à recetter sur Pixel 7 : ouverture du lecteur au tap sur une chaîne, boutons Lire VOD et épisode, faux « hors connexion ».
+- Corrigé dans le code par #208, à recetter sur Pixel 7 : `blocked reason=missingsource` (cache hérité sans URL), en-têtes d'accès M3U, redémarrage sans perte des sources.
 - Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, erreurs et retour (Logcat `tag:ZyvioPlayback`).
 
 **P1 — fiabilité/sécurité**
@@ -216,7 +224,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 ## 13. Première tâche au prochain lancement de Claude Code
 
 1. Lire ce fichier puis vérifier que les chemins et l'architecture correspondent au `main` actuel.
-2. Vérifier sur GitHub l'état de la PR #207 (lecture Android) et le résultat de la recette Pixel 7 rapportée par l'utilisateur avant d'ouvrir un nouveau bloc.
+2. Vérifier sur GitHub l'état de la PR du bloc #208 (sources M3U) et le résultat de la recette Pixel 7 rapportée par l'utilisateur (lignes `ZyvioCatalog catalog_cache_sources` et `ZyvioPlayback`) avant d'ouvrir un nouveau bloc.
 3. Prochains candidats : `player_devices` 403 (audit sans modification prod), Xtream HTTP 512, lenteur du cache à froid et jank, classification M3U.
 4. **Ne pas commencer** par changer la base Supabase de production, ajouter un `largeHeap`, inventer des streams, réécrire les maquettes ou prétendre tester le fournisseur depuis CI.
 

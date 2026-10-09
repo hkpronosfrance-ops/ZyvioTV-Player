@@ -47,6 +47,12 @@ sealed interface ProviderCatalogState {
          * and must not gate playback (bloc #207): use NetworkAvailability.
          */
         val isFromCache: Boolean = false,
+        /**
+         * The restored catalog lost its playback sources (pre-#206 JSON
+         * cache). It may be browsed, but play actions explain that a
+         * controlled resynchronisation is needed (bloc #208).
+         */
+        val sourcesPending: Boolean = false,
         val syncWarning: String? = null,
         val isRefreshing: Boolean = false,
     ) : ProviderCatalogState
@@ -137,6 +143,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     snapshot = cached.snapshot,
                     rawSnapshot = cached.snapshot,
                     isFromCache = true,
+                    sourcesPending = !cached.isPlayable,
                     isRefreshing = true,
                 )
                 state.value = previousReady
@@ -158,23 +165,25 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     snapshot = loaded.snapshot,
                     locks = locks,
                 )
-                withContext(Dispatchers.IO) {
+                val fresh = withContext(Dispatchers.IO) {
                     val visibleSeriesIds = filtered.series.mapTo(HashSet()) { it.id }
-                    offlineCache.saveCatalog(
-                        profileId = profileId,
-                        catalog = CachedCatalog(
-                            playlistId = loaded.playlistId,
-                            playlistName = loaded.playlistName,
-                            snapshot = filtered,
-                            seriesDetails = M3uSeriesDetailRegistry.snapshot()
-                                .filterKeys(visibleSeriesIds::contains),
-                        ),
-                    )
+                    CachedCatalog(
+                        playlistId = loaded.playlistId,
+                        playlistName = loaded.playlistName,
+                        snapshot = filtered,
+                        seriesDetails = M3uSeriesDetailRegistry.snapshot()
+                            .filterKeys(visibleSeriesIds::contains),
+                    ).also { catalog ->
+                        // saveCatalog only replaces the cache with a catalog
+                        // whose every source survived (bloc #208).
+                        offlineCache.saveCatalog(profileId = profileId, catalog = catalog)
+                    }
                 }
                 loaded.copy(
                     snapshot = filtered,
                     rawSnapshot = loaded.snapshot,
                     contentLocks = locks,
+                    sourcesPending = !fresh.sourceReport.isPlayable,
                     isRefreshing = false,
                 )
             }
@@ -195,6 +204,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                             snapshot = cached.snapshot,
                             rawSnapshot = cached.snapshot,
                             isFromCache = true,
+                            sourcesPending = !cached.isPlayable,
                             syncWarning = loaded.message,
                             isRefreshing = false,
                         )
