@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.shared.epg.EpgProgramme
 import fr.zyviotv.player.shared.epg.EpgWindow
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -380,7 +381,7 @@ private fun ProgrammeBlock(
     val isCurrent = nowEpochSeconds >= programme.startEpochSeconds && nowEpochSeconds < programme.endEpochSeconds
     val isPast = nowEpochSeconds >= programme.endEpochSeconds
     val color = when {
-        isCurrent -> ZyvioSurface3
+        isCurrent -> ZyvioRedTint
         isPast -> ZyvioSurface1
         else -> ZyvioSurface2
     }
@@ -401,7 +402,7 @@ private fun ProgrammeBlock(
     ) {
         Box {
             Column(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = ZyvioSpace.s3, vertical = ZyvioSpace.s2),
             ) {
                 if (durationMinutes >= 10) {
                     Text(
@@ -453,7 +454,7 @@ private fun ProgrammeDetails(
         color = ZyvioSurface1,
         shape = RoundedCornerShape(18.dp),
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(ZyvioSpace.s5)) {
             Text(
                 text = channel.name,
                 color = MaterialTheme.colorScheme.primary,
@@ -525,7 +526,7 @@ private fun GuideError(
             shape = RoundedCornerShape(18.dp),
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(ZyvioSpace.s6),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(

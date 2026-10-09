@@ -1,6 +1,7 @@
 package fr.zyviotv.player.ui.live
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
@@ -425,12 +427,15 @@ private fun PlayerPanel(
         color = ZyvioSurface1,
         shape = RoundedCornerShape(20.dp),
     ) {
-        Column(Modifier.padding(18.dp)) {
+        Column(Modifier.padding(ZyvioSpace.s5)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(if (isTelevision) 360.dp else 280.dp)
-                    .background(ZyvioSurface2, RoundedCornerShape(16.dp)),
+                    .background(
+                        brush = Brush.verticalGradient(listOf(ZyvioSurface2, ZyvioRedTint, ZyvioSurface1)),
+                        shape = RoundedCornerShape(16.dp),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -537,7 +542,7 @@ private fun ChannelList(
                 shape = RoundedCornerShape(14.dp),
             ) {
                 Row(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.padding(ZyvioSpace.s4),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Surface(
@@ -606,7 +611,7 @@ private fun LiveErrorState(
             shape = RoundedCornerShape(18.dp),
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(ZyvioSpace.s6),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
