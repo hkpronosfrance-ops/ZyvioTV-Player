@@ -5,6 +5,9 @@ on:
     paths:
       - "webosApp/**"
       - ".github/workflows/webos-ci.yml"
+      - "scripts/d7_source_audit.py"
+      - "tests/test_d7_crossplatform_source_audit.py"
+      - "docs/d7-visual-evidence-pack.md"
   push:
     branches:
       - main
@@ -23,6 +26,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate D7 cross-platform source contract
+        run: python3 scripts/d7_source_audit.py
 
       - name: Set up Node
         uses: actions/setup-node@v4
