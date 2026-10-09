@@ -1,8 +1,8 @@
 package fr.zyviotv.player.data.network
 
 import android.util.Log
+import java.io.EOFException
 import java.net.ConnectException
-import java.net.EOFException
 import java.net.MalformedURLException
 import java.net.ProtocolException
 import java.net.SocketException

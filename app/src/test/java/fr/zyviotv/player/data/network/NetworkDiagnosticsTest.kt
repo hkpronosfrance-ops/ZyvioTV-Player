@@ -1,7 +1,7 @@
 package fr.zyviotv.player.data.network
 
+import java.io.EOFException
 import java.net.ConnectException
-import java.net.EOFException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
