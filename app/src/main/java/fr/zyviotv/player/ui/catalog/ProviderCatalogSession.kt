@@ -41,7 +41,12 @@ sealed interface ProviderCatalogState {
         val snapshot: CatalogSnapshot,
         val rawSnapshot: CatalogSnapshot = snapshot,
         val contentLocks: ProfileContentLocks? = null,
-        val isOffline: Boolean = false,
+        /**
+         * True while the snapshot comes from the encrypted disk cache and no
+         * network refresh has completed yet. It never means "device offline"
+         * and must not gate playback (bloc #207): use NetworkAvailability.
+         */
+        val isFromCache: Boolean = false,
         val syncWarning: String? = null,
         val isRefreshing: Boolean = false,
     ) : ProviderCatalogState
@@ -67,6 +72,20 @@ private object ProviderCatalogSyncCoordinator {
     ): ProviderCatalogState {
         return singleFlight.run(key, loader)
     }
+}
+
+/**
+ * The start-up reload (profile gate) cancels the first session effect while
+ * its blocking cache read keeps running; sharing the read avoids decoding the
+ * 20k+ item cache twice in parallel.
+ */
+private object ProviderCatalogCacheCoordinator {
+    private val singleFlight = CatalogSingleFlight<CachedCatalog?>()
+
+    suspend fun load(
+        profileId: String,
+        loader: () -> CachedCatalog?,
+    ): CachedCatalog? = singleFlight.run(profileId) { loader() }
 }
 
 @Composable
@@ -108,14 +127,16 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
 
         var previousReady = state.value as? ProviderCatalogState.Ready
         if (previousReady == null) {
-            val cached = withContext(Dispatchers.IO) { offlineCache.loadCatalog(profileId) }
+            val cached = ProviderCatalogCacheCoordinator.load(profileId) {
+                offlineCache.loadCatalog(profileId)
+            }
             if (cached != null) {
                 previousReady = ProviderCatalogState.Ready(
                     playlistId = cached.playlistId,
                     playlistName = cached.playlistName,
                     snapshot = cached.snapshot,
                     rawSnapshot = cached.snapshot,
-                    isOffline = !cached.snapshot.hasPlaybackSources(),
+                    isFromCache = true,
                     isRefreshing = true,
                 )
                 state.value = previousReady
@@ -164,14 +185,16 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                         isRefreshing = false,
                     )
                 } else {
-                    val cached = withContext(Dispatchers.IO) { offlineCache.loadCatalog(profileId) }
+                    val cached = ProviderCatalogCacheCoordinator.load(profileId) {
+                        offlineCache.loadCatalog(profileId)
+                    }
                     if (cached != null) {
                         ProviderCatalogState.Ready(
                             playlistId = cached.playlistId,
                             playlistName = cached.playlistName,
                             snapshot = cached.snapshot,
                             rawSnapshot = cached.snapshot,
-                            isOffline = !cached.snapshot.hasPlaybackSources(),
+                            isFromCache = true,
                             syncWarning = loaded.message,
                             isRefreshing = false,
                         )
@@ -335,13 +358,6 @@ private fun isAdultCategory(name: String): Boolean {
 
     return ADULT_CATEGORY_TOKENS.any { token -> normalized.contains(token) }
 }
-
-private fun CatalogSnapshot.hasPlaybackSources(): Boolean =
-    liveChannels.any { it.streamUrl.isNotBlank() } ||
-        movies.any { it.streamUrl.isNotBlank() } ||
-        M3uSeriesDetailRegistry.snapshot().values.any { detail ->
-            detail.episodes.any { it.streamUrl.isNotBlank() }
-        }
 
 private val ADULT_CATEGORY_TOKENS = listOf(
     "adult",

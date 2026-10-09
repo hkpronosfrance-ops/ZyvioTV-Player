@@ -180,10 +180,10 @@ private fun LiveReadyState(
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
             restoreFocusChannelId = selectedChannelId,
+            // Offline refusal is explained by the app-level playback policy;
+            // dropping the tap here would leave the user without feedback.
             onTuneChannel = { channel ->
-                if (!isOffline) {
-                    if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
-                }
+                if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
             },
             isOffline = isOffline,
             onOpenGuide = onOpenGuide,
@@ -208,10 +208,10 @@ private fun LiveReadyState(
             selectedChannel = selectedChannel,
             onChannelSelected = { selectedChannelId = it.id },
             restoreFocusChannelId = selectedChannelId,
+            // Offline refusal is explained by the app-level playback policy;
+            // dropping the tap here would leave the user without feedback.
             onTuneChannel = { channel ->
-                if (!isOffline) {
-                    if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
-                }
+                if (channel.isLocked) pendingChannel = channel else onTuneChannel(channel)
             },
             isOffline = isOffline,
             onOpenGuide = onOpenGuide,
@@ -279,6 +279,7 @@ private fun MobileLiveLayout(
             channels = channels,
             selectedChannel = selectedChannel,
             onChannelSelected = onChannelSelected,
+            onChannelActivated = onTuneChannel,
             isTelevision = false,
             restoreFocusChannelId = restoreFocusChannelId,
         )
@@ -323,6 +324,7 @@ private fun LargeLiveLayout(
                 channels = channels,
                 selectedChannel = selectedChannel,
                 onChannelSelected = onChannelSelected,
+                onChannelActivated = onTuneChannel,
                 isTelevision = isTelevision,
                 restoreFocusChannelId = restoreFocusChannelId,
             )
@@ -462,7 +464,7 @@ private fun PlayerPanel(
                         text = if (isOffline) {
                             "Hors connexion : la liste des chaînes reste consultable."
                         } else {
-                            "Sélectionnez Regarder pour lancer le flux."
+                            "Touchez une chaîne ou Regarder pour lancer le direct."
                         },
                         color = ZyvioTextSecondary,
                     )
@@ -517,6 +519,7 @@ private fun ChannelList(
     channels: List<LiveChannelUi>,
     selectedChannel: LiveChannelUi?,
     onChannelSelected: (LiveChannelUi) -> Unit,
+    onChannelActivated: (LiveChannelUi) -> Unit,
     isTelevision: Boolean,
     restoreFocusChannelId: String?,
 ) {
@@ -557,7 +560,12 @@ private fun ChannelList(
                         }
                     }
                     .tvFocusEffect(isTelevision, cornerRadiusDp = 14)
-                    .clickable { onChannelSelected(channel) },
+                    // Focus (D-pad) only selects; a tap or OK press opens the
+                    // player, as the Regarder button does (bloc #207).
+                    .clickable(onClickLabel = "Regarder ${channel.name}") {
+                        onChannelSelected(channel)
+                        onChannelActivated(channel)
+                    },
                 colors = CardDefaults.cardColors(
                     containerColor = if (selected) ZyvioRedTint else ZyvioSurface1,
                 ),

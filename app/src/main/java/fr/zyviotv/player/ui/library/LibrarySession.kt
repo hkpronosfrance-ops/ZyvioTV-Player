@@ -24,7 +24,12 @@ import fr.zyviotv.player.shared.sync.SyncResult
 
 data class LibrarySnapshot(
     val profileId: String,
-    val isOffline: Boolean = false,
+    /**
+     * Served from the local copy because an account sync request failed.
+     * This is not a connectivity signal (bloc #207): playback never depends
+     * on it, only writes that would diverge from a stale copy do.
+     */
+    val isFromCache: Boolean = false,
     val favorites: List<SyncedFavorite> = emptyList(),
     val progress: List<SyncedWatchProgress> = emptyList(),
     val liveHistory: List<SyncedLiveHistory> = emptyList(),
@@ -47,8 +52,8 @@ class LibrarySession internal constructor(
     suspend fun toggleFavorite(favorite: SyncedFavorite): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
-        if (ready.snapshot.isOffline) {
-            return SyncResult.Failure("Action indisponible hors connexion.")
+        if (ready.snapshot.isFromCache) {
+            return SyncResult.Failure(ACCOUNT_SYNC_UNAVAILABLE_MESSAGE)
         }
         val scopedFavorite = favorite.copy(profileId = ready.snapshot.profileId)
         val exists = ready.snapshot.favorites.any {
@@ -87,8 +92,8 @@ class LibrarySession internal constructor(
     suspend fun saveProgress(progress: SyncedWatchProgress): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
-        if (ready.snapshot.isOffline) {
-            return SyncResult.Failure("Action indisponible hors connexion.")
+        if (ready.snapshot.isFromCache) {
+            return SyncResult.Failure(ACCOUNT_SYNC_UNAVAILABLE_MESSAGE)
         }
         val scopedProgress = progress.copy(profileId = ready.snapshot.profileId)
         val result = repository.upsertWatchProgress(scopedProgress)
@@ -118,8 +123,8 @@ class LibrarySession internal constructor(
     ): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
-        if (ready.snapshot.isOffline) {
-            return SyncResult.Failure("Action indisponible hors connexion.")
+        if (ready.snapshot.isFromCache) {
+            return SyncResult.Failure(ACCOUNT_SYNC_UNAVAILABLE_MESSAGE)
         }
         val item = SyncedLiveHistory(
             profileId = ready.snapshot.profileId,
@@ -148,8 +153,8 @@ class LibrarySession internal constructor(
     suspend fun removeProgress(progress: SyncedWatchProgress): SyncResult {
         val ready = state.value as? LibraryState.Ready
             ?: return SyncResult.Failure("Bibliothèque indisponible.")
-        if (ready.snapshot.isOffline) {
-            return SyncResult.Failure("Action indisponible hors connexion.")
+        if (ready.snapshot.isFromCache) {
+            return SyncResult.Failure(ACCOUNT_SYNC_UNAVAILABLE_MESSAGE)
         }
         val result = repository.removeWatchProgress(
             profileId = ready.snapshot.profileId,
@@ -200,9 +205,11 @@ class LibrarySession internal constructor(
         }
     }
 
-    private companion object {
-        const val MAX_PROGRESS = 200
-        const val MAX_LIVE_HISTORY = 50
+    companion object {
+        const val ACCOUNT_SYNC_UNAVAILABLE_MESSAGE =
+            "Synchronisation du compte momentanément indisponible. Réessayez dans un instant."
+        private const val MAX_PROGRESS = 200
+        private const val MAX_LIVE_HISTORY = 50
     }
 }
 
@@ -234,7 +241,7 @@ fun rememberLibrarySession(): LibrarySession {
                 state.value = LibraryState.Ready(
                     LibrarySnapshot(
                         profileId = cached.profileId,
-                        isOffline = true,
+                        isFromCache = true,
                         favorites = cached.favorites,
                         progress = cached.progress,
                         liveHistory = cached.liveHistory,
@@ -251,7 +258,7 @@ fun rememberLibrarySession(): LibrarySession {
                 state.value = LibraryState.Ready(
                     LibrarySnapshot(
                         profileId = cached.profileId,
-                        isOffline = true,
+                        isFromCache = true,
                         favorites = cached.favorites,
                         progress = cached.progress,
                         liveHistory = cached.liveHistory,
@@ -293,7 +300,7 @@ fun rememberLibrarySession(): LibrarySession {
                 state.value = LibraryState.Ready(
                     LibrarySnapshot(
                         profileId = cached.profileId,
-                        isOffline = true,
+                        isFromCache = true,
                         favorites = cached.favorites,
                         progress = cached.progress,
                         liveHistory = cached.liveHistory,

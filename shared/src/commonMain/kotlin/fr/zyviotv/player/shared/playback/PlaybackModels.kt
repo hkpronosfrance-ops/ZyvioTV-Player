@@ -25,13 +25,15 @@ enum class PlaybackState {
 
 object PlaybackMediaTypeResolver {
     fun resolve(request: PlaybackRequest): PlaybackMediaType {
-        val cleanUrl = request.streamUrl
-            .substringBefore('?')
-            .substringBefore('#')
-            .lowercase()
+        val lowerUrl = request.streamUrl.substringBefore('#').lowercase()
+        val cleanUrl = lowerUrl.substringBefore('?')
+        val query = lowerUrl.substringAfter('?', "")
 
         return when {
             cleanUrl.endsWith(".m3u8") -> PlaybackMediaType.Hls
+            // get.php / panel style URLs announce HLS through a query value
+            // such as output=m3u8 or type=hls instead of a file extension.
+            HLS_QUERY_HINT.containsMatchIn(query) -> PlaybackMediaType.Hls
             cleanUrl.endsWith(".ts") -> PlaybackMediaType.TransportStream
             cleanUrl.endsWith(".mp4") ||
                 cleanUrl.endsWith(".mkv") ||
@@ -40,6 +42,24 @@ object PlaybackMediaTypeResolver {
             else -> PlaybackMediaType.Unknown
         }
     }
+
+    /**
+     * Ordered container attempts for a request. IPTV providers frequently
+     * serve an HLS playlist behind an extensionless or `.ts` URL, so every
+     * guess that is not explicitly HLS or progressive gets one HLS fallback
+     * when the first container cannot be parsed.
+     */
+    fun attempts(request: PlaybackRequest): List<PlaybackMediaType> =
+        when (val primary = resolve(request)) {
+            PlaybackMediaType.Hls,
+            PlaybackMediaType.Progressive,
+            -> listOf(primary)
+            PlaybackMediaType.TransportStream,
+            PlaybackMediaType.Unknown,
+            -> listOf(primary, PlaybackMediaType.Hls)
+        }
+
+    private val HLS_QUERY_HINT = Regex("(^|&)[a-z_]+=(m3u8|hls)(&|$)")
 }
 
 data class PlaybackRequest(

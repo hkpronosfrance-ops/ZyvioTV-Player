@@ -86,6 +86,7 @@ fun HomeScreen(
     onOpenFavorites: () -> Unit,
     onOpenContinueWatching: () -> Unit,
     onOpenHistory: () -> Unit,
+    isOffline: Boolean = false,
 ) {
     val contentPadding = if (profile == DeviceProfile.Mobile) ZyvioSpace.s1 else ZyvioSpace.s3
     val readyProvider = providerState as? ProviderCatalogState.Ready
@@ -384,8 +385,17 @@ fun HomeScreen(
             readyProvider?.snapshot?.series.orEmpty().isNotEmpty() ||
             recentChannels.isNotEmpty()
 
-    val offlineMode = readyProvider?.isOffline == true ||
-        readyLibrary?.snapshot?.isOffline == true
+    // Device connectivity only: a catalog restored from disk or a failed
+    // account request is reported separately and never as "offline".
+    val offlineMode = isOffline
+    val syncNotice = when {
+        offlineMode -> null
+        readyLibrary?.snapshot?.isFromCache == true ->
+            "Votre catalogue et la lecture restent disponibles. Favoris et progression sont affichés depuis l’appareil."
+        readyProvider?.syncWarning != null ->
+            "Le catalogue enregistré reste lisible ; la dernière actualisation de la playlist n’a pas abouti."
+        else -> null
+    }
 
     Column(
         modifier = Modifier
@@ -397,6 +407,13 @@ fun HomeScreen(
             LocalStatusBanner(
                 title = "Mode hors connexion",
                 message = "Les contenus enregistrés localement restent consultables. La lecture, le guide et les actions nécessitant Internet sont temporairement indisponibles.",
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+        if (syncNotice != null) {
+            LocalStatusBanner(
+                title = "Synchronisation incomplète",
+                message = syncNotice,
             )
             Spacer(Modifier.height(16.dp))
         }
