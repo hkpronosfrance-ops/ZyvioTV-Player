@@ -49,16 +49,19 @@
 
     async play(url) {
       this.stop();
+      if (typeof url !== "string" || !/^https?:\/\//i.test(url.trim())) {
+        throw new Error("Adresse du flux vidéo invalide.");
+      }
       this.currentUrl = url;
       this.buffering = true;
       this.ended = false;
 
       if (this.usingAvPlay) {
         const avplay = window.webapis.avplay;
-        avplay.open(url);
-        avplay.setDisplayRect(0, 0, 1920, 1080);
-        avplay.setDisplayMethod("PLAYER_DISPLAY_MODE_FULL_SCREEN");
         try {
+          avplay.open(url);
+          avplay.setDisplayRect(0, 0, 1920, 1080);
+          avplay.setDisplayMethod("PLAYER_DISPLAY_MODE_FULL_SCREEN");
           await new Promise((resolve, reject) => {
             avplay.prepareAsync(resolve, () => reject(new Error("Lecture impossible.")));
           });
