@@ -11,15 +11,34 @@ package fr.zyviotv.player.shared.catalog
  */
 object DisplayTitle {
     fun clean(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return trimmed
+        // Provider format "Title (MULTI) FHD 2026": the year closes the title,
+        // so the markers before it are never at the edge. The year is kept,
+        // in parentheses, only when markers were actually removed: "Blade
+        // Runner 2049" or "Animals 2026" stay as provided.
+        TRAILING_YEAR.matchEntire(trimmed)?.let { match ->
+            val head = match.groupValues[1]
+            // Only markers before the year: nothing reliable to show but the raw title.
+            val cleanedHead = stripMarkers(head) ?: return trimmed
+            if (cleanedHead != trimSeparators(head)) {
+                return cleanedHead + " (" + match.groupValues[2] + ")"
+            }
+        }
+        return stripMarkers(trimmed) ?: trimmed
+    }
+
+    /** The title without its edge markers, or null when only markers remain. */
+    private fun stripMarkers(raw: String): String? {
         var title = raw.trim()
-        if (title.isEmpty()) return title
+        if (title.isEmpty()) return null
         while (true) {
             val next = stripOnce(title)
             if (next == title || next.isEmpty()) break
             title = next
         }
         // A title made only of markers ("(MULTI) FHD") is shown as provided.
-        if (title.isEmpty() || isMarkerGroup(title)) return raw.trim()
+        if (title.isEmpty() || isMarkerGroup(title)) return null
         return title
     }
 
@@ -93,8 +112,9 @@ object DisplayTitle {
     private fun trimSeparators(value: String): String =
         value.trim { it in SEPARATORS || it.isWhitespace() }
 
-    private const val SEPARATORS = " |-_.:/"
-    private const val STRONG_SEPARATORS = "|-:/"
+    private const val SEPARATORS = " |-_.:/\u2013\u2014"
+    private const val STRONG_SEPARATORS = "|-:/\u2013\u2014"
+    private val TRAILING_YEAR = Regex("""^(.*?)[\s._-]+\(?((?:19|20)\d{2})\)?$""")
     private val OPENING = mapOf(')' to '(', ']' to '[', '}' to '{')
     private val CLOSING = mapOf('(' to ')', '[' to ']', '{' to '}')
 
