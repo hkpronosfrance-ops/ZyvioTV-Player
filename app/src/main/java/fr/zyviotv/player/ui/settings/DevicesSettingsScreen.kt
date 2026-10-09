@@ -47,6 +47,7 @@ import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
 import fr.zyviotv.player.shared.sync.SyncResult
 import fr.zyviotv.player.shared.sync.SyncedDevice
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioRadius
 import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
@@ -214,7 +215,7 @@ private fun DeviceRow(
             .fillMaxWidth()
             .tvFocusEffect(isTelevision, cornerRadiusDp = 16),
         color = ZyvioSurface1,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(ZyvioRadius.lg),
     ) {
         Row(
             modifier = Modifier.padding(ZyvioSpace.s4),

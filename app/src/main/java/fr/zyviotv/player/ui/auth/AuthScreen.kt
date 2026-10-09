@@ -55,6 +55,7 @@ import fr.zyviotv.player.shared.auth.AuthResult
 import fr.zyviotv.player.shared.auth.AuthValidator
 import fr.zyviotv.player.shared.auth.RegistrationCredentials
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.ui.theme.ZyvioRadius
 import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
@@ -304,7 +305,7 @@ private fun AuthFormCard(
     Surface(
         modifier = modifier,
         color = ZyvioSurface1,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(ZyvioRadius.xl),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -345,7 +346,7 @@ private fun AuthFormCard(
                 label = { Text(stringResource(R.string.auth_email)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(ZyvioRadius.md),
             )
 
             if (mode != AuthMode.ResetPassword) {
@@ -360,7 +361,7 @@ private fun AuthFormCard(
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(ZyvioRadius.md),
                 )
             }
 
@@ -376,7 +377,7 @@ private fun AuthFormCard(
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(ZyvioRadius.md),
                 )
             }
 
@@ -386,7 +387,7 @@ private fun AuthFormCard(
                         .fillMaxWidth()
                         .padding(top = 16.dp),
                     color = ZyvioRedTint,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(ZyvioRadius.md),
                 ) {
                     Text(
                         text = it,
@@ -405,7 +406,7 @@ private fun AuthFormCard(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(ZyvioRadius.md),
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
@@ -468,7 +469,7 @@ private fun AuthFormCard(
                         enabled = !isLoading,
                         onClick = { onModeChange(AuthMode.SignIn) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(ZyvioRadius.md),
                     ) {
                         Text(stringResource(R.string.auth_back_to_signin))
                     }
