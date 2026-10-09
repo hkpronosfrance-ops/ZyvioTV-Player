@@ -109,6 +109,7 @@ private fun MovieDetailReady(
         D6MediaDetailHero(
             title = movie.title,
             height = if (isLarge) 300.dp else 220.dp,
+            artworkUrl = movie.backdropUrl ?: movie.posterUrl,
         )
 
         Spacer(Modifier.height(20.dp))
