@@ -59,6 +59,9 @@ jobs:
       - name: Validate full M3U catalog contract
         run: node webosApp/m3u-catalog.test.cjs
 
+      - name: Validate phase 196 player failure recovery
+        run: node tests/player-reliability-196.cjs webosApp
+
       - name: Validate playback adapter syntax
         run: node --check webosApp/player.js
 
