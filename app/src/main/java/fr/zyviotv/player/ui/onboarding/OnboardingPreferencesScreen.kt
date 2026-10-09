@@ -31,6 +31,7 @@ import fr.zyviotv.player.data.settings.ProfileMediaPreferencesSnapshot
 import fr.zyviotv.player.shared.sync.PlayerProfile
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
+import fr.zyviotv.player.ui.theme.ZyvioTextPrimary
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
 
@@ -82,6 +83,7 @@ fun OnboardingPreferencesScreen(
         ) {
             Text(
                 text = "Finalisons votre expérience",
+                color = ZyvioTextPrimary,
                 style = if (isTv) {
                     MaterialTheme.typography.displaySmall
                 } else {

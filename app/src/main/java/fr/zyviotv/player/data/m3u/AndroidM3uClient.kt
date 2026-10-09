@@ -1,5 +1,6 @@
 package fr.zyviotv.player.data.m3u
 
+import fr.zyviotv.player.data.network.NetworkDiagnostics
 import fr.zyviotv.player.shared.m3u.M3uClient
 import fr.zyviotv.player.shared.m3u.M3uEntry
 import fr.zyviotv.player.shared.m3u.M3uImportResult
@@ -33,6 +34,7 @@ class AndroidM3uClient : M3uClient {
             val connection = open(source.url.trim())
             try {
                 val code = connection.responseCode
+                NetworkDiagnostics.response("m3u", source.url, code)
                 if (code !in 200..299) {
                     return@withContext M3uImportResult.Failure(
                         "Le serveur M3U a répondu avec le code $code.",
@@ -62,9 +64,11 @@ class AndroidM3uClient : M3uClient {
             } finally {
                 connection.disconnect()
             }
-        } catch (_: SocketTimeoutException) {
+        } catch (error: SocketTimeoutException) {
+            NetworkDiagnostics.failure("m3u", source.url, error)
             M3uImportResult.Failure("Le serveur M3U met trop de temps à répondre.")
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            NetworkDiagnostics.failure("m3u", source.url, error)
             M3uImportResult.Failure(
                 "Impossible de télécharger la playlist M3U. Vérifiez l’adresse et votre connexion.",
             )

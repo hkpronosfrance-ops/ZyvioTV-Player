@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Many IPTV providers only expose M3U/Xtream endpoints over HTTP and their
+  hostnames cannot be known at build time. This exception is therefore global
+  and intentionally shared by debug and release builds. HTTPS remains fully
+  supported and should be preferred whenever the provider offers it.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

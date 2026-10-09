@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.ui.catalog.ProviderCatalogState
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
+import fr.zyviotv.player.ui.theme.ZyvioTextPrimary
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
 
@@ -68,6 +69,7 @@ fun OnboardingGateScreen(
 
             Text(
                 text = if (resumed) "Reprenons là où vous en étiez" else "Préparons votre expérience",
+                color = ZyvioTextPrimary,
                 style = if (isTv) {
                     MaterialTheme.typography.displaySmall
                 } else {
