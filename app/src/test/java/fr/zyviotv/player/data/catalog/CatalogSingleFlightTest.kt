@@ -85,6 +85,10 @@ class CatalogSingleFlightTest {
         val singleFlight = CatalogSingleFlight<Int>()
         assertEquals(1, singleFlight.run("profile-1") { starts.incrementAndGet() })
         assertEquals(2, singleFlight.run("profile-1") { starts.incrementAndGet() })
+        // The completion handler may run just after the caller resumes.
+        withTimeout(1_000L) {
+            while (singleFlight.inFlightCount() != 0) delay(5L)
+        }
         assertEquals(0, singleFlight.inFlightCount())
     }
 }
