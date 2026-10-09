@@ -10,7 +10,9 @@ object XtreamValidator {
             return XtreamValidationResult.Invalid("Saisissez l’adresse du serveur.")
         }
 
-        if (!server.startsWith("http://") && !server.startsWith("https://")) {
+        if (!server.startsWith("http://", ignoreCase = true) &&
+            !server.startsWith("https://", ignoreCase = true)
+        ) {
             return XtreamValidationResult.Invalid("L’adresse du serveur doit commencer par http:// ou https://.")
         }
 

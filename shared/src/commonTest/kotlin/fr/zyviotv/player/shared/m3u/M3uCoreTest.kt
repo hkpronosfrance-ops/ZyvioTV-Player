@@ -83,6 +83,45 @@ class M3uCoreTest {
     }
 
     @Test
+    fun parserHandlesVeryLargeCatalogWithPrecompiledAttributeScanner() {
+        val entryCount = 50_000
+        val lines = sequence {
+            yield("#EXTM3U")
+            repeat(entryCount) { index ->
+                yield(
+                    "#EXTINF:-1 tvg-id=\"id-$index\" tvg-name='Channel $index' " +
+                        "tvg-logo=https://img.example/$index.png group-title=Group-$index,Channel $index",
+                )
+                yield("https://stream.example/live/$index.ts")
+            }
+        }
+
+        var last: M3uEntry? = null
+        val report = M3uParser.parseLinesDetailed(lines) { last = it }
+
+        assertEquals(entryCount, report.emitted)
+        assertTrue(report.headerSeen)
+        assertTrue(!report.danglingMetadata)
+        assertEquals("id-49999", last?.tvgId)
+        assertEquals("Group-49999", last?.groupTitle)
+    }
+
+    @Test
+    fun detailedParserReportsDanglingMetadataAtEndOfStream() {
+        val report = M3uParser.parseLinesDetailed(
+            sequenceOf(
+                "#EXTM3U",
+                "#EXTINF:-1,Complete",
+                "https://stream.example/live/1.ts",
+                "#EXTINF:-1,Interrupted",
+            ),
+        ) { }
+
+        assertEquals(1, report.emitted)
+        assertTrue(report.danglingMetadata)
+    }
+
+    @Test
     fun parserCanStopAtConfiguredEntryLimit() {
         val content = buildString {
             appendLine("#EXTM3U")

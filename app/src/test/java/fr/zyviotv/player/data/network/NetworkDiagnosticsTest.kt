@@ -1,6 +1,8 @@
 package fr.zyviotv.player.data.network
 
+import java.io.EOFException
 import java.net.ConnectException
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
@@ -49,6 +51,8 @@ class NetworkDiagnosticsTest {
         assertEquals("timeout", NetworkDiagnostics.failureKind(SocketTimeoutException("secret-url")))
         assertEquals("dns", NetworkDiagnostics.failureKind(UnknownHostException("secret-host")))
         assertEquals("connection", NetworkDiagnostics.failureKind(ConnectException("secret-url")))
+        assertEquals("truncated", NetworkDiagnostics.failureKind(EOFException("secret-url")))
+        assertEquals("connection-interrupted", NetworkDiagnostics.failureKind(SocketException("secret-url")))
         assertEquals("tls", NetworkDiagnostics.failureKind(SSLException("secret-url")))
         assertEquals("security-policy", NetworkDiagnostics.failureKind(SecurityException("secret-url")))
     }

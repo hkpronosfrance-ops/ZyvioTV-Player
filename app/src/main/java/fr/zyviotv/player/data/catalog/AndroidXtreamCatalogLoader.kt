@@ -1,5 +1,6 @@
 package fr.zyviotv.player.data.catalog
 
+import fr.zyviotv.player.data.xtream.AndroidXtreamHttpClient
 import fr.zyviotv.player.shared.catalog.CatalogCategory
 import fr.zyviotv.player.shared.catalog.CatalogLiveChannel
 import fr.zyviotv.player.shared.catalog.CatalogLoadResult
@@ -8,9 +9,8 @@ import fr.zyviotv.player.shared.catalog.CatalogSeries
 import fr.zyviotv.player.shared.catalog.CatalogSnapshot
 import fr.zyviotv.player.shared.xtream.XtreamCredentials
 import fr.zyviotv.player.shared.xtream.XtreamEndpointBuilder
-import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
-import java.net.URL
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -19,6 +19,8 @@ import org.json.JSONObject
 class AndroidXtreamCatalogLoader(
     private val credentials: XtreamCredentials,
 ) {
+    private val httpClient = AndroidXtreamHttpClient()
+
     suspend fun load(): CatalogLoadResult = withContext(Dispatchers.IO) {
         try {
             val liveCategories = getArray("get_live_categories").mapCategories()
@@ -38,6 +40,8 @@ class AndroidXtreamCatalogLoader(
                     series = series,
                 ),
             )
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: SocketTimeoutException) {
             CatalogLoadResult.Failure("Le catalogue IPTV met trop de temps à répondre.")
         } catch (_: Exception) {
@@ -52,26 +56,11 @@ class AndroidXtreamCatalogLoader(
             credentials = credentials,
             action = action,
         )
-        val connection = URL(endpoint).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "GET"
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-            connection.doInput = true
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "ZYVIOTV-Player/0.1")
-
-            val code = connection.responseCode
-            if (code !in 200..299) {
-                throw IllegalStateException("Provider HTTP error")
-            }
-
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            return JSONArray(body)
-        } finally {
-            connection.disconnect()
+        val response = httpClient.get(endpoint, operation = "xtream-catalog")
+        if (response.code !in 200..299) {
+            throw IllegalStateException("Provider HTTP error ${response.code}")
         }
+        return JSONArray(response.body)
     }
 
     private fun JSONArray.mapCategories(): List<CatalogCategory> =
@@ -154,8 +143,4 @@ class AndroidXtreamCatalogLoader(
         return if (value > 9_999_999_999L) value / 1_000L else value
     }
 
-    private companion object {
-        const val CONNECT_TIMEOUT_MS = 15_000
-        const val READ_TIMEOUT_MS = 30_000
-    }
 }

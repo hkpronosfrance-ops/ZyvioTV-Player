@@ -1,15 +1,15 @@
 package fr.zyviotv.player.data.epg
 
 import android.util.Base64
+import fr.zyviotv.player.data.xtream.AndroidXtreamHttpClient
 import fr.zyviotv.player.shared.epg.EpgLoadResult
 import fr.zyviotv.player.shared.epg.EpgProgramme
 import fr.zyviotv.player.shared.epg.EpgRepository
 import fr.zyviotv.player.shared.epg.EpgWindow
 import fr.zyviotv.player.shared.xtream.XtreamCredentials
 import fr.zyviotv.player.shared.xtream.XtreamEndpointBuilder
-import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
-import java.net.URL
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -17,6 +17,8 @@ import org.json.JSONObject
 class AndroidXtreamEpgRepository(
     private val credentials: XtreamCredentials,
 ) : EpgRepository {
+    private val httpClient = AndroidXtreamHttpClient()
+
     override suspend fun load(
         channelId: String,
         window: EpgWindow,
@@ -31,25 +33,14 @@ class AndroidXtreamEpgRepository(
                 ),
             )
 
-            val connection = URL(endpoint).openConnection() as HttpURLConnection
-            try {
-                connection.requestMethod = "GET"
-                connection.connectTimeout = CONNECT_TIMEOUT_MS
-                connection.readTimeout = READ_TIMEOUT_MS
-                connection.doInput = true
-                connection.instanceFollowRedirects = true
-                connection.setRequestProperty("Accept", "application/json")
-                connection.setRequestProperty("User-Agent", "ZYVIOTV-Player/0.1")
+            val response = httpClient.get(endpoint, operation = "xtream-epg")
+            if (response.code !in 200..299) {
+                return@withContext EpgLoadResult.Failure(
+                    "Impossible de charger le guide TV pour cette chaîne (HTTP ${response.code}).",
+                )
+            }
 
-                val code = connection.responseCode
-                if (code !in 200..299) {
-                    return@withContext EpgLoadResult.Failure(
-                        "Impossible de charger le guide TV pour cette chaîne.",
-                    )
-                }
-
-                val body = connection.inputStream.bufferedReader().use { it.readText() }
-                val root = JSONObject(body)
+                val root = JSONObject(response.body)
                 val array = root.optJSONArray("epg_listings")
                     ?: return@withContext EpgLoadResult.Success(emptyList())
 
@@ -83,9 +74,8 @@ class AndroidXtreamEpgRepository(
                     .sortedBy { it.startEpochSeconds }
 
                 EpgLoadResult.Success(programmes)
-            } finally {
-                connection.disconnect()
-            }
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: SocketTimeoutException) {
             EpgLoadResult.Failure("Le guide TV met trop de temps à répondre.")
         } catch (_: Exception) {
@@ -105,8 +95,6 @@ class AndroidXtreamEpgRepository(
     }
 
     private companion object {
-        const val CONNECT_TIMEOUT_MS = 15_000
-        const val READ_TIMEOUT_MS = 20_000
         const val MAX_PROGRAMMES = 100
     }
 }

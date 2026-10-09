@@ -37,6 +37,7 @@ sealed interface ProviderCatalogState {
         val rawSnapshot: CatalogSnapshot = snapshot,
         val contentLocks: ProfileContentLocks? = null,
         val isOffline: Boolean = false,
+        val syncWarning: String? = null,
     ) : ProviderCatalogState
 
     data class Empty(val message: String) : ProviderCatalogState
@@ -80,6 +81,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
     var reloadToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(reloadToken) {
+        val previousReady = state.value as? ProviderCatalogState.Ready
         state.value = ProviderCatalogState.Loading
 
         val profileId = profilePreferences.selectedProfileId()
@@ -161,17 +163,22 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                 )
             }
             is ProviderCatalogState.Error -> {
-                val cached = profileId?.let(offlineCache::loadCatalog)
-                if (cached != null) {
-                    ProviderCatalogState.Ready(
-                        playlistId = cached.playlistId,
-                        playlistName = cached.playlistName,
-                        snapshot = cached.snapshot,
-                        rawSnapshot = cached.snapshot,
-                        isOffline = true,
-                    )
+                if (previousReady != null && previousReady.playlistId == playlist.id) {
+                    previousReady.copy(syncWarning = loaded.message)
                 } else {
-                    loaded
+                    val cached = profileId?.let(offlineCache::loadCatalog)
+                    if (cached != null) {
+                        ProviderCatalogState.Ready(
+                            playlistId = cached.playlistId,
+                            playlistName = cached.playlistName,
+                            snapshot = cached.snapshot,
+                            rawSnapshot = cached.snapshot,
+                            isOffline = true,
+                            syncWarning = loaded.message,
+                        )
+                    } else {
+                        loaded
+                    }
                 }
             }
             else -> loaded
@@ -213,7 +220,7 @@ private suspend fun loadCatalog(
             when (
                 val result = m3uClient.import(
                     source = M3uSource(secret.url),
-                    maxEntries = MAX_M3U_ENTRIES,
+                    maxEntries = Int.MAX_VALUE,
                 )
             ) {
                 is M3uImportResult.Success -> M3uCatalogMapper.map(result.entries)
@@ -230,9 +237,6 @@ private suspend fun loadCatalog(
         snapshot = snapshot,
     )
 }
-
-private const val MAX_M3U_ENTRIES = 20_000
-
 
 private fun applyParentalCatalogPolicy(
     snapshot: CatalogSnapshot,
