@@ -85,3 +85,34 @@ button:disabled, [data-focusable][aria-disabled="true"] {
 @media (prefers-reduced-motion: reduce) {
   button:focus-visible, [data-focusable]:focus, .nav:focus, .card:focus, .primary:focus { transform: none !important; }
 }
+
+
+/* D6 responsive TV layout: preserve remote focus and prevent card clipping
+   on 720p, 1080p and 4K logical viewports. */
+.app-shell, .shell { min-width: 0; }
+.content { min-width: 0; }
+.catalog-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 176px), 1fr));
+  align-items: stretch;
+}
+.catalog-card { min-width: 0; }
+.cards, .shelf { max-width: 100%; }
+.cards { overflow-x: auto; padding: 6px 6px 14px; scroll-padding-inline: 6px; }
+.cards .card { flex: 0 0 auto; }
+:focus-visible { scroll-margin: 20px; }
+@media (max-width: 1280px) {
+  .app-shell, .shell { grid-template-columns: 180px minmax(0, 1fr); }
+  .rail { padding: 24px 16px; }
+  .content { padding: 24px 24px 48px; }
+  .catalog-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr)); }
+  .hero { min-height: 260px; padding: 28px; }
+}
+@media (min-width: 2560px) {
+  .app-shell, .shell { grid-template-columns: 260px minmax(0, 1fr); }
+  .content { padding: 52px 68px 80px; }
+  .catalog-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; }
+  .hero { min-height: 420px; padding: 60px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cards { scroll-behavior: auto; }
+}
