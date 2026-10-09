@@ -2,23 +2,30 @@ package fr.zyviotv.player.data.network
 
 import android.util.Log
 import java.net.ConnectException
+import java.net.EOFException
 import java.net.MalformedURLException
+import java.net.ProtocolException
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
+import kotlinx.coroutines.CancellationException
 
 internal object NetworkDiagnostics {
     private const val TAG = "ZyvioNetwork"
 
-    fun response(client: String, url: String, statusCode: Int) {
-        Log.i(TAG, "$client response=$statusCode transport=${safeEndpoint(url)}")
+    fun response(client: String, url: String, statusCode: Int, attempt: Int = 1) {
+        Log.i(TAG, "$client response=$statusCode transport=${safeEndpoint(url)} attempt=$attempt")
     }
 
-    fun failure(client: String, url: String, error: Throwable) {
+    fun failure(client: String, url: String, error: Throwable, terminal: Boolean = true) {
         // Never log Throwable/message: URLConnection exceptions can include the
         // complete URL, including Xtream credentials or M3U query parameters.
-        Log.w(TAG, "$client failure=${failureKind(error)} transport=${safeEndpoint(url)}")
+        Log.w(
+            TAG,
+            "$client failure=${failureKind(error)} transport=${safeEndpoint(url)} terminal=$terminal",
+        )
     }
 
     fun supabaseResponse(
@@ -47,9 +54,13 @@ internal object NetworkDiagnostics {
     }
 
     internal fun failureKind(error: Throwable): String = when (error) {
+        is CancellationException -> "cancelled"
         is SocketTimeoutException -> "timeout"
-        is UnknownHostException -> "dns"
+        is EOFException -> "truncated"
+        is ProtocolException -> "protocol"
         is ConnectException -> "connection"
+        is SocketException -> "connection-interrupted"
+        is UnknownHostException -> "dns"
         is SSLException -> "tls"
         is MalformedURLException -> "invalid-url"
         is SecurityException -> "security-policy"

@@ -1,6 +1,13 @@
 package fr.zyviotv.player.shared.m3u
 
 object M3uParser {
+    data class ParseReport(
+        val emitted: Int,
+        val headerSeen: Boolean,
+        val reachedLimit: Boolean,
+        val danglingMetadata: Boolean,
+    )
+
     fun parse(
         content: String,
         maxEntries: Int = Int.MAX_VALUE,
@@ -21,8 +28,16 @@ object M3uParser {
         lines: Sequence<String>,
         maxEntries: Int = Int.MAX_VALUE,
         onEntry: (M3uEntry) -> Unit,
-    ): Int {
-        if (maxEntries <= 0) return 0
+    ): Int = parseLinesDetailed(lines, maxEntries, onEntry).emitted
+
+    fun parseLinesDetailed(
+        lines: Sequence<String>,
+        maxEntries: Int = Int.MAX_VALUE,
+        onEntry: (M3uEntry) -> Unit,
+    ): ParseReport {
+        if (maxEntries <= 0) {
+            return ParseReport(0, headerSeen = false, reachedLimit = true, danglingMetadata = false)
+        }
 
         val iterator = lines.iterator()
         var headerSeen = false
@@ -37,7 +52,9 @@ object M3uParser {
             if (line.isEmpty()) continue
 
             if (!headerSeen) {
-                if (!line.startsWith("#EXTM3U", ignoreCase = true)) return 0
+                if (!line.startsWith("#EXTM3U", ignoreCase = true)) {
+                    return ParseReport(0, false, false, false)
+                }
                 headerSeen = true
                 continue
             }
@@ -55,7 +72,12 @@ object M3uParser {
             }
         }
 
-        return emitted
+        return ParseReport(
+            emitted = emitted,
+            headerSeen = headerSeen,
+            reachedLimit = emitted >= maxEntries,
+            danglingMetadata = metadata != null && emitted < maxEntries,
+        )
     }
 
     private fun parseEntry(metadata: String, streamUrl: String): M3uEntry? {
@@ -69,34 +91,37 @@ object M3uParser {
         } else {
             ""
         }
-        val tvgName = attribute(metadata, "tvg-name")
+        val attributes = attributes(metadata)
+        val tvgName = attributes["tvg-name"]
         val name = metadataName.ifBlank { tvgName.orEmpty() }.trim()
         if (name.isBlank()) return null
 
         return M3uEntry(
             name = name,
             streamUrl = streamUrl.trim(),
-            tvgId = attribute(metadata, "tvg-id"),
+            tvgId = attributes["tvg-id"],
             tvgName = tvgName,
-            logoUrl = attribute(metadata, "tvg-logo"),
-            groupTitle = attribute(metadata, "group-title"),
+            logoUrl = attributes["tvg-logo"],
+            groupTitle = attributes["group-title"],
         )
     }
 
-    private fun attribute(line: String, name: String): String? {
-        val escaped = Regex.escape(name)
-        val quoted = Regex(
-            """(?:^|\s)$escaped\s*=\s*["']([^"']*)["']""",
-            RegexOption.IGNORE_CASE,
-        ).find(line)?.groups?.get(1)?.value
-
-        val unquoted = Regex(
-            """(?:^|\s)$escaped\s*=\s*([^\s,]+)""",
-            RegexOption.IGNORE_CASE,
-        ).find(line)?.groups?.get(1)?.value
-
-        return (quoted ?: unquoted)
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
+    private fun attributes(line: String): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        ATTRIBUTE_PATTERN.findAll(line).forEach { match ->
+            val key = match.groupValues[1].lowercase()
+            if (key !in SUPPORTED_ATTRIBUTES) return@forEach
+            val value = match.groupValues.drop(2).firstOrNull(String::isNotEmpty)
+                ?.trim()
+                ?.takeIf(String::isNotBlank)
+                ?: return@forEach
+            result[key] = value
+        }
+        return result
     }
+
+    private val ATTRIBUTE_PATTERN = Regex(
+        """(?:^|\s)([A-Za-z0-9_-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""",
+    )
+    private val SUPPORTED_ATTRIBUTES = setOf("tvg-id", "tvg-name", "tvg-logo", "group-title")
 }

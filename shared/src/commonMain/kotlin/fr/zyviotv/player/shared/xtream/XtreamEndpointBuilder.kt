@@ -2,7 +2,7 @@ package fr.zyviotv.player.shared.xtream
 
 object XtreamEndpointBuilder {
     fun playerApi(credentials: XtreamCredentials): String {
-        val base = credentials.serverUrl.trim().trimEnd('/')
+        val base = normalizedServerBase(credentials.serverUrl)
         return base + "/player_api.php"
     }
 
@@ -28,7 +28,7 @@ object XtreamEndpointBuilder {
         streamId: String,
         extension: String = "ts",
     ): String {
-        val base = credentials.serverUrl.trim().trimEnd('/')
+        val base = normalizedServerBase(credentials.serverUrl)
         return base + "/live/" + encodePath(credentials.username) + "/" +
             encodePath(credentials.password) + "/" + encodePath(streamId) + "." + encodePath(extension)
     }
@@ -38,7 +38,7 @@ object XtreamEndpointBuilder {
         streamId: String,
         extension: String,
     ): String {
-        val base = credentials.serverUrl.trim().trimEnd('/')
+        val base = normalizedServerBase(credentials.serverUrl)
         return base + "/movie/" + encodePath(credentials.username) + "/" +
             encodePath(credentials.password) + "/" + encodePath(streamId) + "." + encodePath(extension)
     }
@@ -48,7 +48,7 @@ object XtreamEndpointBuilder {
         streamId: String,
         extension: String,
     ): String {
-        val base = credentials.serverUrl.trim().trimEnd('/')
+        val base = normalizedServerBase(credentials.serverUrl)
         return base + "/series/" + encodePath(credentials.username) + "/" +
             encodePath(credentials.password) + "/" + encodePath(streamId) + "." + encodePath(extension)
     }
@@ -83,6 +83,20 @@ object XtreamEndpointBuilder {
     private fun encodePath(value: String): String =
         encodeComponent(value.trim())
 
+    internal fun normalizedServerBase(value: String): String {
+        var base = value.trim()
+            .substringBefore('#')
+            .substringBefore('?')
+            .trimEnd('/')
+        val knownEndpoint = KNOWN_ENDPOINTS.firstOrNull { endpoint ->
+            base.endsWith(endpoint, ignoreCase = true)
+        }
+        if (knownEndpoint != null) {
+            base = base.dropLast(knownEndpoint.length).trimEnd('/')
+        }
+        return base
+    }
+
     private fun encodeQuery(value: String): String =
         encodeComponent(value.trim())
 
@@ -107,4 +121,5 @@ object XtreamEndpointBuilder {
     }
 
     private const val HEX = "0123456789ABCDEF"
+    private val KNOWN_ENDPOINTS = listOf("/player_api.php", "/get.php")
 }

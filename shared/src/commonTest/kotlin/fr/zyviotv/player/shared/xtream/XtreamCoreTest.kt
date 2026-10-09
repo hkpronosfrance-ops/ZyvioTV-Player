@@ -71,6 +71,49 @@ class XtreamCoreTest {
     }
 
     @Test
+    fun endpointBuilderPreservesPortAndProviderPath() {
+        val url = XtreamEndpointBuilder.authenticatedPlayerApi(
+            XtreamCredentials(
+                serverUrl = "http://provider.example:8080/server-path/",
+                username = "user",
+                password = "secret",
+            ),
+        )
+
+        assertEquals(
+            "http://provider.example:8080/server-path/player_api.php?username=user&password=secret",
+            url,
+        )
+    }
+
+    @Test
+    fun endpointBuilderDoesNotDuplicateKnownApiFilename() {
+        val credentials = XtreamCredentials(
+            serverUrl = "https://provider.example/panel/player_api.php?old=value",
+            username = "user",
+            password = "secret",
+        )
+
+        assertEquals(
+            "https://provider.example/panel/player_api.php?username=user&password=secret",
+            XtreamEndpointBuilder.authenticatedPlayerApi(credentials),
+        )
+        assertEquals(
+            "https://provider.example/panel/live/user/secret/42.ts",
+            XtreamEndpointBuilder.liveStream(credentials, "42"),
+        )
+    }
+
+    @Test
+    fun validatorAcceptsCaseInsensitiveHttpScheme() {
+        assertIs<XtreamValidationResult.Valid>(
+            XtreamValidator.validate(
+                XtreamCredentials("HTTP://provider.example:8080/path", "user", "secret"),
+            ),
+        )
+    }
+
+    @Test
     fun streamUrlCanBeRedactedForLogs() {
         val url = XtreamEndpointBuilder.liveStream(
             credentials = XtreamCredentials(
