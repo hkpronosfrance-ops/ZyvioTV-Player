@@ -44,6 +44,9 @@ jobs:
           node --check tizenApp/auth.js
           node --check tizenApp/cloud.js
 
+      - name: Validate M3U functional and category isolation audit
+        run: node tests/m3u-functional-audit-194.cjs tizenApp
+
       - name: Validate provider core
         run: node tizenApp/provider.test.cjs
 
