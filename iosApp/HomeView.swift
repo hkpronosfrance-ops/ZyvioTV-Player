@@ -85,7 +85,7 @@ struct HomeView: View {
                     }
                 }
             }
-            .padding(horizontalSizeClass == .regular ? 32 : 20)
+            .padding(.horizontal, horizontalSizeClass == .regular ? ZyvioDesign.Space.s8 : ZyvioDesign.Space.s5)
             .padding(.vertical, 20)
         }
         .background(ZyvioDesign.Palette.base)
@@ -123,8 +123,19 @@ private struct HomeHero: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
+            if let artwork = item?.artworkUrl, let url = URL(string: artwork) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    ZyvioDesign.Palette.surface2
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .accessibilityHidden(true)
+            }
+
             LinearGradient(
-                colors: [ZyvioDesign.Palette.brand.opacity(0.30), ZyvioDesign.Palette.base],
+                colors: [ZyvioDesign.Palette.brand.opacity(0.92), ZyvioDesign.Palette.base.opacity(0.95), ZyvioDesign.Palette.base.opacity(0.45)],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -159,7 +170,7 @@ private struct HomeHero: View {
             }
             .padding(isWide ? 32 : 24)
         }
-        .frame(height: isWide ? 300 : 240)
+        .frame(height: isWide ? 330 : 252)
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 }
@@ -174,7 +185,7 @@ private struct ProgressShelf: View {
                 .font(.title3.bold())
 
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 12) {
+                LazyHStack(alignment: .top, spacing: ZyvioDesign.Space.s3) {
                     ForEach(items) { item in
                         VStack(alignment: .leading, spacing: 8) {
                             AsyncArtwork(
