@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -119,6 +120,7 @@ fun WhoIsWatchingGate(
         }
 
         val profiles = repository.listProfiles().getOrElse {
+            android.util.Log.e("ZyvioProfiles", "Profile list failed: ${it.message?.takeIf { value -> value.matches(Regex("PROFILE_LIST_HTTP_[0-9]{3}")) } ?: it.javaClass.simpleName}")
             state = ProfileGateState.Error("Impossible de charger vos profils.")
             return@LaunchedEffect
         }
@@ -278,6 +280,7 @@ private fun ProfileGateError(
         ) {
             Text(
                 text = message,
+                color = Color.White,
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
             )
