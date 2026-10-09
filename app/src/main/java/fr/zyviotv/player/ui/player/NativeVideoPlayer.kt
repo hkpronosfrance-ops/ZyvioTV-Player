@@ -1,12 +1,15 @@
 package fr.zyviotv.player.ui.player
 
+import android.os.Build
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -18,13 +21,20 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecDecoderException
+import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackMediaType
@@ -55,8 +65,11 @@ fun NativeVideoPlayer(
     onTracksChanged: (NativeTrackCatalog) -> Unit = {},
     selectedAudioLanguage: String? = null,
     selectedSubtitleLanguage: String? = null,
+    selectedAudioTrackId: String? = null,
+    selectedSubtitleTrackId: String? = null,
     subtitlesEnabled: Boolean = true,
     playbackQuality: String = "Auto",
+    scaleMode: PlayerScaleMode = PlayerScaleMode.Fit,
     showNativeControls: Boolean = true,
     autoPlay: Boolean = true,
     command: NativePlayerCommand = NativePlayerCommand.None,
@@ -66,12 +79,20 @@ fun NativeVideoPlayer(
     val lifecycleOwner = LocalLifecycleOwner.current
     val validation = remember(request) { PlaybackValidator.validate(request) }
 
+    // Effects outlive a single composition: always call the latest callbacks.
+    val stateChanged by rememberUpdatedState(onStateChanged)
+    val errorReported by rememberUpdatedState(onError)
+    val positionChanged by rememberUpdatedState(onPositionChanged)
+    val durationChanged by rememberUpdatedState(onDurationChanged)
+    val isPlayingChanged by rememberUpdatedState(onIsPlayingChanged)
+    val tracksChanged by rememberUpdatedState(onTracksChanged)
+
     if (validation !is PlaybackValidationResult.Valid) {
         // Report through an effect: callbacks must not mutate caller state
         // during composition.
         LaunchedEffect(validation) {
-            onStateChanged(PlaybackState.Error)
-            onError(
+            stateChanged(PlaybackState.Error)
+            errorReported(
                 (validation as? PlaybackValidationResult.Invalid)?.message
                     ?: "Le flux vidéo est invalide.",
             )
@@ -87,7 +108,12 @@ fun NativeVideoPlayer(
     val player = remember(request.streamUrl, request.resumePositionMs) {
         PlaybackDiagnostics.launch(request)
         PlaybackDiagnostics.attempt(mediaAttempts[0], 0)
-        ExoPlayer.Builder(context)
+        ExoPlayer.Builder(
+            context,
+            // A decoder that fails to initialise (frequent for HEVC on the
+            // emulator) falls back to the next one, e.g. the software codec.
+            DefaultRenderersFactory(context).setEnableDecoderFallback(true),
+        )
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(
                     DefaultDataSource.Factory(
@@ -107,11 +133,15 @@ fun NativeVideoPlayer(
                 playWhenReady = autoPlay
             }
     }
+    // Commands sent before this player existed belong to the previous one.
+    val commandGate = remember(player) { PlayerCommandGate(commandToken) }
 
     LaunchedEffect(
         player,
         selectedAudioLanguage,
         selectedSubtitleLanguage,
+        selectedAudioTrackId,
+        selectedSubtitleTrackId,
         subtitlesEnabled,
         playbackQuality,
     ) {
@@ -121,6 +151,12 @@ fun NativeVideoPlayer(
                 selectedAudioLanguage?.let { setPreferredAudioLanguage(it) }
                 selectedSubtitleLanguage?.let { setPreferredTextLanguage(it) }
                 setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
+                // Explicit track choice: works for IPTV tracks without a
+                // language tag, which preferred-language selection cannot reach.
+                applyTrackOverride(player.currentTracks, C.TRACK_TYPE_AUDIO, selectedAudioTrackId)
+                if (subtitlesEnabled) {
+                    applyTrackOverride(player.currentTracks, C.TRACK_TYPE_TEXT, selectedSubtitleTrackId)
+                }
                 when (playbackQuality) {
                     "4K" -> setMaxVideoSize(3840, 2160)
                     "FHD" -> setMaxVideoSize(1920, 1080)
@@ -132,34 +168,51 @@ fun NativeVideoPlayer(
             .build()
     }
 
-    LaunchedEffect(player, autoPlay) {
-        if (autoPlay && player.playbackState != Player.STATE_ENDED) {
-            player.play()
+    // The overlay timeline needs the position while playing; 1 Hz keeps the
+    // recomposition cost negligible.
+    LaunchedEffect(player) {
+        while (true) {
+            delay(POSITION_TICK_MS)
+            if (player.isPlaying) {
+                positionChanged(player.currentPosition.coerceAtLeast(0L))
+            }
         }
     }
 
     LaunchedEffect(player, commandToken) {
+        if (!commandGate.accept(commandToken)) return@LaunchedEffect
         when (command) {
             NativePlayerCommand.None -> Unit
             NativePlayerCommand.TogglePlayPause -> {
-                if (player.isPlaying) player.pause() else player.play()
+                if (player.isPlaying) {
+                    player.pause()
+                } else {
+                    if (player.playbackState == Player.STATE_ENDED) player.seekTo(0L)
+                    player.play()
+                }
             }
             NativePlayerCommand.Pause -> player.pause()
             NativePlayerCommand.Play -> player.play()
             NativePlayerCommand.SeekBack10 -> {
                 player.seekTo((player.currentPosition - SEEK_STEP_MS).coerceAtLeast(0L))
+                positionChanged(player.currentPosition.coerceAtLeast(0L))
             }
             NativePlayerCommand.SeekForward10 -> {
                 val duration = player.duration.takeIf { it > 0L && it != C.TIME_UNSET }
                 val target = player.currentPosition + SEEK_STEP_MS
                 player.seekTo(if (duration != null) target.coerceAtMost(duration) else target)
+                positionChanged(player.currentPosition.coerceAtLeast(0L))
             }
             NativePlayerCommand.RestartFromBeginning -> {
                 player.seekTo(0L)
                 player.play()
             }
             NativePlayerCommand.Retry -> {
-                val position = player.currentPosition.coerceAtLeast(0L)
+                val position = if (request.kind == PlaybackKind.Live) {
+                    0L
+                } else {
+                    player.currentPosition.coerceAtLeast(0L)
+                }
                 player.stop()
                 player.setMediaItem(buildMediaItem(request, mediaAttempts[attemptIndex[0]]))
                 if (position > 0L) player.seekTo(position)
@@ -169,21 +222,45 @@ fun NativeVideoPlayer(
         }
     }
 
+    // Background/foreground: pause on stop, resume only what was playing.
     DisposableEffect(player, lifecycleOwner) {
+        val resumePolicy = PlayerResumePolicy()
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    resumePolicy.onStop(wasPlaying = player.isPlaying || player.playWhenReady)
+                    positionChanged(player.currentPosition.coerceAtLeast(0L))
+                    player.pause()
+                }
+                Lifecycle.Event.ON_START -> {
+                    if (resumePolicy.onStart() && player.playbackState != Player.STATE_ENDED) {
+                        player.play()
+                    }
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(lifecycleObserver) }
+    }
+
+    // One owner for the player's lifetime: released exactly once, when the
+    // player leaves the screen or is replaced by the next channel/episode.
+    DisposableEffect(player) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         var bufferingJob: Job? = null
         var silentRetryUsed = false
 
         fun publishDuration() {
             val duration = player.duration.takeIf { it > 0L && it != C.TIME_UNSET }
-            onDurationChanged(duration)
+            durationChanged(duration)
         }
 
         fun failPlayback(message: String) {
             bufferingJob?.cancel()
             PlaybackDiagnostics.state("error")
-            onStateChanged(PlaybackState.Error)
-            onError(message)
+            stateChanged(PlaybackState.Error)
+            errorReported(message)
         }
 
         fun reload(mediaType: PlaybackMediaType) {
@@ -214,7 +291,11 @@ fun NativeVideoPlayer(
         fun handlePlayerError(error: PlaybackException) {
             val httpStatus = (error.cause as? HttpDataSource.InvalidResponseCodeException)
                 ?.responseCode
-            val failure = PlaybackErrorClassifier.classify(error.errorCode, httpStatus)
+            val failure = PlaybackErrorClassifier.classify(
+                errorCode = error.errorCode,
+                httpStatus = httpStatus,
+                decoder = error.decoderDiagnosis(),
+            )
             val nextAttempt = attemptIndex[0] + 1
             when {
                 failure.kind == PlaybackErrorKind.BehindLiveWindow -> {
@@ -246,7 +327,7 @@ fun NativeVideoPlayer(
                 delay(BUFFERING_INDICATOR_DELAY_MS)
                 if (player.playbackState != Player.STATE_BUFFERING) return@launch
 
-                onStateChanged(PlaybackState.Buffering)
+                stateChanged(PlaybackState.Buffering)
 
                 delay(BUFFERING_ERROR_TIMEOUT_MS - BUFFERING_INDICATOR_DELAY_MS)
                 if (player.playbackState == Player.STATE_BUFFERING) {
@@ -265,30 +346,30 @@ fun NativeVideoPlayer(
                         bufferingJob?.cancel()
                         silentRetryUsed = false
                         PlaybackDiagnostics.state("ready")
-                        onStateChanged(PlaybackState.Ready)
-                        onPositionChanged(player.currentPosition.coerceAtLeast(0L))
+                        stateChanged(PlaybackState.Ready)
+                        positionChanged(player.currentPosition.coerceAtLeast(0L))
                         publishDuration()
-                        onTracksChanged(player.currentTracks.toNativeTrackCatalog())
+                        tracksChanged(player.currentTracks.toNativeTrackCatalog())
                     }
                     Player.STATE_ENDED -> {
                         bufferingJob?.cancel()
-                        onStateChanged(PlaybackState.Ended)
-                        onPositionChanged(player.currentPosition.coerceAtLeast(0L))
+                        stateChanged(PlaybackState.Ended)
+                        positionChanged(player.currentPosition.coerceAtLeast(0L))
                         publishDuration()
                     }
                     else -> {
                         bufferingJob?.cancel()
-                        onStateChanged(PlaybackState.Idle)
+                        stateChanged(PlaybackState.Idle)
                     }
                 }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                onIsPlayingChanged(isPlaying)
+                isPlayingChanged(isPlaying)
             }
 
             override fun onTracksChanged(tracks: Tracks) {
-                onTracksChanged(tracks.toNativeTrackCatalog())
+                tracksChanged(tracks.toNativeTrackCatalog())
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -296,41 +377,27 @@ fun NativeVideoPlayer(
             }
         }
 
-        val lifecycleObserver = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_STOP -> {
-                    onPositionChanged(player.currentPosition.coerceAtLeast(0L))
-                    player.pause()
-                }
-                Lifecycle.Event.ON_START -> {
-                    if (player.playbackState != Player.STATE_ENDED) {
-                        player.play()
-                    }
-                }
-                else -> Unit
-            }
-        }
-
         player.addListener(listener)
-        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
 
         onDispose {
             bufferingJob?.cancel()
             scope.cancel()
-            onPositionChanged(player.currentPosition.coerceAtLeast(0L))
-            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+            positionChanged(player.currentPosition.coerceAtLeast(0L))
             player.removeListener(listener)
             player.release()
+            PlaybackDiagnostics.released("dispose")
         }
     }
 
     AndroidView(
         modifier = modifier.fillMaxSize(),
-        factory = {
-            PlayerView(context).apply {
+        factory = { viewContext ->
+            PlayerView(viewContext).apply {
                 this.player = player
                 useController = showNativeControls
                 keepScreenOn = true
+                setShutterBackgroundColor(android.graphics.Color.BLACK)
+                resizeMode = scaleMode.resizeMode()
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -338,9 +405,54 @@ fun NativeVideoPlayer(
             }
         },
         update = { view ->
-            view.player = player
+            if (view.player !== player) view.player = player
             view.useController = showNativeControls
+            view.resizeMode = scaleMode.resizeMode()
         },
+        // Detach the surface before the player is released.
+        onRelease = { view -> view.player = null },
+    )
+}
+
+@UnstableApi
+private fun PlayerScaleMode.resizeMode(): Int = when (this) {
+    PlayerScaleMode.Fit -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+    PlayerScaleMode.Zoom -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+}
+
+@UnstableApi
+private fun TrackSelectionParameters.Builder.applyTrackOverride(
+    tracks: Tracks,
+    trackType: Int,
+    trackId: String?,
+) {
+    if (trackId == null) return
+    val groupIndex = trackId.substringBefore(':').toIntOrNull() ?: return
+    val trackIndex = trackId.substringAfter(':').toIntOrNull() ?: return
+    val group = tracks.groups.getOrNull(groupIndex) ?: return
+    if (group.type != trackType || trackIndex !in 0 until group.length) return
+    setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+}
+
+/** Codec facts for diagnostics only; never touches the stream URL. */
+@UnstableApi
+private fun PlaybackException.decoderDiagnosis(): DecoderDiagnosis? {
+    val initialization = cause as? MediaCodecRenderer.DecoderInitializationException
+    val decoding = cause as? MediaCodecDecoderException
+    val rendererMime = (this as? ExoPlaybackException)?.rendererFormat?.sampleMimeType
+    val mimeType = initialization?.mimeType
+        ?: decoding?.codecInfo?.mimeType
+        ?: rendererMime
+    val codecName = initialization?.codecInfo?.name ?: decoding?.codecInfo?.name
+    if (mimeType == null && codecName == null) return null
+    return DecoderDiagnosis(
+        mimeType = mimeType,
+        codecName = codecName,
+        isEmulator = DecoderDiagnosis.isEmulator(
+            fingerprint = Build.FINGERPRINT.orEmpty(),
+            hardware = Build.HARDWARE.orEmpty(),
+            product = Build.PRODUCT.orEmpty(),
+        ),
     )
 }
 
@@ -449,3 +561,4 @@ private const val PROVIDER_READ_TIMEOUT_MS = 20_000
 private const val BUFFERING_INDICATOR_DELAY_MS = 500L
 private const val BUFFERING_ERROR_TIMEOUT_MS = 15_000L
 private const val SEEK_STEP_MS = 10_000L
+private const val POSITION_TICK_MS = 1_000L

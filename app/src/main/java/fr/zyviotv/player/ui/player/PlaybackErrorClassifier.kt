@@ -20,9 +20,46 @@ enum class PlaybackErrorKind(val logName: String) {
     Other("other"),
 }
 
+/**
+ * Which decoder failed, without any stream data (phase #209). Used to tell an
+ * emulator limitation (goldfish/ranchu codecs, HEVC) from an application or
+ * stream error, in Logcat and in the message shown to the user.
+ */
+data class DecoderDiagnosis(
+    val mimeType: String?,
+    val codecName: String?,
+    val isEmulator: Boolean,
+) {
+    val isHevc: Boolean
+        get() = mimeType.equals(HEVC_MIME, ignoreCase = true) ||
+            codecName?.contains("hevc", ignoreCase = true) == true
+
+    /** Emulator codecs (c2.goldfish.*) or HEVC on an emulator: not an app defect by itself. */
+    val isLikelyEmulatorLimitation: Boolean
+        get() = isEmulator && (isHevc || codecName?.contains("goldfish", ignoreCase = true) == true)
+
+    fun logFields(): String =
+        "mime=${mimeType ?: "unknown"} codec=${codecName ?: "unknown"} emulator=$isEmulator"
+
+    companion object {
+        const val HEVC_MIME = "video/hevc"
+
+        fun isEmulator(fingerprint: String, hardware: String, product: String): Boolean =
+            fingerprint.startsWith("generic") ||
+                fingerprint.contains("emulator", ignoreCase = true) ||
+                hardware in EMULATOR_HARDWARE ||
+                product.contains("sdk_gphone", ignoreCase = true) ||
+                product.startsWith("sdk") ||
+                product.contains("emulator", ignoreCase = true)
+
+        private val EMULATOR_HARDWARE = setOf("goldfish", "ranchu")
+    }
+}
+
 data class PlaybackFailure(
     val kind: PlaybackErrorKind,
     val httpStatus: Int? = null,
+    val decoder: DecoderDiagnosis? = null,
 ) {
     /** A different container (HLS) may succeed where sniffing failed. */
     val canTryNextContainer: Boolean
@@ -58,8 +95,15 @@ data class PlaybackFailure(
                 "La politique réseau de l’appareil bloque ce flux HTTP."
             PlaybackErrorKind.UnsupportedContainer ->
                 "Format de flux non reconnu par le lecteur Android."
-            PlaybackErrorKind.Decoder ->
-                "Le codec de ce flux n’est pas pris en charge par cet appareil."
+            PlaybackErrorKind.Decoder -> when {
+                decoder?.isLikelyEmulatorLimitation == true ->
+                    "Le décodeur vidéo de l’émulateur ne parvient pas à lire ce flux" +
+                        (if (decoder.isHevc) " (HEVC/H.265)" else "") +
+                        ". Testez sur un appareil réel."
+                decoder?.isHevc == true ->
+                    "Cet appareil ne parvient pas à décoder ce flux HEVC (H.265)."
+                else -> "Le codec de ce flux n’est pas pris en charge par cet appareil."
+            }
             PlaybackErrorKind.BehindLiveWindow,
             PlaybackErrorKind.Other,
             -> "Impossible de lire ce flux. Réessayez ou choisissez un autre contenu."
@@ -67,7 +111,11 @@ data class PlaybackFailure(
 }
 
 object PlaybackErrorClassifier {
-    fun classify(errorCode: Int, httpStatus: Int?): PlaybackFailure {
+    fun classify(
+        errorCode: Int,
+        httpStatus: Int?,
+        decoder: DecoderDiagnosis? = null,
+    ): PlaybackFailure {
         val kind = when (errorCode) {
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
             PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
@@ -105,7 +153,11 @@ object PlaybackErrorClassifier {
 
             else -> PlaybackErrorKind.Other
         }
-        return PlaybackFailure(kind = kind, httpStatus = httpStatus)
+        return PlaybackFailure(
+            kind = kind,
+            httpStatus = httpStatus,
+            decoder = decoder.takeIf { kind == PlaybackErrorKind.Decoder },
+        )
     }
 }
 
@@ -132,6 +184,10 @@ internal object PlaybackDiagnostics {
         Log.i(TAG, "prepare container=${mediaType.name.lowercase()} attempt=${index + 1}")
     }
 
+    fun released(reason: String) {
+        Log.i(TAG, "release reason=$reason")
+    }
+
     fun state(name: String) {
         Log.i(TAG, "state=$name")
     }
@@ -140,7 +196,8 @@ internal object PlaybackDiagnostics {
         Log.w(
             TAG,
             "failure kind=${failure.kind.logName} code=$errorCodeName " +
-                "http=${failure.httpStatus ?: "none"} terminal=$terminal",
+                "http=${failure.httpStatus ?: "none"} terminal=$terminal" +
+                (failure.decoder?.let { " " + it.logFields() } ?: ""),
         )
     }
 }

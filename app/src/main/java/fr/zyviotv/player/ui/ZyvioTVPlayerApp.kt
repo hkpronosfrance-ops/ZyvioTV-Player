@@ -123,6 +123,7 @@ import fr.zyviotv.player.ui.series.SeriesDetailState
 import fr.zyviotv.player.ui.series.SeriesDetailUi
 import fr.zyviotv.player.ui.series.SeriesScreen
 import fr.zyviotv.player.ui.player.PlayerHost
+import fr.zyviotv.player.ui.player.PlayerExitNavigation
 import fr.zyviotv.player.ui.player.SeriesAutoNextResolver
 import fr.zyviotv.player.ui.player.PlaybackDiagnostics
 import fr.zyviotv.player.ui.player.PlaybackLaunchDecision
@@ -1600,7 +1601,11 @@ fun ZyvioTVPlayerApp(
         composable(PLAYER_ROUTE) {
             val request = playbackRequest
             if (request == null) {
-                LaunchedEffect(Unit) { navController.popBackStack() }
+                LaunchedEffect(Unit) {
+                    if (PlayerExitNavigation.shouldPop(navController.currentDestination?.route, PLAYER_ROUTE)) {
+                        navController.popBackStack()
+                    }
+                }
             } else {
                 PlayerHost(
                     profile = profile,
@@ -1610,8 +1615,13 @@ fun ZyvioTVPlayerApp(
                     onNextChannel = { zapLiveChannel(1) },
                     onChannelNumberEntered = { tuneLiveChannelNumber(it) },
                     onBack = {
-                        playbackRequest = null
-                        navController.popBackStack()
+                        // Pop exactly once. The request is kept until the next
+                        // launch replaces it: clearing it here recomposed the
+                        // exiting entry into its "no request" branch, which
+                        // popped a second time.
+                        if (PlayerExitNavigation.shouldPop(navController.currentDestination?.route, PLAYER_ROUTE)) {
+                            navController.popBackStack()
+                        }
                     },
                     onOpenGuide = {
                         if (request.kind == PlaybackKind.Live) {
@@ -1676,8 +1686,13 @@ fun ZyvioTVPlayerApp(
                             val completed = durationMs != null &&
                                 durationMs > 0L &&
                                 positionMs.toDouble() / durationMs.toDouble() >= 0.95
-                            val shouldSync = completed ||
-                                positionMs == 0L ||
+                            // The player reports the position every second:
+                            // write once per 15 s, and once on completion.
+                            val completionAlreadySynced = durationMs != null &&
+                                durationMs > 0L &&
+                                lastSyncedPositionMs.toDouble() / durationMs.toDouble() >= 0.95
+                            val shouldSync = (completed && !completionAlreadySynced) ||
+                                (positionMs == 0L && lastSyncedPositionMs != 0L) ||
                                 kotlin.math.abs(positionMs - lastSyncedPositionMs) >= 15_000L
                             if (shouldSync) {
                                 lastSyncedPositionMs = positionMs

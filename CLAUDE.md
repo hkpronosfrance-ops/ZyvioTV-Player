@@ -1,7 +1,7 @@
 # ZYVIOTV Player — Instructions permanentes pour Claude Code
 
 > Référence du projet depuis sa création. À lire AVANT toute analyse, modification, PR ou fusion.
-> État de référence documentaire : 9 octobre 2026, `main` après PR #207 : `65b9fa8cf967ce92994ae9f114c7f058ef6827d1` (bloc #208 en cours, voir §8).
+> État de référence documentaire : 9 octobre 2026, `main` après PR #208 : `c867b0292a5ee150bbb24eafb6ad86eceb642c26` (phase #209 en cours, voir §8).
 > Ce document décrit la vision, les décisions immuables, les réalisations observées et les anomalies connues. **Il ne constitue pas une attestation que chaque fonctionnalité est opérationnelle.**
 
 ## 0. Règles de travail non négociables
@@ -157,12 +157,21 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Cache #206 conservé (lecture du cache désormais mutualisée pour éviter le double chargement au démarrage). Aucun changement Supabase.
 - Non vérifié à ce stade : lecture réelle sur Pixel 7 / téléphone / TV avec le fournisseur.
 
-**Bloc #208 — Sources de lecture M3U** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état de la PR)
+**Bloc #208 — Sources de lecture M3U** (PR #208 fusionnée, `main` = `c867b0292a5ee150bbb24eafb6ad86eceb642c26`)
 - Symptôme Pixel 7 après #207 : tap/Lire ouvrent bien la décision de lecture, mais Logcat `ZyvioPlayback blocked reason=missingsource` pour tout le catalogue.
 - Preuve dans le code : la seule origine possible d'une `streamUrl` vide est `OfflineContentCache.loadLegacyCatalog` (cache JSON SharedPreferences d'avant #206, qui n'a jamais stocké d'URL). Le parser M3U, le mapper, le codec #206 et la construction des `PlaybackRequest` conservent les URL (tests de bout en bout). Ce cache hérité restait chargé comme catalogue « prêt » quand le cache chiffré était absent ou illisible, et un échec d'écriture du cache chiffré était silencieux, donc l'ancien JSON n'était jamais supprimé. Le déclenchement exact sur le Pixel 7 reste à confirmer par la ligne `ZyvioCatalog catalog event=catalog_cache_sources origin=…`.
 - Décisions : `CachedCatalog.origin` (`Encrypted` / `LegacyWithoutSources`) et `CatalogSourceReport` (comptes seulement) ; un cache sans sources est affiché mais `Ready.sourcesPending` bloque la lecture avec un message FR (`SourcesPending`) jusqu'à la synchronisation ; le cache n'est remplacé que par un catalogue dont toutes les sources sont présentes ; échecs de lecture/écriture du cache journalisés (`catalog_persist_failed`, `catalog_cache_unreadable`) ; l'ancien JSON est supprimé dès qu'un cache chiffré valide existe ; format `EncryptedCatalogFile` inchangé (extrait pour être testé en JVM).
 - Paramètres d'accès : en-têtes M3U `url|User-Agent=…&Referer=…` (Kodi) et `#EXTVLCOPT:http-user-agent/http-referrer` conservés dans la ligne de flux (`PlaybackSource`), transmis à Media3 comme en-têtes HTTP (liste blanche User-Agent/Referer/Origin, jamais journalisés) ; requêtes/jetons d'URL inchangés.
-- Non vérifié : lecture réelle Pixel 7 / fournisseur.
+- Recette Pixel 7 rapportée par l'utilisateur après fusion : lecture TV et Films via M3U confirmée ; épisodes démarrent mais erreur décodeur HEVC sur l'émulateur.
+
+**Phase #209 — Fiabilisation du lecteur Android** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état de la PR)
+- Retour : le bouton haut du lecteur était dessiné sous la barre d'état (app edge-to-edge, aucun inset) et la sortie remettait `playbackRequest` à null, ce qui recomposait l'entrée sortante dans sa branche « sans requête » et dépilait une seconde fois ; le retour système n'avait pas de `BackHandler` et ne sauvegardait pas la progression. Désormais : un seul chemin (`PlayerBackPolicy`) pour Retour et le retour Android, sauvegarde puis un seul `popBackStack` gardé par `PlayerExitNavigation.shouldPop`.
+- Media3 : libération unique dans `DisposableEffect(player)` (fermeture ou changement de chaîne/épisode, log `release reason=dispose`), `PlayerView.player = null` à la libération de la vue, commandes à jeton non rejouées sur un nouveau lecteur (`PlayerCommandGate`), reprise au premier plan seulement si la lecture tournait (`PlayerResumePolicy`), callbacks via `rememberUpdatedState`.
+- Contrôles : insets `safeDrawing`, titre sur une ligne avec ellipse, actions icône seule sous 600 dp (description accessible), rangée défilante au lieu d'un retour à la ligne, temps écoulé/durée, bouton « Suivant » retiré pour les films (aucune cible), Retour disponible pendant la mise en mémoire, erreurs empilées en portrait. Plein écran réel (barres masquées + paysage capteur, restauration à la sortie) et mode d'image Ajuster/Remplir (`RESIZE_MODE_FIT`/`ZOOM`, jamais d'étirement). Pas sur TV.
+- Pistes : sélection par identifiant Media3 (`TrackSelectionOverride`), y compris pistes sans langue.
+- HEVC : repli décodeur Media3 activé ; `DecoderDiagnosis` (mime, codec, émulateur) dans le log `failure` et message FR distinguant limite d'émulateur et appareil.
+- Jank : position publiée 1×/s seulement en lecture ; synchronisation de progression toujours limitée à 15 s (et une fois à la fin).
+- Non vérifié : comportement sur Pixel 7, téléphone réel, TV et fournisseur.
 
 **Xtream fournisseur réel — problème ouvert**
 - Même abonnement déclaré fonctionnel en M3U **et Xtream** sur IPTV Smarters Pro, ainsi que Zen IPTV et SET IPTV.
@@ -195,7 +204,8 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 **P0 — indispensable avant toute déclaration d'application opérationnelle**
 - Corrigé dans le code par #207, à recetter sur Pixel 7 : ouverture du lecteur au tap sur une chaîne, boutons Lire VOD et épisode, faux « hors connexion ».
 - Corrigé dans le code par #208, à recetter sur Pixel 7 : `blocked reason=missingsource` (cache hérité sans URL), en-têtes d'accès M3U, redémarrage sans perte des sources.
-- Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, erreurs et retour (Logcat `tag:ZyvioPlayback`).
+- Corrigé dans le code par #209, à recetter sur Pixel 7 : Retour du lecteur, libération Media3, contrôles portrait/paysage, plein écran, proportions, pistes, message HEVC émulateur.
+- Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, HEVC sur appareil physique, erreurs et retour (Logcat `tag:ZyvioPlayback`).
 
 **P1 — fiabilité/sécurité**
 - `player_devices` HTTP 403 Supabase, audit grants/RLS/exposition ciblée ; pas de correction prod non approuvée.
@@ -224,7 +234,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 ## 13. Première tâche au prochain lancement de Claude Code
 
 1. Lire ce fichier puis vérifier que les chemins et l'architecture correspondent au `main` actuel.
-2. Vérifier sur GitHub l'état de la PR du bloc #208 (sources M3U) et le résultat de la recette Pixel 7 rapportée par l'utilisateur (lignes `ZyvioCatalog catalog_cache_sources` et `ZyvioPlayback`) avant d'ouvrir un nouveau bloc.
+2. Vérifier sur GitHub l'état de la PR de la phase #209 (lecteur Android) et le résultat de la recette Pixel 7 rapportée par l'utilisateur (Retour, plein écran, rotation, pistes, lignes `ZyvioPlayback`) avant d'ouvrir un nouveau bloc.
 3. Prochains candidats : `player_devices` 403 (audit sans modification prod), Xtream HTTP 512, lenteur du cache à froid et jank, classification M3U.
 4. **Ne pas commencer** par changer la base Supabase de production, ajouter un `largeHeap`, inventer des streams, réécrire les maquettes ou prétendre tester le fournisseur depuis CI.
 
