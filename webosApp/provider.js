@@ -322,12 +322,16 @@
   }
 
   const m3uCache = new Map();
+  const M3U_CACHE_TTL_MS = 5 * 60 * 1000;
+  const M3U_CACHE_MAX_ENTRIES = 3;
 
   async function loadM3u(config) {
     const url = String(config.url || "").trim();
     assertHttpsOrHttp(url);
 
-    if (m3uCache.has(url)) return m3uCache.get(url);
+    const cached = m3uCache.get(url);
+    if (cached && Date.now() - cached.createdAt < M3U_CACHE_TTL_MS) return cached.promise;
+    m3uCache.delete(url);
 
     const promise = (async () => {
       try {
@@ -343,7 +347,10 @@
       }
     })();
 
-    m3uCache.set(url, promise);
+    m3uCache.set(url, { promise, createdAt: Date.now() });
+    while (m3uCache.size > M3U_CACHE_MAX_ENTRIES) {
+      m3uCache.delete(m3uCache.keys().next().value);
+    }
     try {
       return await promise;
     } catch (error) {
