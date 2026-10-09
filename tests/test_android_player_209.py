@@ -21,7 +21,7 @@ class AndroidPlayer209Test(unittest.TestCase):
         host = read(PLAYER / "PlayerHost.kt")
         self.assertIn("BackHandler(onBack = handleBack)", host)
         self.assertIn("onBack = handleBack,", host)
-        self.assertIn("PlayerBackPolicy.onBack(panel)", host)
+        self.assertIn("PlayerBackPolicy.onBack(panel, immersive)", host)
         # Progress is saved before leaving, whichever back is used.
         exit_branch = host.split("PlayerBackAction.ExitPlayer ->", 1)[1].split("}", 1)[0]
         self.assertLess(exit_branch.index("onPlaybackExit"), exit_branch.index("onBack()"))
@@ -82,7 +82,7 @@ class AndroidPlayer209Test(unittest.TestCase):
     def test_fullscreen_restores_the_window(self):
         fullscreen = read(PLAYER / "PlayerFullscreen.kt")
         self.assertIn("controller.show(WindowInsetsCompat.Type.systemBars())", fullscreen)
-        self.assertIn("activity.requestedOrientation = previousOrientation", fullscreen)
+        self.assertIn("activity.requestedOrientation = openingOrientation", fullscreen)
 
     def test_no_stream_url_in_player_logs(self):
         for name in ("NativeVideoPlayer.kt", "PlayerHost.kt", "PlayerScreen.kt", "PlayerFullscreen.kt", "PlayerLifecycle.kt"):

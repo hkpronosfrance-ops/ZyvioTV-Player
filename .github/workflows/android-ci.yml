@@ -49,6 +49,8 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_android_playback_sources_208.py' -v
       - name: Android player navigation and lifecycle contracts (#209)
         run: python3 -m unittest discover -s tests -p 'test_android_player_209.py' -v
+      - name: Android player full screen contracts (#210)
+        run: python3 -m unittest discover -s tests -p 'test_android_player_fullscreen_210.py' -v
 
       - name: Shared and Android unit tests
         run: gradle testDebugUnitTest --stacktrace

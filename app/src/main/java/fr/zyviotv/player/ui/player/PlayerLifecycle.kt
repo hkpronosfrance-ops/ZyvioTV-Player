@@ -13,14 +13,17 @@ enum class PlayerBackAction {
     /** A channel number is being typed: cancel it. */
     CancelChannelNumber,
 
+    /** Full screen is on: leave it first, stay in the player (#210). */
+    ExitFullscreen,
+
     /** Leave the player: save progress, release Media3, pop the route once. */
     ExitPlayer,
 }
 
 object PlayerBackPolicy {
     /** The top-left button and the Android system back share this decision. */
-    fun onBack(panel: PlayerPanel): PlayerBackAction = when (panel) {
-        PlayerPanel.None -> PlayerBackAction.ExitPlayer
+    fun onBack(panel: PlayerPanel, immersive: Boolean = false): PlayerBackAction = when (panel) {
+        PlayerPanel.None -> if (immersive) PlayerBackAction.ExitFullscreen else PlayerBackAction.ExitPlayer
         PlayerPanel.ChannelNumber -> PlayerBackAction.CancelChannelNumber
         PlayerPanel.Tracks,
         PlayerPanel.Resume,
@@ -96,4 +99,58 @@ enum class PlayerScaleMode {
     ;
 
     fun toggled(): PlayerScaleMode = if (this == Fit) Zoom else Fit
+}
+
+/** Orientation the player asks the activity for (#210). */
+enum class PlayerOrientationRequest {
+    /** Whatever the activity had before the player opened (sensor/user setting). */
+    FollowDevice,
+
+    /** Full screen entered with the button: landscape, either way up. */
+    Landscape,
+
+    /** Full screen left while the phone was sideways: back to portrait. */
+    Portrait,
+}
+
+/** Window state of the player, kept across rotation. */
+data class PlayerWindowState(
+    val userFullscreen: Boolean = false,
+    val orientation: PlayerOrientationRequest = PlayerOrientationRequest.FollowDevice,
+)
+
+/**
+ * Full screen on phones and tablets (#210). One rule for the button, the
+ * rotation of the phone and Back:
+ * - the button enters full screen (bars hidden, landscape);
+ * - a phone turned sideways is full screen too, like any video player;
+ * - leaving full screen while sideways asks for portrait, so the button
+ *   always has a visible effect;
+ * - TV keeps its own window and is never changed.
+ */
+object PlayerFullscreenPolicy {
+    fun isImmersive(
+        state: PlayerWindowState,
+        isTelevision: Boolean,
+        isCompactDevice: Boolean,
+        isLandscape: Boolean,
+    ): Boolean = !isTelevision &&
+        (state.userFullscreen || (isCompactDevice && isLandscape && state.orientation != PlayerOrientationRequest.Portrait))
+
+    fun toggle(
+        state: PlayerWindowState,
+        isTelevision: Boolean,
+        isCompactDevice: Boolean,
+        isLandscape: Boolean,
+    ): PlayerWindowState = when {
+        isTelevision -> state
+        isImmersive(state, isTelevision, isCompactDevice, isLandscape) -> PlayerWindowState(
+            userFullscreen = false,
+            orientation = if (isLandscape) PlayerOrientationRequest.Portrait else PlayerOrientationRequest.FollowDevice,
+        )
+        else -> PlayerWindowState(
+            userFullscreen = true,
+            orientation = PlayerOrientationRequest.Landscape,
+        )
+    }
 }

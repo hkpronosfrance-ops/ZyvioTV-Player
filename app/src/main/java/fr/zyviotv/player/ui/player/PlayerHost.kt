@@ -1,5 +1,6 @@
 package fr.zyviotv.player.ui.player
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -11,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import fr.zyviotv.player.data.settings.OnboardingSetupPreferences
 import fr.zyviotv.player.data.settings.PlayerPreferences
@@ -118,7 +120,8 @@ fun PlayerHost(
     var selectedAudioTrackId by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
     var selectedSubtitleTrackId by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
     // Kept across channels/episodes and rotation; reset when the player closes.
-    var fullscreen by rememberSaveable { mutableStateOf(false) }
+    var fullscreenRequested by rememberSaveable { mutableStateOf(false) }
+    var orientationRequest by rememberSaveable { mutableStateOf(PlayerOrientationRequest.FollowDevice) }
     var scaleMode by rememberSaveable { mutableStateOf(PlayerScaleMode.Fit) }
     var subtitlesEnabled by remember(effectiveRequest.streamUrl) {
         mutableStateOf(initialSubtitlesEnabled)
@@ -150,11 +153,28 @@ fun PlayerHost(
         }
     }
 
-    PlayerFullscreenEffect(enabled = fullscreen && profile != DeviceProfile.Television)
+    // Phone vs tablet from the smallest width: a Pixel 7 turned sideways is
+    // more than 600 dp wide and resolves to the Tablet profile, but it is
+    // still a phone.
+    val configuration = LocalConfiguration.current
+    val isTelevision = profile == DeviceProfile.Television
+    val isCompactDevice = configuration.smallestScreenWidthDp < COMPACT_DEVICE_MAX_SMALLEST_WIDTH_DP
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val windowState = PlayerWindowState(fullscreenRequested, orientationRequest)
+    val immersive = PlayerFullscreenPolicy.isImmersive(windowState, isTelevision, isCompactDevice, isLandscape)
+    val toggleFullscreen: () -> Unit = {
+        val next = PlayerFullscreenPolicy.toggle(windowState, isTelevision, isCompactDevice, isLandscape)
+        fullscreenRequested = next.userFullscreen
+        orientationRequest = next.orientation
+    }
+    if (!isTelevision) {
+        PlayerWindowEffect(immersive = immersive, orientation = orientationRequest)
+    }
 
     // The on-screen Retour and the Android back gesture/button take the same path.
     val handleBack: () -> Unit = {
-        when (PlayerBackPolicy.onBack(panel)) {
+        when (PlayerBackPolicy.onBack(panel, immersive)) {
+            PlayerBackAction.ExitFullscreen -> toggleFullscreen()
             PlayerBackAction.ExitPlayer -> {
                 onPlaybackExit(positionMs, durationMs)
                 onBack()
@@ -203,7 +223,7 @@ fun PlayerHost(
         subtitlesEnabled = subtitlesEnabled,
         errorMessage = errorMessage,
         channelNumberInput = channelDigits.takeIf { it.isNotBlank() },
-        isFullscreen = fullscreen,
+        isFullscreen = immersive,
         scaleMode = scaleMode,
     )
 
@@ -281,7 +301,7 @@ fun PlayerHost(
                 panel = PlayerPanel.ChannelNumber
             }
         },
-        onToggleFullscreen = { fullscreen = !fullscreen },
+        onToggleFullscreen = toggleFullscreen,
         onToggleScaleMode = { scaleMode = scaleMode.toggled() },
         videoContent = {
             NativeVideoPlayer(
@@ -322,3 +342,4 @@ private const val RESUME_BACKOFF_MS = 5_000L
 private const val RESUME_PROMPT_MIN_MS = 30_000L
 private const val CHANNEL_NUMBER_CONFIRM_DELAY_MS = 1_500L
 private const val MAX_CHANNEL_DIGITS = 4
+private const val COMPACT_DEVICE_MAX_SMALLEST_WIDTH_DP = 600

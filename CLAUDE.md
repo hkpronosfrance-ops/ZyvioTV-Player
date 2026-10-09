@@ -1,7 +1,7 @@
 # ZYVIOTV Player — Instructions permanentes pour Claude Code
 
 > Référence du projet depuis sa création. À lire AVANT toute analyse, modification, PR ou fusion.
-> État de référence documentaire : 9 octobre 2026, `main` après PR #208 : `c867b0292a5ee150bbb24eafb6ad86eceb642c26` (phase #209 en cours, voir §8).
+> État de référence documentaire : 9 octobre 2026, `main` après PR #209 : `8d4b96f295c6d5f54afa63d29ebac2c37735193c` (PR #210 en cours, voir §8).
 > Ce document décrit la vision, les décisions immuables, les réalisations observées et les anomalies connues. **Il ne constitue pas une attestation que chaque fonctionnalité est opérationnelle.**
 
 ## 0. Règles de travail non négociables
@@ -164,14 +164,28 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Paramètres d'accès : en-têtes M3U `url|User-Agent=…&Referer=…` (Kodi) et `#EXTVLCOPT:http-user-agent/http-referrer` conservés dans la ligne de flux (`PlaybackSource`), transmis à Media3 comme en-têtes HTTP (liste blanche User-Agent/Referer/Origin, jamais journalisés) ; requêtes/jetons d'URL inchangés.
 - Recette Pixel 7 rapportée par l'utilisateur après fusion : lecture TV et Films via M3U confirmée ; épisodes démarrent mais erreur décodeur HEVC sur l'émulateur.
 
-**Phase #209 — Fiabilisation du lecteur Android** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état de la PR)
+**Phase #209 — Fiabilisation du lecteur Android** (PR #209 fusionnée, `main` = `8d4b96f295c6d5f54afa63d29ebac2c37735193c`)
 - Retour : le bouton haut du lecteur était dessiné sous la barre d'état (app edge-to-edge, aucun inset) et la sortie remettait `playbackRequest` à null, ce qui recomposait l'entrée sortante dans sa branche « sans requête » et dépilait une seconde fois ; le retour système n'avait pas de `BackHandler` et ne sauvegardait pas la progression. Désormais : un seul chemin (`PlayerBackPolicy`) pour Retour et le retour Android, sauvegarde puis un seul `popBackStack` gardé par `PlayerExitNavigation.shouldPop`.
 - Media3 : libération unique dans `DisposableEffect(player)` (fermeture ou changement de chaîne/épisode, log `release reason=dispose`), `PlayerView.player = null` à la libération de la vue, commandes à jeton non rejouées sur un nouveau lecteur (`PlayerCommandGate`), reprise au premier plan seulement si la lecture tournait (`PlayerResumePolicy`), callbacks via `rememberUpdatedState`.
 - Contrôles : insets `safeDrawing`, titre sur une ligne avec ellipse, actions icône seule sous 600 dp (description accessible), rangée défilante au lieu d'un retour à la ligne, temps écoulé/durée, bouton « Suivant » retiré pour les films (aucune cible), Retour disponible pendant la mise en mémoire, erreurs empilées en portrait. Plein écran réel (barres masquées + paysage capteur, restauration à la sortie) et mode d'image Ajuster/Remplir (`RESIZE_MODE_FIT`/`ZOOM`, jamais d'étirement). Pas sur TV.
 - Pistes : sélection par identifiant Media3 (`TrackSelectionOverride`), y compris pistes sans langue.
 - HEVC : repli décodeur Media3 activé ; `DecoderDiagnosis` (mime, codec, émulateur) dans le log `failure` et message FR distinguant limite d'émulateur et appareil.
 - Jank : position publiée 1×/s seulement en lecture ; synchronisation de progression toujours limitée à 15 s (et une fois à la fin).
-- Non vérifié : comportement sur Pixel 7, téléphone réel, TV et fournisseur.
+- Recette Pixel 7 rapportée après fusion : Retour du lecteur et retour Android validés, `release reason=dispose` observé, cache chiffré retrouvé avec toutes les sources ; **bouton plein écran invisible** (corrigé par #210).
+
+**PR #210 — Plein écran, orientation et arrêt Media3** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état de la PR)
+- Cause racine du plein écran invisible : la route lecteur n'a aucune `Surface` au-dessus d'elle (NavHost directement sous `MaterialTheme`), donc `LocalContentColor` valait le noir par défaut de Compose. Le bouton plein écran (et Ajuster/Remplir) était un `IconButton` sans teinte : icône noire sur fond noir, présente et cliquable mais invisible. Les boutons visibles (Retour, actions du bas) avaient une couleur explicite.
+- Correctif : `PlayerScreen` fournit `LocalContentColor = ZyvioTextPrimary` ; bouton Plein écran (icône agrandir/réduire, teinte explicite, cible 48 dp) fixe à droite de la rangée du bas, hors défilement, pour Live, Films et Épisodes ; Ajuster/Remplir en haut à droite.
+- Plein écran (`PlayerFullscreenPolicy`, téléphone/tablette, jamais TV) : le bouton masque les barres et demande le paysage capteur ; un téléphone tourné en paysage est aussi en plein écran ; quitter en paysage demande le portrait ; Retour quitte d'abord le plein écran puis le lecteur ; l'orientation d'origine et les barres sont restaurées à la sortie du lecteur. Téléphone détecté par `smallestScreenWidthDp < 600` (un Pixel 7 en paysage passe au profil Tablet). La rotation ne recrée pas l'activité (`configChanges`), donc le flux n'est pas relancé.
+- Media3 / MediaCodec : la surface `PlayerView` est détachée avant l'unique `release()`. Les avertissements `Handler sending message to a Handler on a dead thread` (LegacyMessageQueue / MediaCodec, `c2.goldfish.*`) surviennent après `ExoPlayerImpl Release` : rappels tardifs du codec de l'émulateur vers le thread de lecture déjà arrêté, journalisés par le framework. Aucune double libération ni rappel applicatif trouvé dans le code ; à recontrôler sur appareil réel.
+- Non vérifié : Pixel 7, téléphone réel, tablette, TV.
+
+**Mesures Pixel 7 à traiter dans la phase Performance (rapportées le 09/10/2026, après #209)**
+- Lecture du cache chiffré **46 971 ms** ; sources `playable=true` ; chaînes 6 074/6 074, films 12 607/12 607, épisodes 117 989/117 989.
+- Téléchargement M3U 27 401 ms, parsing 65 313 ms, sauvegarde du catalogue 45 611 ms.
+- GC très fréquents, `Skipped 297 frames`, plusieurs `Davey` > 2 s dont un > 5 s.
+- Resynchronisation complète du catalogue peu après le chargement d'un cache exploitable : à auditer.
+- Supabase `player_devices` HTTP 403 (inchangé).
 
 **Xtream fournisseur réel — problème ouvert**
 - Même abonnement déclaré fonctionnel en M3U **et Xtream** sur IPTV Smarters Pro, ainsi que Zen IPTV et SET IPTV.
@@ -204,13 +218,14 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 **P0 — indispensable avant toute déclaration d'application opérationnelle**
 - Corrigé dans le code par #207, à recetter sur Pixel 7 : ouverture du lecteur au tap sur une chaîne, boutons Lire VOD et épisode, faux « hors connexion ».
 - Corrigé dans le code par #208, à recetter sur Pixel 7 : `blocked reason=missingsource` (cache hérité sans URL), en-têtes d'accès M3U, redémarrage sans perte des sources.
-- Corrigé dans le code par #209, à recetter sur Pixel 7 : Retour du lecteur, libération Media3, contrôles portrait/paysage, plein écran, proportions, pistes, message HEVC émulateur.
+- #209 validé sur Pixel 7 pour Retour/retour Android et libération Media3 ; à recetter : pistes, message HEVC émulateur.
+- Corrigé dans le code par #210, à recetter sur Pixel 7 : bouton Plein écran visible, paysage/portrait, Retour depuis le plein écran, Ajuster/Remplir.
 - Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, HEVC sur appareil physique, erreurs et retour (Logcat `tag:ZyvioPlayback`).
 
 **P1 — fiabilité/sécurité**
 - `player_devices` HTTP 403 Supabase, audit grants/RLS/exposition ciblée ; pas de correction prod non approuvée.
 - Xtream réel HTTP 512 encore non résolu/non retesté sur #205+ ; ne pas supposer que l'URL ou le fournisseur est mauvais.
-- Cache persistant restauré mais lenteur à froid (11–24 s) et doubles chargements observés ; UI encore saccadée. Mesurer, profiler, corriger si nécessaire sans régresser.
+- Performance : cache chiffré 47 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s, resynchronisation après cache valide (voir mesures §8). Phase dédiée.
 - Classification M3U à vérifier, notamment chaînes sport apparaissant comme séries ; distinguer source/mapping et alias.
 
 **P2 — UX et parité**
@@ -234,8 +249,8 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 ## 13. Première tâche au prochain lancement de Claude Code
 
 1. Lire ce fichier puis vérifier que les chemins et l'architecture correspondent au `main` actuel.
-2. Vérifier sur GitHub l'état de la PR de la phase #209 (lecteur Android) et le résultat de la recette Pixel 7 rapportée par l'utilisateur (Retour, plein écran, rotation, pistes, lignes `ZyvioPlayback`) avant d'ouvrir un nouveau bloc.
-3. Prochains candidats : `player_devices` 403 (audit sans modification prod), Xtream HTTP 512, lenteur du cache à froid et jank, classification M3U.
+2. Vérifier sur GitHub l'état de la PR #210 (plein écran) et le résultat de la recette Pixel 7 rapportée par l'utilisateur (bouton Plein écran, paysage/portrait, Retour, lignes `ZyvioPlayback`) avant d'ouvrir un nouveau bloc.
+3. Prochains candidats : phase Performance (cache 47 s, parsing, GC, frames, resynchronisation), `player_devices` 403 (audit sans modification prod), Xtream HTTP 512, classification M3U.
 4. **Ne pas commencer** par changer la base Supabase de production, ajouter un `largeHeap`, inventer des streams, réécrire les maquettes ou prétendre tester le fournisseur depuis CI.
 
 ---

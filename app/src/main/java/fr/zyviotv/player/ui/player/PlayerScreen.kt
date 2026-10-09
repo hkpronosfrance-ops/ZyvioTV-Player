@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -46,11 +47,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,6 +80,7 @@ import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
 import fr.zyviotv.player.ui.theme.ZyvioSurface2
+import fr.zyviotv.player.ui.theme.ZyvioTextPrimary
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
 import kotlinx.coroutines.delay
@@ -168,190 +172,195 @@ fun PlayerScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .onPreviewKeyEvent { keyEvent ->
-                if (
-                    profile != DeviceProfile.Television ||
-                    keyEvent.type != KeyEventType.KeyDown
-                ) {
-                    false
-                } else {
-                    when (val keyCode = keyEvent.key.keyCode.toInt()) {
-                        AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                        AndroidKeyEvent.KEYCODE_ENTER,
-                        -> {
-                            if (!controlsVisible && state.panel == PlayerPanel.None) {
+    // The player route has no Surface above it, so LocalContentColor was the
+    // Compose default (black): every icon and text without an explicit
+    // colour, including the full screen button, was black on black (#210).
+    CompositionLocalProvider(LocalContentColor provides ZyvioTextPrimary) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .onPreviewKeyEvent { keyEvent ->
+                    if (
+                        profile != DeviceProfile.Television ||
+                        keyEvent.type != KeyEventType.KeyDown
+                    ) {
+                        false
+                    } else {
+                        when (val keyCode = keyEvent.key.keyCode.toInt()) {
+                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                            AndroidKeyEvent.KEYCODE_ENTER,
+                            -> {
+                                if (!controlsVisible && state.panel == PlayerPanel.None) {
+                                    controlsVisible = true
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+
+                            AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                onTogglePlayPause()
                                 controlsVisible = true
                                 true
-                            } else {
-                                false
                             }
-                        }
 
-                        AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                            onTogglePlayPause()
-                            controlsVisible = true
-                            true
-                        }
-
-                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                            if (state.metadata.kind != PlaybackKind.Live && state.panel == PlayerPanel.None) {
-                                onSeekBack()
-                                controlsVisible = true
-                                true
-                            } else {
-                                false
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                                if (state.metadata.kind != PlaybackKind.Live && state.panel == PlayerPanel.None) {
+                                    onSeekBack()
+                                    controlsVisible = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
-                        }
 
-                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            if (state.metadata.kind != PlaybackKind.Live && state.panel == PlayerPanel.None) {
-                                onSeekForward()
-                                controlsVisible = true
-                                true
-                            } else {
-                                false
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                if (state.metadata.kind != PlaybackKind.Live && state.panel == PlayerPanel.None) {
+                                    onSeekForward()
+                                    controlsVisible = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
-                        }
 
-                        AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                            if (
-                                state.metadata.kind == PlaybackKind.Live &&
-                                !controlsVisible &&
-                                state.panel == PlayerPanel.None
-                            ) {
-                                onChannelUp()
-                                true
-                            } else {
-                                false
+                            AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                                if (
+                                    state.metadata.kind == PlaybackKind.Live &&
+                                    !controlsVisible &&
+                                    state.panel == PlayerPanel.None
+                                ) {
+                                    onChannelUp()
+                                    true
+                                } else {
+                                    false
+                                }
                             }
-                        }
 
-                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                            if (
-                                state.metadata.kind == PlaybackKind.Live &&
-                                !controlsVisible &&
-                                state.panel == PlayerPanel.None
-                            ) {
-                                onChannelDown()
-                                true
-                            } else {
-                                false
+                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                if (
+                                    state.metadata.kind == PlaybackKind.Live &&
+                                    !controlsVisible &&
+                                    state.panel == PlayerPanel.None
+                                ) {
+                                    onChannelDown()
+                                    true
+                                } else {
+                                    false
+                                }
                             }
-                        }
 
-                        AndroidKeyEvent.KEYCODE_CHANNEL_UP -> {
-                            if (state.metadata.kind == PlaybackKind.Live) {
-                                onChannelUp()
-                                controlsVisible = true
-                                true
-                            } else {
-                                false
+                            AndroidKeyEvent.KEYCODE_CHANNEL_UP -> {
+                                if (state.metadata.kind == PlaybackKind.Live) {
+                                    onChannelUp()
+                                    controlsVisible = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
-                        }
 
-                        AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                            if (state.metadata.kind == PlaybackKind.Live) {
-                                onChannelDown()
-                                controlsVisible = true
-                                true
-                            } else {
-                                false
+                            AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                                if (state.metadata.kind == PlaybackKind.Live) {
+                                    onChannelDown()
+                                    controlsVisible = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
-                        }
 
-                        else -> {
-                            val digit = keyCodeToDigit(keyCode)
-                            if (digit != null && state.metadata.kind == PlaybackKind.Live) {
-                                onChannelDigit(digit)
-                                controlsVisible = true
-                                true
-                            } else {
-                                false
+                            else -> {
+                                val digit = keyCodeToDigit(keyCode)
+                                if (digit != null && state.metadata.kind == PlaybackKind.Live) {
+                                    onChannelDigit(digit)
+                                    controlsVisible = true
+                                    true
+                                } else {
+                                    false
+                                }
                             }
                         }
                     }
                 }
-            }
-            .clickable {
-                if (state.panel == PlayerPanel.None && state.playbackState != PlaybackState.Error) {
-                    controlsVisible = !controlsVisible
-                }
-            },
-    ) {
-        videoContent()
-
-        when {
-            state.unavailable -> UnavailableOverlay(
-                profile = profile,
-                title = state.metadata.title,
-                onBack = onBack,
-            )
-
-            state.playbackState == PlaybackState.Error -> ErrorOverlay(
-                profile = profile,
-                message = state.errorMessage ?: "Flux indisponible",
-                nextLabel = when (state.metadata.kind) {
-                    PlaybackKind.Live -> "Chaîne suivante"
-                    PlaybackKind.Episode -> "Épisode suivant"
-                    PlaybackKind.Movie -> null
+                .clickable {
+                    if (state.panel == PlayerPanel.None && state.playbackState != PlaybackState.Error) {
+                        controlsVisible = !controlsVisible
+                    }
                 },
-                onRetry = onRetry,
-                onNext = onNext,
-                onBack = onBack,
-            )
+        ) {
+            videoContent()
 
-            state.playbackState == PlaybackState.Buffering -> BufferingOverlay(
-                profile = profile,
-                title = state.metadata.title,
-                onBack = onBack,
-            )
+            when {
+                state.unavailable -> UnavailableOverlay(
+                    profile = profile,
+                    title = state.metadata.title,
+                    onBack = onBack,
+                )
 
-            else -> {
-                if (controlsVisible || blocking) {
-                    PlayerControlsOverlay(
-                        profile = profile,
-                        state = state,
-                        onBack = onBack,
-                        onTogglePlayPause = onTogglePlayPause,
-                        onSeekBack = onSeekBack,
-                        onSeekForward = onSeekForward,
-                        onNext = onNext,
-                        onOpenTracks = onOpenTracks,
-                        onOpenGuide = onOpenGuide,
-                        onToggleFavorite = onToggleFavorite,
-                        onToggleFullscreen = onToggleFullscreen,
-                        onToggleScaleMode = onToggleScaleMode,
-                    )
+                state.playbackState == PlaybackState.Error -> ErrorOverlay(
+                    profile = profile,
+                    message = state.errorMessage ?: "Flux indisponible",
+                    nextLabel = when (state.metadata.kind) {
+                        PlaybackKind.Live -> "Chaîne suivante"
+                        PlaybackKind.Episode -> "Épisode suivant"
+                        PlaybackKind.Movie -> null
+                    },
+                    onRetry = onRetry,
+                    onNext = onNext,
+                    onBack = onBack,
+                )
+
+                state.playbackState == PlaybackState.Buffering -> BufferingOverlay(
+                    profile = profile,
+                    title = state.metadata.title,
+                    onBack = onBack,
+                )
+
+                else -> {
+                    if (controlsVisible || blocking) {
+                        PlayerControlsOverlay(
+                            profile = profile,
+                            state = state,
+                            onBack = onBack,
+                            onTogglePlayPause = onTogglePlayPause,
+                            onSeekBack = onSeekBack,
+                            onSeekForward = onSeekForward,
+                            onNext = onNext,
+                            onOpenTracks = onOpenTracks,
+                            onOpenGuide = onOpenGuide,
+                            onToggleFavorite = onToggleFavorite,
+                            onToggleFullscreen = onToggleFullscreen,
+                            onToggleScaleMode = onToggleScaleMode,
+                        )
+                    }
                 }
             }
-        }
 
-        when (state.panel) {
-            PlayerPanel.Tracks -> TracksPanel(
-                profile = profile,
-                audioTracks = state.audioTracks,
-                subtitleTracks = state.subtitleTracks,
-                subtitlesEnabled = state.subtitlesEnabled,
-                onSelectAudioTrack = onSelectAudioTrack,
-                onSelectSubtitleTrack = onSelectSubtitleTrack,
-                onDisableSubtitles = onDisableSubtitles,
-            )
-            PlayerPanel.Resume -> ResumePanel(
-                profile = profile,
-                title = state.metadata.title,
-                timeline = state.timeline,
-                onRestartFromBeginning = onRestartFromBeginning,
-                onResumePlayback = onResumePlayback,
-            )
-            PlayerPanel.ChannelNumber -> ChannelNumberPanel(
-                profile = profile,
-                input = state.channelNumberInput.orEmpty(),
-            )
-            PlayerPanel.None -> Unit
+            when (state.panel) {
+                PlayerPanel.Tracks -> TracksPanel(
+                    profile = profile,
+                    audioTracks = state.audioTracks,
+                    subtitleTracks = state.subtitleTracks,
+                    subtitlesEnabled = state.subtitlesEnabled,
+                    onSelectAudioTrack = onSelectAudioTrack,
+                    onSelectSubtitleTrack = onSelectSubtitleTrack,
+                    onDisableSubtitles = onDisableSubtitles,
+                )
+                PlayerPanel.Resume -> ResumePanel(
+                    profile = profile,
+                    title = state.metadata.title,
+                    timeline = state.timeline,
+                    onRestartFromBeginning = onRestartFromBeginning,
+                    onResumePlayback = onResumePlayback,
+                )
+                PlayerPanel.ChannelNumber -> ChannelNumberPanel(
+                    profile = profile,
+                    input = state.channelNumberInput.orEmpty(),
+                )
+                PlayerPanel.None -> Unit
+            }
         }
     }
 }
@@ -477,22 +486,9 @@ private fun PlayerControlsOverlay(
                         contentDescription = if (state.scaleMode == PlayerScaleMode.Fit) {
                             "Remplir l'écran"
                         } else {
-                            "Afficher l'image entière"
+                            "Ajuster à l'écran"
                         },
-                    )
-                }
-                IconButton(onClick = onToggleFullscreen) {
-                    Icon(
-                        imageVector = if (state.isFullscreen) {
-                            Icons.Default.FullscreenExit
-                        } else {
-                            Icons.Default.Fullscreen
-                        },
-                        contentDescription = if (state.isFullscreen) {
-                            "Quitter le plein écran"
-                        } else {
-                            "Plein écran"
-                        },
+                        tint = ZyvioTextPrimary,
                     )
                 }
             }
@@ -564,57 +560,72 @@ private fun PlayerControlsOverlay(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // One line in every orientation: icon-only on narrow phones,
-            // scrollable rather than wrapped when labels do not fit.
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PlayerAction(
-                    profile = profile,
-                    icon = Icons.Default.Audiotrack,
-                    label = state.audioLabel ?: "Audio",
-                    description = "Pistes audio",
-                    iconOnly = layout.iconOnlyActions,
-                    onClick = onOpenTracks,
-                )
-                PlayerAction(
-                    profile = profile,
-                    icon = Icons.Default.Subtitles,
-                    label = state.subtitlesLabel ?: "Sous-titres",
-                    description = "Sous-titres",
-                    iconOnly = layout.iconOnlyActions,
-                    onClick = onOpenTracks,
-                )
+                // One line in every orientation: icon-only on narrow phones,
+                // scrollable rather than wrapped when labels do not fit. The full
+                // screen button sits outside the scroll so it is never pushed off.
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PlayerAction(
+                        profile = profile,
+                        icon = Icons.Default.Audiotrack,
+                        label = state.audioLabel ?: "Audio",
+                        description = "Pistes audio",
+                        iconOnly = layout.iconOnlyActions,
+                        onClick = onOpenTracks,
+                    )
+                    PlayerAction(
+                        profile = profile,
+                        icon = Icons.Default.Subtitles,
+                        label = state.subtitlesLabel ?: "Sous-titres",
+                        description = "Sous-titres",
+                        iconOnly = layout.iconOnlyActions,
+                        onClick = onOpenTracks,
+                    )
 
-                if (state.metadata.kind == PlaybackKind.Live) {
-                    PlayerAction(
-                        profile = profile,
-                        icon = Icons.Default.List,
-                        label = "Guide",
-                        description = "Guide des programmes",
-                        iconOnly = layout.iconOnlyActions,
-                        onClick = onOpenGuide,
-                    )
-                    PlayerAction(
-                        profile = profile,
-                        icon = Icons.Default.Favorite,
-                        label = "Favori",
-                        description = "Favori",
-                        active = state.metadata.isFavorite,
-                        iconOnly = layout.iconOnlyActions,
-                        onClick = onToggleFavorite,
-                    )
-                } else if (state.metadata.kind == PlaybackKind.Episode) {
-                    // Films have no "next" item: no silent button.
-                    PlayerAction(
-                        profile = profile,
-                        icon = Icons.Default.SkipNext,
-                        label = "Épisode suivant",
-                        description = "Épisode suivant",
-                        iconOnly = layout.iconOnlyActions,
-                        onClick = onNext,
+                    if (state.metadata.kind == PlaybackKind.Live) {
+                        PlayerAction(
+                            profile = profile,
+                            icon = Icons.Default.List,
+                            label = "Guide",
+                            description = "Guide des programmes",
+                            iconOnly = layout.iconOnlyActions,
+                            onClick = onOpenGuide,
+                        )
+                        PlayerAction(
+                            profile = profile,
+                            icon = Icons.Default.Favorite,
+                            label = "Favori",
+                            description = "Favori",
+                            active = state.metadata.isFavorite,
+                            iconOnly = layout.iconOnlyActions,
+                            onClick = onToggleFavorite,
+                        )
+                    } else if (state.metadata.kind == PlaybackKind.Episode) {
+                        // Films have no "next" item: no silent button.
+                        PlayerAction(
+                            profile = profile,
+                            icon = Icons.Default.SkipNext,
+                            label = "Épisode suivant",
+                            description = "Épisode suivant",
+                            iconOnly = layout.iconOnlyActions,
+                            onClick = onNext,
+                        )
+                    }
+                }
+                if (layout.showFullscreenToggle) {
+                    Spacer(Modifier.width(8.dp))
+                    FullscreenButton(
+                        isFullscreen = state.isFullscreen,
+                        onClick = onToggleFullscreen,
                     )
                 }
             }
@@ -642,6 +653,25 @@ private fun PlayerControlsOverlay(
     }
 }
 
+/** Classic expand/collapse icon, always white on the dark overlay. */
+@Composable
+private fun FullscreenButton(
+    isFullscreen: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        onClick = onClick,
+    ) {
+        Icon(
+            imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+            contentDescription = if (isFullscreen) "Quitter le plein écran" else "Plein écran",
+            tint = ZyvioTextPrimary,
+        )
+    }
+}
+
 @Composable
 private fun PlayerAction(
     profile: DeviceProfile,
@@ -653,7 +683,9 @@ private fun PlayerAction(
     onClick: () -> Unit,
 ) {
     OutlinedButton(
-        modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
+        modifier = Modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
         contentPadding = if (iconOnly) PaddingValues(horizontal = 12.dp, vertical = 8.dp) else ButtonDefaults.ContentPadding,
         onClick = onClick,
     ) {
