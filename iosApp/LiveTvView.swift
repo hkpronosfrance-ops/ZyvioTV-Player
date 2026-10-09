@@ -86,7 +86,7 @@ struct LiveTvView: View {
 
     private var categoryBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack {
+            LazyHStack(spacing: ZyvioDesign.Space.s2) {
                 Button((Locale.current.language.languageCode?.identifier == "fr" ? "Toutes" : "All")) {
                     selectedCategory = nil
                     selectedId = channels.first?.id
@@ -130,8 +130,8 @@ struct LiveTvView: View {
                         Spacer()
                     }
                     .padding(12)
-                    .background(Color.white.opacity(selected?.id == channel.id ? 0.10 : 0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .background(selected?.id == channel.id ? ZyvioDesign.Palette.brand.opacity(0.20) : ZyvioDesign.Palette.surface1)
+                    .clipShape(RoundedRectangle(cornerRadius: ZyvioDesign.Radius.lg))
                 }
                 .buttonStyle(.plain)
             }
@@ -146,7 +146,7 @@ struct LiveTvView: View {
                     RoundedRectangle(cornerRadius: 22)
                         .fill(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.1), .black],
+                                colors: [ZyvioDesign.Palette.brand.opacity(0.30), ZyvioDesign.Palette.surface1],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -322,7 +322,7 @@ private struct GuideList: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: ZyvioDesign.Space.s3) {
                     ForEach(channels) { channel in
                         let programmes = guide[channel.id] ?? []
                         let current = current(programmes)
@@ -348,8 +348,8 @@ private struct GuideList: View {
                             }
                         }
                         .padding(14)
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .background(ZyvioDesign.Palette.surface1)
+                        .clipShape(RoundedRectangle(cornerRadius: ZyvioDesign.Radius.lg))
                     }
                 }
                 .padding(ZyvioDesign.Space.s4)
@@ -379,7 +379,9 @@ private struct GuideList: View {
         let threshold = current?.endEpochSeconds
             ?? Int64(Date().timeIntervalSince1970)
 
-        return programmes.first { $0.startEpochSeconds >= threshold }
+        return programmes
+            .filter { $0.startEpochSeconds >= threshold }
+            .min { $0.startEpochSeconds < $1.startEpochSeconds }
     }
 }
 

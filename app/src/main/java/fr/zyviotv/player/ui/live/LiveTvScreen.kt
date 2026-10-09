@@ -1,6 +1,7 @@
 package fr.zyviotv.player.ui.live
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -292,6 +293,12 @@ private fun LargeLiveLayout(
     isOffline: Boolean,
     onOpenGuide: () -> Unit,
 ) {
+    val availableWidth = LocalConfiguration.current.screenWidthDp.dp
+    val channelListWidth = if (isTelevision) {
+        (availableWidth * 0.32f).coerceAtMost(420.dp)
+    } else {
+        (availableWidth * 0.40f).coerceAtMost(330.dp)
+    }
     Column(Modifier.fillMaxSize()) {
         LiveHeader(onOpenGuide = onOpenGuide, isTelevision = isTelevision)
         Spacer(Modifier.height(14.dp))
@@ -304,7 +311,7 @@ private fun LargeLiveLayout(
         ) {
             Column(
                 modifier = Modifier
-                    .width(if (isTelevision) 390.dp else 330.dp)
+                    .width(channelListWidth)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState()),
             ) {
