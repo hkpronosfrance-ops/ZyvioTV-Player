@@ -588,7 +588,7 @@ private fun Hero(
     val heroHeight = when (profile) {
         DeviceProfile.Mobile -> 220.dp
         DeviceProfile.Tablet -> 260.dp
-        DeviceProfile.Television -> 330.dp
+        DeviceProfile.Television -> 390.dp
     }
 
     Box(
@@ -626,7 +626,11 @@ private fun Hero(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .fillMaxWidth(if (profile == DeviceProfile.Mobile) 0.94f else 0.78f)
-                .padding(if (profile == DeviceProfile.Mobile) ZyvioSpace.s4 else ZyvioSpace.s6),
+                .padding(when (profile) {
+                    DeviceProfile.Mobile -> ZyvioSpace.s4
+                    DeviceProfile.Tablet -> ZyvioSpace.s6
+                    DeviceProfile.Television -> ZyvioSpace.s12
+                }),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
@@ -914,7 +918,7 @@ private fun QuickActions(
     val cardWidth = when (profile) {
         DeviceProfile.Mobile -> 150.dp
         DeviceProfile.Tablet -> 176.dp
-        DeviceProfile.Television -> 190.dp
+        DeviceProfile.Television -> 220.dp
     }
     Row(
         modifier = Modifier
