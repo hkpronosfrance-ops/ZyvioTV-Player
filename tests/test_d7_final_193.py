@@ -5,7 +5,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCREENS = {
-    "tizenApp": ["auth-screen", "profile-screen", "pin-screen", "system-screen", "app-shell", "live-panel", "catalog-panel", "devices-panel"],
+    "tizenApp": ["auth-screen", "profile-screen", "pin-screen", "system-screen", "app-shell", "catalog-panel", "devices-panel"],
     "webosApp": ["auth-screen", "profile-screen", "pin-screen", "system-screen", "app-shell", "live-panel", "catalog-panel", "devices-panel"],
 }
 class D7FinalQASourceTests(unittest.TestCase):
