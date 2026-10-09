@@ -39,7 +39,7 @@ class ProfileRepository(
                 path = "/rest/v1/player_profiles?select=id,name,avatar_key,profile_type,max_age,is_primary&order=is_primary.desc,created_at.asc",
                 method = "GET",
             )
-            if (response.code !in 200..299) error("Impossible de charger les profils.")
+            if (response.code !in 200..299) error("PROFILE_LIST_HTTP_${response.code}")
 
             val array = JSONArray(response.body)
             buildList {
