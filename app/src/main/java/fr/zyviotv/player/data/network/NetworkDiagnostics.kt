@@ -63,6 +63,7 @@ internal object NetworkDiagnostics {
             "missing" in normalized && "authorization" in normalized -> "missing-authorization"
             "missing" in normalized && "credential" in normalized -> "missing-credentials"
             "permission denied" in normalized -> "permission-denied"
+            "timeout" in normalized || "timed out" in normalized -> "upstream-timeout"
             responseBody.isBlank() -> "empty"
             else -> "unclassified"
         }

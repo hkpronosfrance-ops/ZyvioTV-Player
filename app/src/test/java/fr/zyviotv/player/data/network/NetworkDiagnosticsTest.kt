@@ -40,6 +40,7 @@ class NetworkDiagnosticsTest {
         assertEquals("expired-jwt", NetworkDiagnostics.supabaseErrorKind("{\"message\":\"JWT expired\"}"))
         assertEquals("missing-credentials", NetworkDiagnostics.supabaseErrorKind("MISSING_CREDENTIALS"))
         assertEquals("permission-denied", NetworkDiagnostics.supabaseErrorKind("permission denied for table"))
+        assertEquals("upstream-timeout", NetworkDiagnostics.supabaseErrorKind("upstream timed out"))
         assertEquals("unclassified", NetworkDiagnostics.supabaseErrorKind("private-token-value"))
     }
 
