@@ -74,13 +74,13 @@
   </section>
 
   <main id="app-shell" class="shell" hidden>
-    <aside class="rail">
+    <aside class="rail" aria-label="Navigation principale">
       <div class="brand">
         <strong>ZYVIOTV</strong>
         <span>PLAYER</span>
       </div>
-      <nav>
-        <button data-focusable data-section="home" class="nav active">Accueil</button>
+      <nav aria-label="Rubriques ZYVIOTV">
+        <button data-focusable data-section="home" class="nav active" aria-current="page">Accueil</button>
         <button data-focusable data-section="live" class="nav">TV</button>
         <button data-focusable data-section="movies" class="nav">Films</button>
         <button data-focusable data-section="series" class="nav">Séries</button>
@@ -91,7 +91,7 @@
 
     <section class="content">
       <video id="tv-player" class="tv-player" playsinline hidden></video>
-      <header class="hero">
+      <header class="hero" aria-label="Découvrir ZYVIOTV">
         <p class="eyebrow">LG SMART TV</p>
         <h1>Tout votre univers au même endroit.</h1>
         <p>Interface grand écran pensée pour la télécommande LG.</p>
