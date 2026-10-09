@@ -13,6 +13,9 @@ on:
       - "webosApp/**"
       - ".github/workflows/android-smoke-apk.yml"
       - "docs/SMOKE_TEST.md"
+      - "scripts/d7_source_audit.py"
+      - "tests/test_d7_crossplatform_source_audit.py"
+      - "docs/d7-visual-evidence-pack.md"
   push:
     branches:
       - "feat/phase-18-5-real-device-smoke-test"
