@@ -201,8 +201,8 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 **Recette Pixel 7 émulateur après #211** (rapportée le 09/10/2026, `main` = `f1e3591`)
 - Vérifié sur émulateur : affiches Films/Séries et logos de chaînes affichés ; lecture Live MPEG-TS (`ZyvioPlayback summary … first_frame_ms=5652`), `release reason=dispose` ; lignes `ZyvioUi frames` par écran.
 - `catalog_cache_load` 35 166 ms (47 s avant), `ui_map_movies` 1 519 ms, `ui_map_series` 823 ms, `ui_map_live` 374 ms hors thread principal ; démarrage encore `Skipped 297 frames`, splash `frozen=1 max_ms=4651` (objet de #212).
-- Premier lancement après mise à jour : `catalog_cache_freshness status=missing` puis `refresh_decision decision=unknown_age` → resynchronisation attendue (cache écrit avant #211, sans `.meta`). À confirmer au lancement suivant : `status=valid` et `decision=use_fresh_cache`.
-- `player_devices` : `sqlstate=42501 pg=missing-table-grant` → privilège de table manquant pour `authenticated` (pas un refus RLS). La migration du dépôt crée la table et les politiques propriétaires mais aucun `GRANT` ; GRANT ciblé à `authenticated` (select/insert/update/delete, rien pour `anon`, RLS conservée) **appliqué en production par le propriétaire le 09/10/2026** après vérification en lecture seule ; migration `20261009230000_player_devices_authenticated_grant.sql`. Retour 200/201 à confirmer dans Logcat.
+- Premier lancement après mise à jour : `catalog_cache_freshness status=missing` puis `refresh_decision decision=unknown_age` → resynchronisation attendue (cache écrit avant #211, sans `.meta`). Confirmé au lancement suivant : `status=valid age_min=8` et `decision=use_fresh_cache`, sans téléchargement M3U (cache lu en 40 867 ms : démarrage toujours lent, objet du bloc Room).
+- `player_devices` : `sqlstate=42501 pg=missing-table-grant` → privilège de table manquant pour `authenticated` (pas un refus RLS). La migration du dépôt crée la table et les politiques propriétaires mais aucun `GRANT` ; GRANT ciblé à `authenticated` (select/insert/update/delete, rien pour `anon`, RLS conservée) **appliqué en production par le propriétaire le 09/10/2026** après vérification en lecture seule ; migration `20261009230000_player_devices_authenticated_grant.sql`. Vérifié : `player_devices response=201` sur Pixel 7 émulateur.
 - Titres « Animals (MULTI) FHD 2026 » non nettoyés : l'année finale bloquait `DisplayTitle` (correctif « Titre (2026) » sur la branche `claude/fix-android-playback-xru14n`). Classification : « |BH| ARENA SPORT » apparaît dans Séries (P1 ouvert).
 
 **Xtream fournisseur réel — problème ouvert**
@@ -238,11 +238,11 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Corrigé dans le code par #208, à recetter sur Pixel 7 : `blocked reason=missingsource` (cache hérité sans URL), en-têtes d'accès M3U, redémarrage sans perte des sources.
 - #209 validé sur Pixel 7 pour Retour/retour Android et libération Media3 ; à recetter : pistes, message HEVC émulateur.
 - Corrigé dans le code par #210, à recetter sur Pixel 7 : bouton Plein écran visible, paysage/portrait, Retour depuis le plein écran, Ajuster/Remplir.
-- #211 recetté sur Pixel 7 émulateur (affiches, logos, `ZyvioUi frames`, `ZyvioPlayback summary`) ; reste à confirmer `refresh_decision decision=use_fresh_cache` au 2ᵉ lancement après la première sauvegarde, et l'icône Ajuster/Remplir.
+- #211 recetté sur Pixel 7 émulateur (affiches, logos, `ZyvioUi frames`, `ZyvioPlayback summary`) ; `refresh_decision decision=use_fresh_cache` confirmé au 2ᵉ lancement ; reste l'icône Ajuster/Remplir.
 - Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, HEVC sur appareil physique, erreurs et retour (Logcat `tag:ZyvioPlayback`).
 
 **P1 — fiabilité/sécurité**
-- `player_devices` HTTP 403 Supabase : `pg=missing-table-grant` (42501), GRANT ciblé appliqué par le propriétaire le 09/10/2026 ; confirmer 200/201 dans Logcat.
+- `player_devices` HTTP 403 Supabase : `pg=missing-table-grant` (42501), GRANT ciblé appliqué par le propriétaire le 09/10/2026 ; **résolu** (`response=201` sur émulateur).
 - Xtream réel HTTP 512 encore non résolu/non retesté sur #205+ ; ne pas supposer que l'URL ou le fournisseur est mauvais.
 - Performance : cache chiffré 47 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s (voir mesures §8). Resynchronisation après cache valide traitée par #211 ; démarrage < 2 s prévu par #212 (stockage paginé).
 - Classification M3U à vérifier, notamment chaînes sport apparaissant comme séries ; distinguer source/mapping et alias.

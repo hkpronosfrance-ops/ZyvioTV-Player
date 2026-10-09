@@ -52,8 +52,9 @@ propriétaire, dans le SQL Editor**, après la vérification « avant » conform
 (`auth_*` = false, `anon_select` = false, `rls_enabled` = true, 4 politiques
 `player_devices_*_own` limitées à `authenticated` et `auth.uid() = user_id`).
 Les deux instructions exécutées sont exactement celles de la migration
-(« Success. No rows returned »). Restent à confirmer : vérification « après »
-et 200/201 dans Logcat.
+(« Success. No rows returned »). Vérification « après » conforme (`auth_*` = true, `anon_select` = false,
+`rls_enabled` = true) et Logcat Pixel 7 émulateur :
+`supabase operation=player_devices response=201 … sqlstate=none pg=none`.
 
 ## Recette après application
 
