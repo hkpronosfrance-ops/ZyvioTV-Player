@@ -116,3 +116,26 @@ button:disabled, [data-focusable][aria-disabled="true"] {
 @media (prefers-reduced-motion: reduce) {
   .cards { scroll-behavior: auto; }
 }
+
+
+/* D7 physical-TV safe margins and readable focus after scaling.
+   D6 TV focus: 4px white ring + 4px offset, never clipped by shelf edges. */
+:root { --zyvio-tv-safe: 32px; }
+.rail { padding-left: max(24px, var(--zyvio-tv-safe)); }
+.content { padding-right: max(44px, var(--zyvio-tv-safe)); padding-bottom: max(64px, var(--zyvio-tv-safe)); }
+.cards { padding: 12px 10px 20px; }
+.catalog-grid { padding: 8px; }
+[data-focusable]:focus-visible, button:focus-visible {
+  position: relative;
+  z-index: 2;
+}
+@media (max-width: 1280px) {
+  :root { --zyvio-tv-safe: 20px; }
+  .rail { padding-left: var(--zyvio-tv-safe); }
+  .content { padding-right: var(--zyvio-tv-safe); padding-bottom: 44px; }
+}
+@media (min-width: 2560px) {
+  :root { --zyvio-tv-safe: 48px; }
+  .rail { padding-left: var(--zyvio-tv-safe); }
+  .content { padding-right: max(68px, var(--zyvio-tv-safe)); }
+}
