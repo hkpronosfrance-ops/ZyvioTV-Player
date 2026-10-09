@@ -86,7 +86,7 @@ struct LiveTvView: View {
 
     private var categoryBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack {
+            LazyHStack(spacing: ZyvioDesign.Space.s2) {
                 Button((Locale.current.language.languageCode?.identifier == "fr" ? "Toutes" : "All")) {
                     selectedCategory = nil
                     selectedId = channels.first?.id
@@ -130,8 +130,8 @@ struct LiveTvView: View {
                         Spacer()
                     }
                     .padding(12)
-                    .background(Color.white.opacity(selected?.id == channel.id ? 0.10 : 0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .background(selected?.id == channel.id ? ZyvioDesign.Palette.brand.opacity(0.20) : ZyvioDesign.Palette.surface1)
+                    .clipShape(RoundedRectangle(cornerRadius: ZyvioDesign.Radius.lg))
                 }
                 .buttonStyle(.plain)
             }
@@ -146,7 +146,7 @@ struct LiveTvView: View {
                     RoundedRectangle(cornerRadius: 22)
                         .fill(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.1), .black],
+                                colors: [ZyvioDesign.Palette.brand.opacity(0.30), ZyvioDesign.Palette.surface1],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
