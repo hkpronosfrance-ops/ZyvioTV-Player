@@ -47,8 +47,13 @@ Attendu **après** : `auth_*` = true, `anon_select` = false, `rls_enabled` = tru
 explicite pour `anon`, RLS laissée active. Aucune autre table, fonction ni
 politique n'est modifiée.
 
-**Statut : préparé, non appliqué.** Application en production uniquement après
-validation explicite du SQL par le propriétaire.
+**Statut : appliqué en production le 09/10/2026 (~22:40 UTC) par le
+propriétaire, dans le SQL Editor**, après la vérification « avant » conforme
+(`auth_*` = false, `anon_select` = false, `rls_enabled` = true, 4 politiques
+`player_devices_*_own` limitées à `authenticated` et `auth.uid() = user_id`).
+Les deux instructions exécutées sont exactement celles de la migration
+(« Success. No rows returned »). Restent à confirmer : vérification « après »
+et 200/201 dans Logcat.
 
 ## Recette après application
 

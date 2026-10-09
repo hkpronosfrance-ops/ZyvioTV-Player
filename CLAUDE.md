@@ -202,7 +202,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Vérifié sur émulateur : affiches Films/Séries et logos de chaînes affichés ; lecture Live MPEG-TS (`ZyvioPlayback summary … first_frame_ms=5652`), `release reason=dispose` ; lignes `ZyvioUi frames` par écran.
 - `catalog_cache_load` 35 166 ms (47 s avant), `ui_map_movies` 1 519 ms, `ui_map_series` 823 ms, `ui_map_live` 374 ms hors thread principal ; démarrage encore `Skipped 297 frames`, splash `frozen=1 max_ms=4651` (objet de #212).
 - Premier lancement après mise à jour : `catalog_cache_freshness status=missing` puis `refresh_decision decision=unknown_age` → resynchronisation attendue (cache écrit avant #211, sans `.meta`). À confirmer au lancement suivant : `status=valid` et `decision=use_fresh_cache`.
-- `player_devices` : `sqlstate=42501 pg=missing-table-grant` → privilège de table manquant pour `authenticated` (pas un refus RLS). La migration du dépôt crée la table et les politiques propriétaires mais aucun `GRANT` ; correctif possible = GRANT ciblé à `authenticated`, **jamais appliqué sans validation explicite**.
+- `player_devices` : `sqlstate=42501 pg=missing-table-grant` → privilège de table manquant pour `authenticated` (pas un refus RLS). La migration du dépôt crée la table et les politiques propriétaires mais aucun `GRANT` ; GRANT ciblé à `authenticated` (select/insert/update/delete, rien pour `anon`, RLS conservée) **appliqué en production par le propriétaire le 09/10/2026** après vérification en lecture seule ; migration `20261009230000_player_devices_authenticated_grant.sql`. Retour 200/201 à confirmer dans Logcat.
 - Titres « Animals (MULTI) FHD 2026 » non nettoyés : l'année finale bloquait `DisplayTitle` (correctif « Titre (2026) » sur la branche `claude/fix-android-playback-xru14n`). Classification : « |BH| ARENA SPORT » apparaît dans Séries (P1 ouvert).
 
 **Xtream fournisseur réel — problème ouvert**
@@ -242,7 +242,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, HEVC sur appareil physique, erreurs et retour (Logcat `tag:ZyvioPlayback`).
 
 **P1 — fiabilité/sécurité**
-- `player_devices` HTTP 403 Supabase : `pg=missing-table-grant` (42501), GRANT ciblé à `authenticated` à proposer ; pas de correction prod non approuvée.
+- `player_devices` HTTP 403 Supabase : `pg=missing-table-grant` (42501), GRANT ciblé appliqué par le propriétaire le 09/10/2026 ; confirmer 200/201 dans Logcat.
 - Xtream réel HTTP 512 encore non résolu/non retesté sur #205+ ; ne pas supposer que l'URL ou le fournisseur est mauvais.
 - Performance : cache chiffré 47 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s (voir mesures §8). Resynchronisation après cache valide traitée par #211 ; démarrage < 2 s prévu par #212 (stockage paginé).
 - Classification M3U à vérifier, notamment chaînes sport apparaissant comme séries ; distinguer source/mapping et alias.

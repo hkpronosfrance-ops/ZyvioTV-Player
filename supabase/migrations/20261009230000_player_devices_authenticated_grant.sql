@@ -14,7 +14,9 @@
 --     (on_conflict=user_id,device_uid → SELECT + INSERT + UPDATE), liste et
 --     suppression d'un appareil (DELETE).
 --
--- NE PAS APPLIQUER en production sans validation explicite du propriétaire.
+-- Appliquée en production le 09/10/2026 par le propriétaire (SQL Editor), après
+-- vérification des privilèges et des politiques (docs/SUPABASE_PLAYER_DEVICES_403.md).
+-- Idempotente : peut être rejouée sans effet de bord.
 
 alter table public.player_devices enable row level security;
 
