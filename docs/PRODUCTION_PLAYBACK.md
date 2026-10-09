@@ -105,3 +105,28 @@ Not yet verified: real provider streams on Pixel 7 emulator, physical phone, tab
 - Tests: `PlayerLifecycleTest` (JVM) and
   `tests/test_android_player_fullscreen_210.py`. Not verified on a device.
 
+
+## PR #211 — Playback telemetry and controls (October 2026)
+
+- No `LoadControl` / buffer change: the buffer is tuned only after the new
+  telemetry has been recorded on devices.
+- One `ZyvioPlayback summary` line per playback, logged when the player is
+  released: `session kind end duration_s playing_s container attempts
+  first_ready_ms first_frame_ms ready buffering_startup|seek|reload|stall
+  stall_ms_total stall_ms_max seeks silent_reloads manual_retries
+  behind_live_window discontinuities dropped_frames video video_size
+  video_decoder audio audio_decoder bandwidth_kbps_last|max load_errors`.
+  READY events are counted; the number of real rebuffering episodes is
+  derived from the buffering causes and is an estimate. Free-form values
+  are allow-listed (codec/class tokens, MIME types); anything else is
+  `other`. No URL, host, title, header or credential.
+- Playback marks itself active (`PlaybackActivity`), so automatic catalogue
+  refreshes wait for its end.
+- Fit/Fill control: aspect-ratio / crop pictograms, label "Image : ajuster /
+  remplir" from 600 dp, content descriptions "Mode d'image : ajuster /
+  remplir", distinct from "Plein écran" / "Quitter le plein écran".
+- Film and series titles are cleaned for display only (`DisplayTitle`:
+  markers such as `(MULTI)`, `FHD`, `[4K]`, `FR |` at the edges); ids,
+  search, favourites and history keep the provider title. Live channel
+  names are not changed (quality variants stay distinguishable).
+- Not verified on a device.

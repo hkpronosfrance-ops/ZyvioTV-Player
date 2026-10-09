@@ -21,14 +21,29 @@ class AndroidXtreamCatalogLoader(
 ) {
     private val httpClient = AndroidXtreamHttpClient()
 
-    suspend fun load(): CatalogLoadResult = withContext(Dispatchers.IO) {
+    /** A list rejected by [XtreamCatalogValidation]: the refresh fails as a whole. */
+    private class RejectedList(val list: XtreamCatalogList, val outcome: XtreamListOutcome) : Exception()
+
+    /**
+     * @param previous the validated catalogue of the same playlist, if any:
+     *   an empty list is suspicious only when the same list was not empty.
+     */
+    suspend fun load(previous: CatalogSnapshot? = null): CatalogLoadResult = withContext(Dispatchers.IO) {
         try {
-            val liveCategories = getArray("get_live_categories").mapCategories()
-            val liveChannels = getArray("get_live_streams").mapLiveChannels()
-            val movieCategories = getArray("get_vod_categories").mapCategories()
-            val movies = getArray("get_vod_streams").mapMovies()
-            val seriesCategories = getArray("get_series_categories").mapCategories()
-            val series = getArray("get_series").mapSeries()
+            val liveCategories = getList(XtreamCatalogList.LiveCategories, previous?.liveCategories?.size) {
+                it.mapCategories()
+            }
+            val liveChannels = getList(XtreamCatalogList.LiveStreams, previous?.liveChannels?.size) {
+                it.mapLiveChannels()
+            }
+            val movieCategories = getList(XtreamCatalogList.MovieCategories, previous?.movieCategories?.size) {
+                it.mapCategories()
+            }
+            val movies = getList(XtreamCatalogList.Movies, previous?.movies?.size) { it.mapMovies() }
+            val seriesCategories = getList(XtreamCatalogList.SeriesCategories, previous?.seriesCategories?.size) {
+                it.mapCategories()
+            }
+            val series = getList(XtreamCatalogList.Series, previous?.series?.size) { it.mapSeries() }
 
             CatalogLoadResult.Success(
                 CatalogSnapshot(
@@ -42,6 +57,8 @@ class AndroidXtreamCatalogLoader(
             )
         } catch (error: CancellationException) {
             throw error
+        } catch (rejected: RejectedList) {
+            CatalogLoadResult.Failure(XtreamCatalogValidation.message(rejected.list, rejected.outcome))
         } catch (_: SocketTimeoutException) {
             CatalogLoadResult.Failure("Le catalogue IPTV met trop de temps à répondre.")
         } catch (_: Exception) {
@@ -51,16 +68,57 @@ class AndroidXtreamCatalogLoader(
         }
     }
 
-    private fun getArray(action: String): JSONArray {
+    private fun <T> getList(
+        list: XtreamCatalogList,
+        previousCount: Int?,
+        map: (JSONArray) -> List<T>,
+    ): List<T> {
         val endpoint = XtreamEndpointBuilder.authenticatedPlayerApi(
             credentials = credentials,
-            action = action,
+            action = list.action,
         )
-        val response = httpClient.get(endpoint, operation = "xtream-catalog")
-        if (response.code !in 200..299) {
-            throw IllegalStateException("Provider HTTP error ${response.code}")
+        val response = try {
+            httpClient.get(endpoint, operation = "xtream-catalog-" + list.logName)
+        } catch (error: Exception) {
+            CatalogPerformanceDiagnostics.event(
+                name = "xtream_list",
+                fields = "list=${list.logName} outcome=network_error failure=" + error.javaClass.simpleName,
+                warning = true,
+            )
+            throw error
         }
-        return JSONArray(response.body)
+        if (response.code !in 200..299) {
+            CatalogPerformanceDiagnostics.event(
+                name = "xtream_list",
+                fields = "list=${list.logName} outcome=http_error http=${response.code}",
+                warning = true,
+            )
+            throw IllegalStateException("Provider HTTP error")
+        }
+        val bodyKind = XtreamBodyKind.of(response.body)
+        val array = when (bodyKind) {
+            XtreamBodyKind.JsonArray -> runCatching { JSONArray(response.body) }.getOrNull()
+            else -> null
+        }
+        val items = array?.let(map).orEmpty()
+        val outcome = if (bodyKind == XtreamBodyKind.JsonArray && array == null) {
+            XtreamListOutcome.InvalidBody
+        } else {
+            XtreamCatalogValidation.check(
+                bodyKind = bodyKind,
+                rawCount = array?.length() ?: 0,
+                usableCount = items.size,
+                previousCount = previousCount,
+            )
+        }
+        CatalogPerformanceDiagnostics.event(
+            name = "xtream_list",
+            fields = "list=${list.logName} outcome=${outcome.logName} body=${bodyKind.logName} " +
+                "items=${items.size} raw=${array?.length() ?: 0}",
+            warning = !outcome.accepted,
+        )
+        if (!outcome.accepted) throw RejectedList(list, outcome)
+        return items
     }
 
     private fun JSONArray.mapCategories(): List<CatalogCategory> =

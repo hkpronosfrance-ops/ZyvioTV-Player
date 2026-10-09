@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fr.zyviotv.player.ui.catalog.CatalogPosterImage
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
 import fr.zyviotv.player.ui.catalog.catalogPosterMinimumWidth
@@ -76,6 +77,8 @@ data class SeriesCatalogItem(
     val progressLabel: String? = null,
     val isNew: Boolean = false,
     val isLocked: Boolean = false,
+    /** Precomputed A-Z key of the display title (bloc #211). */
+    val sortKey: String = title.lowercase(),
 )
 
 sealed interface SeriesScreenState {
@@ -139,7 +142,7 @@ private fun SeriesReady(
             else -> items.filter { it.category == selectedCategory }
         }
         val result = when (sort) {
-            "A-Z" -> base.sortedBy { it.title.lowercase() }
+            "A-Z" -> base.sortedBy { it.sortKey }
             "Année" -> base.sortedByDescending { it.year ?: "" }
             else -> base
         }
@@ -426,7 +429,10 @@ private fun SeriesCard(
                     .fillMaxSize()
                     .background(ZyvioSurface2),
             ) {
-                if (item.posterUrl.isNullOrBlank()) {
+                CatalogPosterImage(
+                    url = item.posterUrl,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     Column(
                         modifier = Modifier
                             .align(Alignment.Center)

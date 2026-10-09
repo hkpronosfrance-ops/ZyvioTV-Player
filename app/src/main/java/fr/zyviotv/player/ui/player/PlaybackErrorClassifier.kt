@@ -192,6 +192,11 @@ internal object PlaybackDiagnostics {
         Log.i(TAG, "state=$name")
     }
 
+    /** One aggregated line per playback, built by PlaybackSessionStats (#211). */
+    fun session(summary: String) {
+        Log.i(TAG, "summary $summary")
+    }
+
     fun failure(failure: PlaybackFailure, errorCodeName: String, terminal: Boolean) {
         Log.w(
             TAG,

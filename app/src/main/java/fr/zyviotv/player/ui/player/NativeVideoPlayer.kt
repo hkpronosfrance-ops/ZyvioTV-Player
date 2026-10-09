@@ -1,6 +1,7 @@
 package fr.zyviotv.player.ui.player
 
 import android.os.Build
+import android.os.SystemClock
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -28,14 +30,19 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.mediacodec.MediaCodecDecoderException
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import fr.zyviotv.player.data.catalog.PlaybackActivity
 import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackMediaType
 import fr.zyviotv.player.shared.playback.PlaybackMediaTypeResolver
@@ -44,6 +51,7 @@ import fr.zyviotv.player.shared.playback.PlaybackSource
 import fr.zyviotv.player.shared.playback.PlaybackState
 import fr.zyviotv.player.shared.playback.PlaybackValidationResult
 import fr.zyviotv.player.shared.playback.PlaybackValidator
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -133,6 +141,14 @@ fun NativeVideoPlayer(
                 playWhenReady = autoPlay
             }
     }
+    // One aggregated, anonymous summary per player, logged at release (#211).
+    val sessionStats = remember(player) {
+        PlaybackSessionStats(
+            sessionId = PlaybackSessionStats.newSessionId(),
+            kind = request.kind.name.lowercase(),
+            clock = SystemClock::elapsedRealtime,
+        ).also { it.onPrepare(mediaAttempts[0].name.lowercase()) }
+    }
     // The view showing this player, so the surface can be detached before the
     // player is released (see the release effect below).
     val attachedView = remember(player) { arrayOfNulls<PlayerView>(1) }
@@ -211,6 +227,7 @@ fun NativeVideoPlayer(
                 player.play()
             }
             NativePlayerCommand.Retry -> {
+                sessionStats.onManualRetry()
                 val position = if (request.kind == PlaybackKind.Live) {
                     0L
                 } else {
@@ -253,6 +270,8 @@ fun NativeVideoPlayer(
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         var bufferingJob: Job? = null
         var silentRetryUsed = false
+        // Catalogue synchronisations wait while this player lives (#211).
+        val playbackActivity = PlaybackActivity.tracker.begin()
 
         fun publishDuration() {
             val duration = player.duration.takeIf { it > 0L && it != C.TIME_UNSET }
@@ -285,6 +304,7 @@ fun NativeVideoPlayer(
             bufferingJob?.cancel()
             if (!silentRetryUsed) {
                 silentRetryUsed = true
+                sessionStats.onSilentReload()
                 reload(mediaAttempts[attemptIndex[0]])
             } else {
                 failPlayback(message)
@@ -303,6 +323,7 @@ fun NativeVideoPlayer(
             when {
                 failure.kind == PlaybackErrorKind.BehindLiveWindow -> {
                     PlaybackDiagnostics.failure(failure, error.errorCodeName, terminal = false)
+                    sessionStats.onBehindLiveWindow()
                     player.seekToDefaultPosition()
                     player.prepare()
                 }
@@ -310,6 +331,8 @@ fun NativeVideoPlayer(
                     PlaybackDiagnostics.failure(failure, error.errorCodeName, terminal = false)
                     attemptIndex[0] = nextAttempt
                     PlaybackDiagnostics.attempt(mediaAttempts[nextAttempt], nextAttempt)
+                    sessionStats.onContainerSwitch()
+                    sessionStats.onPrepare(mediaAttempts[nextAttempt].name.lowercase())
                     bufferingJob?.cancel()
                     reload(mediaAttempts[nextAttempt])
                 }
@@ -344,8 +367,12 @@ fun NativeVideoPlayer(
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
-                    Player.STATE_BUFFERING -> beginBufferingWatch()
+                    Player.STATE_BUFFERING -> {
+                        sessionStats.onBuffering()
+                        beginBufferingWatch()
+                    }
                     Player.STATE_READY -> {
+                        sessionStats.onReady()
                         bufferingJob?.cancel()
                         silentRetryUsed = false
                         PlaybackDiagnostics.state("ready")
@@ -355,12 +382,14 @@ fun NativeVideoPlayer(
                         tracksChanged(player.currentTracks.toNativeTrackCatalog())
                     }
                     Player.STATE_ENDED -> {
+                        sessionStats.onIdleOrEnded()
                         bufferingJob?.cancel()
                         stateChanged(PlaybackState.Ended)
                         positionChanged(player.currentPosition.coerceAtLeast(0L))
                         publishDuration()
                     }
                     else -> {
+                        sessionStats.onIdleOrEnded()
                         bufferingJob?.cancel()
                         stateChanged(PlaybackState.Idle)
                     }
@@ -368,7 +397,17 @@ fun NativeVideoPlayer(
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                sessionStats.onIsPlaying(isPlaying)
                 isPlayingChanged(isPlaying)
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) sessionStats.onSeekDiscontinuity()
+                sessionStats.onDiscontinuity(discontinuityName(reason))
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -380,13 +419,75 @@ fun NativeVideoPlayer(
             }
         }
 
+        // Codec, format, first frame, dropped frames, bandwidth and load
+        // errors: values only, never the media URI or headers.
+        val analytics = object : AnalyticsListener {
+            override fun onRenderedFirstFrame(
+                eventTime: AnalyticsListener.EventTime,
+                output: Any,
+                renderTimeMs: Long,
+            ) = sessionStats.onFirstFrame()
+
+            override fun onDroppedVideoFrames(
+                eventTime: AnalyticsListener.EventTime,
+                droppedFrames: Int,
+                elapsedMs: Long,
+            ) = sessionStats.onDroppedFrames(droppedFrames)
+
+            override fun onVideoInputFormatChanged(
+                eventTime: AnalyticsListener.EventTime,
+                format: Format,
+                decoderReuseEvaluation: DecoderReuseEvaluation?,
+            ) = sessionStats.onVideoFormat(format.sampleMimeType, format.width, format.height)
+
+            override fun onVideoDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) = sessionStats.onVideoDecoder(decoderName)
+
+            override fun onAudioInputFormatChanged(
+                eventTime: AnalyticsListener.EventTime,
+                format: Format,
+                decoderReuseEvaluation: DecoderReuseEvaluation?,
+            ) = sessionStats.onAudioFormat(format.sampleMimeType)
+
+            override fun onAudioDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) = sessionStats.onAudioDecoder(decoderName)
+
+            override fun onBandwidthEstimate(
+                eventTime: AnalyticsListener.EventTime,
+                totalLoadTimeMs: Int,
+                totalBytesLoaded: Long,
+                bitrateEstimate: Long,
+            ) = sessionStats.onBandwidthEstimate(bitrateEstimate)
+
+            override fun onLoadError(
+                eventTime: AnalyticsListener.EventTime,
+                loadEventInfo: LoadEventInfo,
+                mediaLoadData: MediaLoadData,
+                error: IOException,
+                wasCanceled: Boolean,
+            ) {
+                // The class name only: exception messages can contain the URL.
+                if (!wasCanceled) sessionStats.onLoadError(error.javaClass.simpleName)
+            }
+        }
+
         player.addListener(listener)
+        player.addAnalyticsListener(analytics)
 
         onDispose {
             bufferingJob?.cancel()
             scope.cancel()
             positionChanged(player.currentPosition.coerceAtLeast(0L))
             player.removeListener(listener)
+            player.removeAnalyticsListener(analytics)
             // Order matters (#210): detach the surface first so the decoder
             // stops rendering into it, then release once. Releasing while the
             // surface is still attached lets the view's surface callbacks
@@ -395,6 +496,8 @@ fun NativeVideoPlayer(
             attachedView[0] = null
             player.release()
             PlaybackDiagnostics.released("dispose")
+            PlaybackDiagnostics.session(sessionStats.summary("dispose"))
+            playbackActivity.close()
         }
     }
 
@@ -425,6 +528,17 @@ fun NativeVideoPlayer(
         // Detach the surface before the player is released.
         onRelease = { view -> view.player = null },
     )
+}
+
+/** Fixed names for Media3 discontinuity reasons (bounded log values). */
+private fun discontinuityName(reason: Int): String = when (reason) {
+    Player.DISCONTINUITY_REASON_AUTO_TRANSITION -> "auto_transition"
+    Player.DISCONTINUITY_REASON_SEEK -> "seek"
+    Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT -> "seek_adjustment"
+    Player.DISCONTINUITY_REASON_SKIP -> "skip"
+    Player.DISCONTINUITY_REASON_REMOVE -> "remove"
+    Player.DISCONTINUITY_REASON_INTERNAL -> "internal"
+    else -> "other"
 }
 
 @UnstableApi

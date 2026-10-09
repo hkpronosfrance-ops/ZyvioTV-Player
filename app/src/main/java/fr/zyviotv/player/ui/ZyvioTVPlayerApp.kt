@@ -1,6 +1,7 @@
 package fr.zyviotv.player.ui
 
 import android.widget.Toast
+import fr.zyviotv.player.ui.diagnostics.FrameStatsMonitor
 import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioCanvas
 import fr.zyviotv.player.ui.theme.ZyvioSurface1
@@ -38,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -74,20 +76,20 @@ import fr.zyviotv.player.data.system.SystemGateState
 import fr.zyviotv.player.data.system.SystemStatePreferences
 import fr.zyviotv.player.data.system.SystemStateRepository
 import fr.zyviotv.player.data.catalog.AndroidSeriesDetailLoader
-import fr.zyviotv.player.shared.xtream.XtreamCredentials
+import fr.zyviotv.player.data.catalog.CatalogRefreshTrigger
 import fr.zyviotv.player.data.catalog.M3uSeriesDetailRegistry
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
+import fr.zyviotv.player.shared.catalog.DisplayTitle
+import fr.zyviotv.player.shared.xtream.XtreamCredentials
 import fr.zyviotv.player.data.epg.AndroidXmlTvGuideLoader
 import fr.zyviotv.player.data.epg.AndroidXtreamGuideLoader
 import fr.zyviotv.player.data.epg.GuideLoadResult
 import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
+import fr.zyviotv.player.ui.catalog.CatalogUiStateCache
 import fr.zyviotv.player.ui.catalog.ProviderCatalogState
 import fr.zyviotv.player.ui.catalog.rememberProviderCatalogSession
 import fr.zyviotv.player.ui.catalog.snapshotOrEmpty
-import fr.zyviotv.player.ui.catalog.toLiveState
-import fr.zyviotv.player.ui.catalog.toMoviesState
-import fr.zyviotv.player.ui.catalog.toSeriesState
 import fr.zyviotv.player.ui.settings.AccountSettingsScreen
 import fr.zyviotv.player.ui.settings.CacheSettingsScreen
 import fr.zyviotv.player.ui.settings.DevicesSettingsScreen
@@ -103,6 +105,7 @@ import fr.zyviotv.player.ui.home.HomeScreen
 import fr.zyviotv.player.ui.onboarding.AppUpdateGateScreen
 import fr.zyviotv.player.ui.onboarding.OnboardingGateScreen
 import fr.zyviotv.player.ui.onboarding.OnboardingPreferencesScreen
+import fr.zyviotv.player.ui.live.LiveScreenState
 import fr.zyviotv.player.ui.live.LiveTvScreen
 import fr.zyviotv.player.ui.library.ContinueWatchingScreen
 import fr.zyviotv.player.ui.library.FavoritesScreen
@@ -116,12 +119,14 @@ import fr.zyviotv.player.ui.movies.MovieDetailScreen
 import fr.zyviotv.player.ui.movies.MovieDetailState
 import fr.zyviotv.player.ui.movies.MovieDetailUi
 import fr.zyviotv.player.ui.movies.MoviesScreen
+import fr.zyviotv.player.ui.movies.MoviesScreenState
 import fr.zyviotv.player.ui.series.EpisodeDetailUi
 import fr.zyviotv.player.ui.series.EpisodeWatchState
 import fr.zyviotv.player.ui.series.SeriesDetailScreen
 import fr.zyviotv.player.ui.series.SeriesDetailState
 import fr.zyviotv.player.ui.series.SeriesDetailUi
 import fr.zyviotv.player.ui.series.SeriesScreen
+import fr.zyviotv.player.ui.series.SeriesScreenState
 import fr.zyviotv.player.ui.player.PlayerHost
 import fr.zyviotv.player.ui.player.PlayerExitNavigation
 import fr.zyviotv.player.ui.player.SeriesAutoNextResolver
@@ -178,9 +183,16 @@ fun ZyvioTVPlayerApp(
     onDeepLinkConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    // One frame-statistics line per screen visit (bloc #211).
+    LaunchedEffect(navController) {
+        navController.currentBackStackEntryFlow.collect { entry ->
+            FrameStatsMonitor.setScreen(entry.destination.route)
+        }
+    }
     val profile = rememberDeviceProfile()
     val providerCatalog = rememberProviderCatalogSession()
     val providerState = providerCatalog.state.value
+    val catalogUiCache = remember { CatalogUiStateCache() }
     val networkAvailability by rememberNetworkAvailability()
     val deviceOffline = networkAvailability == NetworkAvailability.Unavailable
     val librarySession = rememberLibrarySession()
@@ -479,7 +491,7 @@ fun ZyvioTVPlayerApp(
             WhoIsWatchingGate(
                 deviceProfile = profile,
                 onProfileSelected = {
-                    providerCatalog.reload()
+                    providerCatalog.reload(CatalogRefreshTrigger.Startup)
                     librarySession.reload()
                     val target = if (onboardingPreferences.isCompleted()) {
                         "system-gate"
@@ -508,7 +520,7 @@ fun ZyvioTVPlayerApp(
                     ?.any { it.isEnabled && it.secretStatus == "configured" }
                     ?: false
                 if (hasConfiguredPlaylist == true) {
-                    providerCatalog.reload()
+                    providerCatalog.reload(CatalogRefreshTrigger.Startup)
                 }
             }
 
@@ -530,7 +542,7 @@ fun ZyvioTVPlayerApp(
                     },
                     onRetry = {
                         playlistCheckToken += 1
-                        providerCatalog.reload()
+                        providerCatalog.reload(CatalogRefreshTrigger.Retry)
                     },
                     onContinue = {
                         navController.navigate("onboarding-preferences")
@@ -799,7 +811,7 @@ fun ZyvioTVPlayerApp(
             AddPlaylistScreen(
                 onBack = { navController.popBackStack() },
                 onSaved = {
-                    providerCatalog.reload()
+                    providerCatalog.reload(CatalogRefreshTrigger.PlaylistChanged)
                     navController.popBackStack()
                 },
             )
@@ -810,7 +822,7 @@ fun ZyvioTVPlayerApp(
                 deviceProfile = profile,
                 forceChooser = true,
                 onProfileSelected = {
-                    providerCatalog.reload()
+                    providerCatalog.reload(CatalogRefreshTrigger.ProfileChanged)
                     librarySession.reload()
                     navController.navigate(AppDestination.Home.route) {
                         popUpTo("profile-switch") { inclusive = true }
@@ -1000,7 +1012,7 @@ fun ZyvioTVPlayerApp(
             ) {
                 ParentalControlsScreen(
                     catalogState = providerState,
-                    onCatalogReload = providerCatalog::reload,
+                    onCatalogReload = { providerCatalog.reload(CatalogRefreshTrigger.Parental) },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -1072,7 +1084,7 @@ fun ZyvioTVPlayerApp(
                 AddPlaylistScreen(
                     onBack = { navController.popBackStack() },
                     onSaved = {
-                        providerCatalog.reload()
+                        providerCatalog.reload(CatalogRefreshTrigger.PlaylistChanged)
                         navController.popBackStack()
                     },
                 )
@@ -1094,7 +1106,7 @@ fun ZyvioTVPlayerApp(
                     profile = profile,
                     onBack = { navController.popBackStack() },
                     onAddPlaylist = { navController.navigate("settings-playlists-add") },
-                    onChanged = providerCatalog::reload,
+                    onChanged = { providerCatalog.reload(CatalogRefreshTrigger.PlaylistChanged) },
                 )
             }
         }
@@ -1357,7 +1369,7 @@ fun ZyvioTVPlayerApp(
                         state = MovieDetailState.Ready(
                             MovieDetailUi(
                                 id = movie.id,
-                                title = movie.title,
+                                title = DisplayTitle.clean(movie.title),
                                 posterUrl = movie.posterUrl,
                                 progress = movieProgress?.fraction ?: 0f,
                                 isFavorite = movieFavorite,
@@ -1374,7 +1386,7 @@ fun ZyvioTVPlayerApp(
                                 ?: movie
                             startPlayback(
                                 request = PlaybackRequest(
-                                    title = playable.title,
+                                    title = DisplayTitle.clean(playable.title),
                                     streamUrl = playable.streamUrl,
                                     kind = PlaybackKind.Movie,
                                     resumePositionMs = if (resume) {
@@ -1448,7 +1460,7 @@ fun ZyvioTVPlayerApp(
                         seriesDetailState = SeriesDetailState.Ready(
                             SeriesDetailUi(
                                 id = series.id,
-                                title = series.title,
+                                title = DisplayTitle.clean(series.title),
                                 isFavorite = librarySession.isFavorite(
                                     playlistId = readyProvider.playlistId,
                                     type = FavoriteContentType.Series,
@@ -1474,7 +1486,7 @@ fun ZyvioTVPlayerApp(
                             seriesDetailState = SeriesDetailState.Ready(
                                 SeriesDetailUi(
                                     id = series.id,
-                                    title = result.detail.title ?: series.title,
+                                    title = DisplayTitle.clean(result.detail.title ?: series.title),
                                     year = result.detail.year,
                                     genres = result.detail.genres,
                                     synopsis = result.detail.synopsis,
@@ -1572,7 +1584,7 @@ fun ZyvioTVPlayerApp(
                                 )
                                 startPlayback(
                                     request = PlaybackRequest(
-                                        title = series.title + " — S" +
+                                        title = DisplayTitle.clean(series.title) + " — S" +
                                             source.season + " E" + source.number +
                                             " — " + source.title,
                                         streamUrl = source.streamUrl,
@@ -1889,14 +1901,17 @@ fun ZyvioTVPlayerApp(
                         }
 
                         AppDestination.Live -> {
-                            val liveScreenState = remember(providerState) {
-                                providerState.toLiveState()
+                            val liveScreenState by produceState(
+                                initialValue = catalogUiCache.cachedLive(providerState) ?: LiveScreenState.Loading,
+                                providerState,
+                            ) {
+                                value = catalogUiCache.live(providerState)
                             }
                             LiveTvScreen(
                                 profile = profile,
                                 state = liveScreenState,
                                 isOffline = deviceOffline,
-                                onRetry = providerCatalog::reload,
+                                onRetry = { providerCatalog.reload(CatalogRefreshTrigger.Retry) },
                                 onTuneChannel = { channel ->
                                     val ready = providerState as? ProviderCatalogState.Ready
                                     val source = ready
@@ -1918,13 +1933,18 @@ fun ZyvioTVPlayerApp(
                         }
 
                         AppDestination.Movies -> {
-                            val moviesScreenState = remember(providerState, movieProgressById) {
-                                providerState.toMoviesState(movieProgressById)
+                            val moviesScreenState by produceState(
+                                initialValue = catalogUiCache.cachedMovies(providerState, movieProgressById)
+                                    ?: MoviesScreenState.Loading,
+                                providerState,
+                                movieProgressById,
+                            ) {
+                                value = catalogUiCache.movies(providerState, movieProgressById)
                             }
                             MoviesScreen(
                                 profile = profile,
                                 state = moviesScreenState,
-                                onRetry = providerCatalog::reload,
+                                onRetry = { providerCatalog.reload(CatalogRefreshTrigger.Retry) },
                                 onMovieSelected = { movieUi ->
                                     selectedMovie = providerState
                                         .snapshotOrEmpty()
@@ -1938,13 +1958,18 @@ fun ZyvioTVPlayerApp(
                         }
 
                         AppDestination.Series -> {
-                            val seriesScreenState = remember(providerState, seriesProgressById) {
-                                providerState.toSeriesState(seriesProgressById)
+                            val seriesScreenState by produceState(
+                                initialValue = catalogUiCache.cachedSeries(providerState, seriesProgressById)
+                                    ?: SeriesScreenState.Loading,
+                                providerState,
+                                seriesProgressById,
+                            ) {
+                                value = catalogUiCache.series(providerState, seriesProgressById)
                             }
                             SeriesScreen(
                                 profile = profile,
                                 state = seriesScreenState,
-                                onRetry = providerCatalog::reload,
+                                onRetry = { providerCatalog.reload(CatalogRefreshTrigger.Retry) },
                                 onSeriesSelected = { seriesUi ->
                                     selectedSeries = providerState
                                         .snapshotOrEmpty()

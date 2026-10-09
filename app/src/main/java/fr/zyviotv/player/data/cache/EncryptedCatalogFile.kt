@@ -7,6 +7,9 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
+import java.security.DigestOutputStream
+import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import javax.crypto.Cipher
@@ -27,7 +30,8 @@ import javax.crypto.spec.GCMParameterSpec
 internal class EncryptedCatalogFile(
     private val secretKey: () -> SecretKey,
 ) {
-    fun write(target: File, catalog: CachedCatalog) {
+    /** Returns the stamp of the committed file (bloc #211 metadata attests it). */
+    fun write(target: File, catalog: CachedCatalog): CatalogFileStamp {
         target.parentFile?.mkdirs()
         val temporary = File(target.parentFile, target.name + ".tmp")
         val backup = File(target.parentFile, target.name + ".bak")
@@ -35,7 +39,9 @@ internal class EncryptedCatalogFile(
             val cipher = Cipher.getInstance(TRANSFORMATION).apply {
                 init(Cipher.ENCRYPT_MODE, secretKey())
             }
-            FileOutputStream(temporary).use { fileOutput ->
+            val digest = MessageDigest.getInstance("SHA-256")
+            val counter = CountingOutputStream(FileOutputStream(temporary))
+            DigestOutputStream(counter, digest).use { fileOutput ->
                 fileOutput.write(MAGIC)
                 fileOutput.write(cipher.iv.size)
                 fileOutput.write(cipher.iv)
@@ -47,6 +53,7 @@ internal class EncryptedCatalogFile(
                     }
                 }
             }
+            val stamp = CatalogFileStamp(counter.count, digest.digest())
             backup.delete()
             if (target.exists()) check(target.renameTo(backup)) { "Unable to back up catalog cache" }
             if (!temporary.renameTo(target)) {
@@ -54,6 +61,7 @@ internal class EncryptedCatalogFile(
                 error("Unable to commit catalog cache")
             }
             backup.delete()
+            return stamp
         } catch (error: Throwable) {
             temporary.delete()
             if (!target.exists()) backup.renameTo(target)
@@ -62,10 +70,20 @@ internal class EncryptedCatalogFile(
     }
 
     /** Null when no cache file exists; throws when one exists but cannot be decoded. */
-    fun read(target: File): CachedCatalog? {
+    fun read(target: File): CachedCatalog? = readResolved(target)?.catalog
+
+    /** Like [read], and tells whether the backup file had to be used. */
+    fun readResolved(target: File): ReadResult? {
+        val fromBackup = !target.exists()
         val source = target.takeIf(File::exists)
             ?: File(target.parentFile, target.name + ".bak").takeIf(File::exists)
             ?: return null
+        return ReadResult(catalog = decode(source), fromBackup = fromBackup)
+    }
+
+    class ReadResult(val catalog: CachedCatalog, val fromBackup: Boolean)
+
+    private fun decode(source: File): CachedCatalog {
         return FileInputStream(source).use { fileInput ->
             val magic = fileInput.readExactly(MAGIC.size)
             check(magic.contentEquals(MAGIC)) { "Unknown catalog cache header" }
@@ -81,6 +99,26 @@ internal class EncryptedCatalogFile(
                 }
             }
         }
+    }
+
+    /** Counts the bytes that reach the file, for the stamp. */
+    private class CountingOutputStream(private val delegate: OutputStream) : OutputStream() {
+        var count = 0L
+            private set
+
+        override fun write(value: Int) {
+            delegate.write(value)
+            count += 1
+        }
+
+        override fun write(bytes: ByteArray, offset: Int, length: Int) {
+            delegate.write(bytes, offset, length)
+            count += length
+        }
+
+        override fun flush() = delegate.flush()
+
+        override fun close() = delegate.close()
     }
 
     private fun InputStream.readExactly(count: Int): ByteArray {

@@ -12,10 +12,18 @@ sealed interface StartupSessionResult {
 
 class StartupSessionCoordinator(
     private val repository: SupabaseAuthRepository,
-    private val canUseOffline: () -> Boolean = { false },
+    /**
+     * Checks the encrypted cache: blocking I/O, so it must switch to an I/O
+     * dispatcher itself. Evaluated at most once per [restore] (bloc #211):
+     * the answer cannot change during the few seconds of retries.
+     */
+    private val canUseOffline: suspend () -> Boolean = { false },
 ) {
     suspend fun restore(): StartupSessionResult {
         val startedAtNanos = System.nanoTime()
+        var offlineUsable: Boolean? = null
+        suspend fun offlineAvailable(): Boolean =
+            offlineUsable ?: canUseOffline().also { offlineUsable = it }
         var last = repository.restoreSession()
         if (last == SupabaseAuthRepository.SessionRestoreResult.Valid) {
             return StartupSessionResult.SessionReady
@@ -30,13 +38,13 @@ class StartupSessionCoordinator(
         for (delayMs in RETRY_DELAYS_MS) {
             if (last == SupabaseAuthRepository.SessionRestoreResult.NetworkUnavailable) {
                 val elapsedMs = (System.nanoTime() - startedAtNanos) / 1_000_000L
-                if (canUseOffline() && elapsedMs >= OFFLINE_FALLBACK_AFTER_MS) {
+                if (offlineAvailable() && elapsedMs >= OFFLINE_FALLBACK_AFTER_MS) {
                     return StartupSessionResult.OfflineReady
                 }
 
                 val untilOfflineMs = OFFLINE_FALLBACK_AFTER_MS - elapsedMs
                 if (
-                    canUseOffline() &&
+                    offlineAvailable() &&
                     untilOfflineMs > 0L &&
                     untilOfflineMs <= delayMs
                 ) {
@@ -57,7 +65,7 @@ class StartupSessionCoordinator(
             }
         }
 
-        return if (canUseOffline()) {
+        return if (offlineAvailable()) {
             StartupSessionResult.OfflineReady
         } else {
             StartupSessionResult.ConnectionRequired

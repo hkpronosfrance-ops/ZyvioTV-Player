@@ -23,9 +23,15 @@ object M3uCatalogMapper {
         build()
     }
 
-    fun builder(): Builder = Builder()
+    /**
+     * @param idIncumbents alias table saved with the previous catalog: which
+     *   entry keeps an id shared by several entries (see [M3uIdResolver]).
+     */
+    fun builder(idIncumbents: Map<String, Long> = emptyMap()): Builder = Builder(idIncumbents)
 
-    class Builder internal constructor() {
+    class Builder internal constructor(
+        private val idIncumbents: Map<String, Long>,
+    ) {
         private val liveCategories = linkedMapOf<String, CatalogCategory>()
         private val movieCategories = linkedMapOf<String, CatalogCategory>()
         private val seriesCategories = linkedMapOf<String, CatalogCategory>()
@@ -34,6 +40,10 @@ object M3uCatalogMapper {
         private val seriesBuilders = linkedMapOf<String, MutableSeries>()
         private val usedLiveIds = mutableSetOf<String>()
         private var inputIndex = 0
+
+        /** Alias table of the last [build]; persisted with the catalog metadata. */
+        var idAliases: Map<String, Long> = emptyMap()
+            private set
 
         fun add(entry: M3uEntry) {
             val index = inputIndex++
@@ -107,28 +117,90 @@ object M3uCatalogMapper {
         }
 
         fun build(): CatalogSnapshot {
-            val series = seriesBuilders.values.map { builder ->
+            val aliases = LinkedHashMap<String, Long>()
+
+            val movieIds = M3uIdResolver.resolve(
+                legacyIds = movies.map { it.id },
+                fingerprintOf = { index ->
+                    val movie = movies[index]
+                    M3uIdResolver.fingerprint("movie", movie.title, movie.categoryId, movie.streamUrl)
+                },
+                incumbents = idIncumbents,
+            )
+            aliases.putAll(movieIds.aliases)
+            movieIds.replacements.forEach { (index, id) -> movies[index] = movies[index].copy(id = id) }
+
+            val seriesList = seriesBuilders.values.toList()
+            val seriesIds = M3uIdResolver.resolve(
+                legacyIds = seriesList.map { it.id },
+                fingerprintOf = { index ->
+                    val builder = seriesList[index]
+                    M3uIdResolver.fingerprint("series", builder.title.lowercase(), builder.categoryId)
+                },
+                incumbents = idIncumbents,
+            )
+            aliases.putAll(seriesIds.aliases)
+            val resolvedSeriesIds = Array(seriesList.size) { index ->
+                seriesIds.replacements[index] ?: seriesList[index].id
+            }
+
+            // Episode ids must be unique across the whole catalogue: progress
+            // and resume points are keyed by episode id.
+            val episodeCount = seriesList.sumOf { it.episodes.size }
+            val episodeOwner = IntArray(episodeCount)
+            val episodePosition = IntArray(episodeCount)
+            val episodeIds = ArrayList<String>(episodeCount)
+            seriesList.forEachIndexed { owner, builder ->
+                builder.episodes.forEachIndexed { position, episode ->
+                    episodeOwner[episodeIds.size] = owner
+                    episodePosition[episodeIds.size] = position
+                    episodeIds += episode.id
+                }
+            }
+            val resolvedEpisodes = M3uIdResolver.resolve(
+                legacyIds = episodeIds,
+                fingerprintOf = { index ->
+                    val episode = seriesList[episodeOwner[index]].episodes[episodePosition[index]]
+                    M3uIdResolver.fingerprint(
+                        "episode",
+                        episode.season.toString(),
+                        episode.number.toString(),
+                        episode.title,
+                        episode.streamUrl,
+                    )
+                },
+                incumbents = idIncumbents,
+            )
+            aliases.putAll(resolvedEpisodes.aliases)
+            resolvedEpisodes.replacements.forEach { (index, id) ->
+                val owner = seriesList[episodeOwner[index]].episodes
+                val position = episodePosition[index]
+                owner[position] = owner[position].copy(id = id)
+            }
+            idAliases = aliases
+
+            val series = seriesList.mapIndexed { index, builder ->
                 CatalogSeries(
-                    id = builder.id,
+                    id = resolvedSeriesIds[index],
                     title = builder.title,
                     categoryId = builder.categoryId,
                     posterUrl = builder.posterUrl,
                 )
             }
 
-            M3uSeriesDetailRegistry.replace(
-                seriesBuilders.values.associate { builder ->
-                    builder.id to SeriesDetailSource(
-                        title = builder.title,
-                        year = null,
-                        synopsis = null,
-                        genres = emptyList(),
-                        episodes = builder.episodes.sortedWith(
-                            compareBy<SeriesEpisodeSource> { it.season }.thenBy { it.number },
-                        ),
-                    )
-                },
-            )
+            val details = LinkedHashMap<String, SeriesDetailSource>(seriesList.size * 2)
+            seriesList.forEachIndexed { index, builder ->
+                details[resolvedSeriesIds[index]] = SeriesDetailSource(
+                    title = builder.title,
+                    year = null,
+                    synopsis = null,
+                    genres = emptyList(),
+                    episodes = builder.episodes.sortedWith(
+                        compareBy<SeriesEpisodeSource> { it.season }.thenBy { it.number },
+                    ),
+                )
+            }
+            M3uSeriesDetailRegistry.replace(details)
 
             return CatalogSnapshot(
                 liveCategories = liveCategories.values.toList(),

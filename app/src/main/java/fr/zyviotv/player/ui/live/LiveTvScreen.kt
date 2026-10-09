@@ -1,6 +1,7 @@
 package fr.zyviotv.player.ui.live
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
@@ -51,6 +52,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fr.zyviotv.player.ui.catalog.CatalogPosterImage
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
 import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
@@ -72,6 +74,7 @@ data class LiveChannelUi(
     val nextProgram: String? = null,
     val progress: Float? = null,
     val isLocked: Boolean = false,
+    val logoUrl: String? = null,
 )
 
 sealed interface LiveScreenState {
@@ -144,9 +147,11 @@ private fun LiveReadyState(
         result
     }
 
-    val selectedChannel = channels.firstOrNull { it.id == selectedChannelId }
-        ?: filteredChannels.firstOrNull()
-        ?: channels.firstOrNull()
+    val selectedChannel = remember(channels, filteredChannels, selectedChannelId) {
+        channels.firstOrNull { it.id == selectedChannelId }
+            ?: filteredChannels.firstOrNull()
+            ?: channels.firstOrNull()
+    }
 
     LaunchedEffect(selectedChannel?.id, profile) {
         val channel = selectedChannel ?: return@LaunchedEffect
@@ -582,9 +587,16 @@ private fun ChannelList(
                         color = ZyvioSurface2,
                         shape = RoundedCornerShape(10.dp),
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
+                        CatalogPosterImage(
+                            url = channel.logoUrl,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(6.dp),
+                            contentScale = ContentScale.Fit,
+                        ) {
                             Text(
                                 text = channel.channelNumber ?: "TV",
+                                modifier = Modifier.align(Alignment.Center),
                                 fontWeight = FontWeight.Bold,
                                 color = if (selected) MaterialTheme.colorScheme.primary else ZyvioTextSecondary,
                             )

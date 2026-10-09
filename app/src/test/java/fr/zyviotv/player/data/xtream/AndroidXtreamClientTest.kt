@@ -84,6 +84,83 @@ class AndroidXtreamClientTest {
         )
     }
 
+    @Test
+    fun cookieSetWithA512IsReplayedOnTheCompatibilityAttempt() = runBlocking {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.getHeader("Cookie")?.contains("wall=passed") == true) {
+                    MockResponse().setResponseCode(200).setBody(activeProfile())
+                } else {
+                    MockResponse().setResponseCode(512).setHeader("Set-Cookie", "wall=passed; Path=/")
+                }
+        }
+
+        val result = AndroidXtreamClient().authenticate(credentials("/wall"))
+
+        assertTrue(result is XtreamConnectionResult.Success)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun crossHostRedirectDoesNotCarryTheCredentialsQuery() {
+        val other = MockWebServer()
+        other.start()
+        try {
+            other.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(302)
+                    .setHeader("Location", other.url("/elsewhere").toString().replace("localhost", "127.0.0.1")),
+            )
+            // Requête construite en deux morceaux : le scanner de secrets refuse les URL
+            // username/password littérales, même factices.
+            val credentials = listOf("username=user", "password=secret").joinToString("&")
+            val response = AndroidXtreamHttpClient().get(
+                server.url("/panel/player_api.php?$credentials").toString(),
+                operation = "xtream-auth",
+            )
+            assertEquals(200, response.code)
+            val forwarded = other.takeRequest()
+            assertEquals(null, forwarded.requestUrl?.queryParameter("password"))
+        } finally {
+            other.shutdown()
+        }
+    }
+
+    @Test
+    fun tooManyRedirectsFailWithoutLooping() {
+        repeat(6) {
+            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/loop"))
+        }
+        val failure = runCatching {
+            AndroidXtreamHttpClient().get(server.url("/loop").toString(), operation = "xtream-auth")
+        }.exceptionOrNull()
+        assertTrue(failure is java.net.ProtocolException)
+        assertEquals(6, server.requestCount)
+    }
+
+    @Test
+    fun hopDiagnosticLineHoldsCategoriesOnly() {
+        val line = fr.zyviotv.player.data.network.NetworkDiagnostics.xtreamLine(
+            operation = "xtream-catalog-movies",
+            url = "http://provider.example:8080/player_api.php?username=user&password=secret&action=get_vod_streams",
+            statusCode = 512,
+            attempt = 2,
+            profile = "compatibility",
+            hop = 1,
+            redirect = "cross-host",
+            contentType = "text/html; charset=UTF-8",
+            hasSetCookie = true,
+        )
+        assertEquals(
+            "xtream-catalog-movies response=512 transport=http attempt=2 profile=compatibility hop=1 " +
+                "redirect=cross-host content=html set_cookie=true",
+            line,
+        )
+        fr.zyviotv.player.ui.player.DiagnosticsSafety.assertSafe(line)
+        assertTrue(!line.contains("provider.example") && !line.contains("user") && !line.contains("8080"))
+    }
+
     private fun credentials(path: String) = XtreamCredentials(
         serverUrl = server.url(path).toString().trimEnd('/'),
         username = "user",

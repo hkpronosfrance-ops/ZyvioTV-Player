@@ -1,7 +1,7 @@
 # ZYVIOTV Player — Instructions permanentes pour Claude Code
 
 > Référence du projet depuis sa création. À lire AVANT toute analyse, modification, PR ou fusion.
-> État de référence documentaire : 9 octobre 2026, `main` après PR #209 : `8d4b96f295c6d5f54afa63d29ebac2c37735193c` (PR #210 en cours, voir §8).
+> État de référence documentaire : 9 octobre 2026, `main` après PR #210 : `da7a9de` (PR #211 en cours, voir §8).
 > Ce document décrit la vision, les décisions immuables, les réalisations observées et les anomalies connues. **Il ne constitue pas une attestation que chaque fonctionnalité est opérationnelle.**
 
 ## 0. Règles de travail non négociables
@@ -173,7 +173,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Jank : position publiée 1×/s seulement en lecture ; synchronisation de progression toujours limitée à 15 s (et une fois à la fin).
 - Recette Pixel 7 rapportée après fusion : Retour du lecteur et retour Android validés, `release reason=dispose` observé, cache chiffré retrouvé avec toutes les sources ; **bouton plein écran invisible** (corrigé par #210).
 
-**PR #210 — Plein écran, orientation et arrêt Media3** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état de la PR)
+**PR #210 — Plein écran, orientation et arrêt Media3** (PR #210 fusionnée, `main` = `da7a9de`)
 - Cause racine du plein écran invisible : la route lecteur n'a aucune `Surface` au-dessus d'elle (NavHost directement sous `MaterialTheme`), donc `LocalContentColor` valait le noir par défaut de Compose. Le bouton plein écran (et Ajuster/Remplir) était un `IconButton` sans teinte : icône noire sur fond noir, présente et cliquable mais invisible. Les boutons visibles (Retour, actions du bas) avaient une couleur explicite.
 - Correctif : `PlayerScreen` fournit `LocalContentColor = ZyvioTextPrimary` ; bouton Plein écran (icône agrandir/réduire, teinte explicite, cible 48 dp) fixe à droite de la rangée du bas, hors défilement, pour Live, Films et Épisodes ; Ajuster/Remplir en haut à droite.
 - Plein écran (`PlayerFullscreenPolicy`, téléphone/tablette, jamais TV) : le bouton masque les barres et demande le paysage capteur ; un téléphone tourné en paysage est aussi en plein écran ; quitter en paysage demande le portrait ; Retour quitte d'abord le plein écran puis le lecteur ; l'orientation d'origine et les barres sont restaurées à la sortie du lecteur. Téléphone détecté par `smallestScreenWidthDp < 600` (un Pixel 7 en paysage passe au profil Tablet). La rotation ne recrée pas l'activité (`configChanges`), donc le flux n'est pas relancé.
@@ -186,6 +186,17 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - GC très fréquents, `Skipped 297 frames`, plusieurs `Davey` > 2 s dont un > 5 s.
 - Resynchronisation complète du catalogue peu après le chargement d'un cache exploitable : à auditer.
 - Supabase `player_devices` HTTP 403 (inchangé).
+
+**PR #211 — Télémétrie, travail inutile, stabilité, intégrité, UX** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état de la PR). Rapport d'audit : fichiers du projet `audits/audit-211.md`.
+- Découpage validé par l'utilisateur : #211 = mesurer, supprimer le travail inutile, intégrité, UX ; **#212** = stockage paginé/générationnel (Room) et objectif de démarrage < 2 s (chiffrement AES-GCM par champ des URL de lecture, clé Keystore). #211 ne promet pas de démarrage plus rapide à froid.
+- Rafraîchissement : `CatalogRefreshPolicy` (fraîcheur 12 h ; démarrage/changement de profil = automatique, Réessayer/playlist/parental = manuel, toujours exécuté). Aucune synchronisation automatique ne démarre pendant une lecture (`PlaybackActivity`, attente avant le démarrage ; jamais de parseur suspendu). Log `refresh_decision`.
+- Date de fraîcheur authentifiée : fichier `<digest>.meta` AES-GCM (clé Keystore, AAD dédiée) liant la date au SHA-256 et à la taille du catalogue, écrit seulement après le catalogue. Format catalogue V1 inchangé et toujours lu ; aucun cache supprimé. Un catalogue remplacé/corrompu n'est jamais « attesté ».
+- Vérification hors ligne au démarrage sur `Dispatchers.IO`, une fois par restauration ; états Live/Films/Séries construits hors thread principal (`CatalogUiStateCache`) ; accueil calculé une fois par catalogue ; `CatalogSingleFlight` libère une tâche terminée.
+- Ids M3U : id 32 bits conservé s'il est unique ; en collision, un seul garde l'id (table d'alias, sinon plus petite empreinte 64 bits, indépendant de l'ordre), les autres reçoivent `m3u-<16 hex>` ; alias dans les métadonnées authentifiées.
+- Xtream : validation de chaque liste ; HTML/objet JSON/illisible, aucune entrée exploitable, ou liste vide alors que le catalogue précédent de la même playlist ne l'était pas → échec, l'ancien catalogue et son cache sont conservés.
+- Télémétrie (anonyme, bornée, sans log périodique) : GC/mémoire native dans les phases `ZyvioCatalog` ; `ZyvioUi frames screen=…` une ligne par visite d'écran ; `ZyvioPlayback summary …` une ligne par lecture à la libération ; `ZyvioNetwork` Supabase avec `sqlstate=` et `pg=` (`missing-table-grant` / `rls-violation`…) ; Xtream une ligne par saut HTTP (`profile= hop= redirect= content= set_cookie=`). Pas de modification `LoadControl`.
+- UX : affiches dans les grilles Films/Séries (aucune requête si URL vide, repli icône+titre), logos de chaînes, titres films/séries nettoyés à l'affichage seulement (`DisplayTitle`), contrôle Ajuster/Remplir distinct du plein écran.
+- Aucun changement Supabase. Non vérifié : Pixel 7, appareil réel, TV, fournisseur réel.
 
 **Xtream fournisseur réel — problème ouvert**
 - Même abonnement déclaré fonctionnel en M3U **et Xtream** sur IPTV Smarters Pro, ainsi que Zen IPTV et SET IPTV.
@@ -220,16 +231,17 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Corrigé dans le code par #208, à recetter sur Pixel 7 : `blocked reason=missingsource` (cache hérité sans URL), en-têtes d'accès M3U, redémarrage sans perte des sources.
 - #209 validé sur Pixel 7 pour Retour/retour Android et libération Media3 ; à recetter : pistes, message HEVC émulateur.
 - Corrigé dans le code par #210, à recetter sur Pixel 7 : bouton Plein écran visible, paysage/portrait, Retour depuis le plein écran, Ajuster/Remplir.
+- #211, à recetter sur Pixel 7 : pas de resynchronisation après un cache de moins de 12 h, affiches, icône Ajuster/Remplir, lignes `refresh_decision`, `ZyvioUi frames`, `ZyvioPlayback summary`.
 - Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, HEVC sur appareil physique, erreurs et retour (Logcat `tag:ZyvioPlayback`).
 
 **P1 — fiabilité/sécurité**
 - `player_devices` HTTP 403 Supabase, audit grants/RLS/exposition ciblée ; pas de correction prod non approuvée.
 - Xtream réel HTTP 512 encore non résolu/non retesté sur #205+ ; ne pas supposer que l'URL ou le fournisseur est mauvais.
-- Performance : cache chiffré 47 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s, resynchronisation après cache valide (voir mesures §8). Phase dédiée.
+- Performance : cache chiffré 47 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s (voir mesures §8). Resynchronisation après cache valide traitée par #211 ; démarrage < 2 s prévu par #212 (stockage paginé).
 - Classification M3U à vérifier, notamment chaînes sport apparaissant comme séries ; distinguer source/mapping et alias.
 
 **P2 — UX et parité**
-- Posters VOD/séries parfois vides et détails incomplets.
+- Posters VOD/séries : grilles corrigées par #211 (à recetter) ; détails incomplets.
 - Traductions résiduelles (ex. « My account »), intégrité FR/EN.
 - Guide EPG, favoris/historique, lecture continue, recherche, profils, contrôles parentaux, QR TV, multi-appareils : refaire une recette réelle par plateforme ; ne pas prendre les maquettes pour des tests d'exécution.
 
@@ -249,8 +261,8 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 ## 13. Première tâche au prochain lancement de Claude Code
 
 1. Lire ce fichier puis vérifier que les chemins et l'architecture correspondent au `main` actuel.
-2. Vérifier sur GitHub l'état de la PR #210 (plein écran) et le résultat de la recette Pixel 7 rapportée par l'utilisateur (bouton Plein écran, paysage/portrait, Retour, lignes `ZyvioPlayback`) avant d'ouvrir un nouveau bloc.
-3. Prochains candidats : phase Performance (cache 47 s, parsing, GC, frames, resynchronisation), `player_devices` 403 (audit sans modification prod), Xtream HTTP 512, classification M3U.
+2. Vérifier sur GitHub l'état de la PR #211 et le résultat de la recette Pixel 7 rapportée par l'utilisateur (lignes `refresh_decision`, `ZyvioUi frames`, `ZyvioPlayback summary`, `ZyvioNetwork … sqlstate= pg=`) avant d'ouvrir un nouveau bloc.
+3. Prochains candidats : PR #212 (stockage paginé Room, démarrage < 2 s), `player_devices` 403 (résultats de l'audit en lecture seule à présenter, aucun GRANT sans validation), Xtream HTTP 512, classification M3U.
 4. **Ne pas commencer** par changer la base Supabase de production, ajouter un `largeHeap`, inventer des streams, réécrire les maquettes ou prétendre tester le fournisseur depuis CI.
 
 ---

@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fr.zyviotv.player.ui.catalog.CatalogPosterImage
 import fr.zyviotv.player.ui.DeviceProfile
 import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
 import fr.zyviotv.player.ui.catalog.catalogPosterMinimumWidth
@@ -76,6 +77,8 @@ data class MovieCatalogItem(
     val progress: Float? = null,
     val isNew: Boolean = false,
     val isLocked: Boolean = false,
+    /** Precomputed A-Z key of the display title (bloc #211). */
+    val sortKey: String = title.lowercase(),
 )
 
 sealed interface MoviesScreenState {
@@ -139,7 +142,7 @@ private fun MoviesReady(
             else -> items.filter { it.category == selectedCategory }
         }
         val result = when (sort) {
-            "A-Z" -> base.sortedBy { it.title.lowercase() }
+            "A-Z" -> base.sortedBy { it.sortKey }
             "Année" -> base.sortedByDescending { it.year ?: "" }
             "Note" -> base.sortedByDescending { it.rating?.replace(",", ".")?.toDoubleOrNull() ?: -1.0 }
             else -> base
@@ -428,7 +431,10 @@ private fun MovieCard(
                     .fillMaxSize()
                     .background(ZyvioSurface2),
             ) {
-                if (item.posterUrl.isNullOrBlank()) {
+                CatalogPosterImage(
+                    url = item.posterUrl,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     Column(
                         modifier = Modifier
                             .align(Alignment.Center)

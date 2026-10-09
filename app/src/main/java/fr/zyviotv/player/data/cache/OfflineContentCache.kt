@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
+import fr.zyviotv.player.data.catalog.CatalogRefreshPolicy
 import fr.zyviotv.player.data.catalog.M3uSeriesDetailRegistry
 import fr.zyviotv.player.data.catalog.SeriesDetailSource
 import fr.zyviotv.player.data.sync.SyncedLiveHistory
@@ -52,6 +53,16 @@ data class CachedCatalog(
         get() = origin == CatalogCacheOrigin.Encrypted && sourceReport.isPlayable
 }
 
+/**
+ * A restored catalog with its freshness (bloc #211). [fetchedAtEpochMs] is
+ * only set when authenticated metadata attests this exact cache file.
+ */
+class RestoredCatalog(
+    val catalog: CachedCatalog,
+    val fetchedAtEpochMs: Long?,
+    val idAliases: Map<String, Long>,
+)
+
 data class CachedLibrary(
     val profileId: String,
     val favorites: List<SyncedFavorite>,
@@ -65,13 +76,19 @@ class OfflineContentCache(context: Context) {
         applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val catalogDirectory = File(applicationContext.filesDir, CATALOG_DIRECTORY)
     private val encryptedFile = EncryptedCatalogFile(::secretKey)
+    private val metadataFile = EncryptedCatalogMetadataFile(::secretKey)
 
     /**
      * Replaces the cached catalog only with a validated one: every channel,
      * film and indexed episode must carry its source. Returns false (and keeps
      * the previous cache) otherwise or when the write fails.
      */
-    fun saveCatalog(profileId: String, catalog: CachedCatalog): Boolean {
+    fun saveCatalog(
+        profileId: String,
+        catalog: CachedCatalog,
+        fetchedAtEpochMs: Long,
+        idAliases: Map<String, Long> = emptyMap(),
+    ): Boolean {
         val startedAt = CatalogPerformanceDiagnostics.startedAt()
         val report = catalog.sourceReport
         if (catalog.origin != CatalogCacheOrigin.Encrypted || !report.isPlayable) {
@@ -83,7 +100,10 @@ class OfflineContentCache(context: Context) {
             return false
         }
         return try {
-            encryptedFile.write(catalogFile(profileId), catalog)
+            val stamp = encryptedFile.write(catalogFile(profileId), catalog)
+            // The metadata is written only now, after the validated catalog was
+            // committed: it attests this exact file and its fetch date.
+            writeMetadata(profileId, catalog, stamp, fetchedAtEpochMs, idAliases)
             preferences.edit().remove(catalogKey(profileId)).apply()
             CatalogPerformanceDiagnostics.phase(
                 name = "catalog_persist",
@@ -101,10 +121,16 @@ class OfflineContentCache(context: Context) {
         }
     }
 
-    fun loadCatalog(profileId: String): CachedCatalog? {
+    fun loadCatalog(profileId: String): CachedCatalog? = restoreCatalog(profileId)?.catalog
+
+    /**
+     * Decodes the whole catalog cache (several seconds on large catalogs: call
+     * off the main thread) and resolves its authenticated freshness.
+     */
+    fun restoreCatalog(profileId: String): RestoredCatalog? {
         val startedAt = CatalogPerformanceDiagnostics.startedAt()
-        val encrypted = try {
-            encryptedFile.read(catalogFile(profileId))
+        val read = try {
+            encryptedFile.readResolved(catalogFile(profileId))
         } catch (error: Exception) {
             // Unreadable (key reset, truncation): never hide it behind the
             // legacy fallback silently. The next validated refresh rewrites it.
@@ -115,6 +141,7 @@ class OfflineContentCache(context: Context) {
             )
             null
         }
+        val encrypted = read?.catalog
         if (encrypted != null && preferences.contains(catalogKey(profileId))) {
             // A pre-#206 JSON copy next to a valid encrypted cache is dead
             // weight loaded with every SharedPreferences access.
@@ -136,7 +163,90 @@ class OfflineContentCache(context: Context) {
                 warning = !stored.isPlayable,
             )
         }
-        return stored
+        stored ?: return null
+        if (read == null) {
+            return RestoredCatalog(stored, fetchedAtEpochMs = null, idAliases = emptyMap())
+        }
+        return resolveFreshness(profileId, stored, fromBackup = read.fromBackup)
+    }
+
+    private fun resolveFreshness(
+        profileId: String,
+        catalog: CachedCatalog,
+        fromBackup: Boolean,
+    ): RestoredCatalog {
+        val metadata = readMetadata(profileId)
+        val aliases = metadata?.idAliases.orEmpty()
+        if (fromBackup) {
+            CatalogPerformanceDiagnostics.event("catalog_cache_freshness", "status=backup")
+            return RestoredCatalog(catalog, fetchedAtEpochMs = null, idAliases = aliases)
+        }
+        val stamp = runCatching { CatalogFileStamp.of(catalogFile(profileId)) }.getOrNull()
+        if (metadata != null && metadata.attests(stamp)) {
+            val ageMinutes = CatalogRefreshPolicy.ageMinutes(metadata.fetchedAtEpochMs, System.currentTimeMillis())
+            CatalogPerformanceDiagnostics.event(
+                "catalog_cache_freshness",
+                "status=valid age_min=" + (ageMinutes?.toString() ?: "unknown"),
+            )
+            return RestoredCatalog(catalog, metadata.fetchedAtEpochMs, aliases)
+        }
+        CatalogPerformanceDiagnostics.event(
+            "catalog_cache_freshness",
+            "status=" + if (metadata == null) "missing" else "mismatch",
+        )
+        // Cache from before #211 (or interrupted save): the decoded file is
+        // valid but its date is unknown. Attest it now with an unknown date so
+        // later offline checks do not need a full decode. Never deleted.
+        if (stamp != null && catalog.isPlayable) {
+            writeMetadata(profileId, catalog, stamp, fetchedAtEpochMs = null, idAliases = aliases)
+        }
+        return RestoredCatalog(catalog, fetchedAtEpochMs = null, idAliases = aliases)
+    }
+
+    /** Authentic id aliases of the last saved catalog, even if that file changed since. */
+    fun loadIdAliases(profileId: String): Map<String, Long> =
+        readMetadata(profileId)?.idAliases.orEmpty()
+
+    private fun readMetadata(profileId: String): CatalogCacheMetadata? = try {
+        metadataFile.read(metadataFile(profileId))
+    } catch (error: Exception) {
+        CatalogPerformanceDiagnostics.event(
+            name = "catalog_metadata_unreadable",
+            fields = "failure=" + error.javaClass.simpleName,
+            warning = true,
+        )
+        null
+    }
+
+    private fun writeMetadata(
+        profileId: String,
+        catalog: CachedCatalog,
+        stamp: CatalogFileStamp,
+        fetchedAtEpochMs: Long?,
+        idAliases: Map<String, Long>,
+    ) {
+        val report = catalog.sourceReport
+        try {
+            metadataFile.write(
+                metadataFile(profileId),
+                CatalogCacheMetadata(
+                    fetchedAtEpochMs = fetchedAtEpochMs,
+                    stamp = stamp,
+                    liveCount = report.liveTotal,
+                    movieCount = report.moviesTotal,
+                    seriesCount = catalog.snapshot.series.size,
+                    episodeCount = report.episodesTotal,
+                    idAliases = idAliases,
+                ),
+            )
+        } catch (error: Exception) {
+            // The catalog stays valid; its date is simply unknown next time.
+            CatalogPerformanceDiagnostics.event(
+                name = "catalog_metadata_failed",
+                fields = "failure=" + error.javaClass.simpleName,
+                warning = true,
+            )
+        }
     }
 
     private fun loadLegacyCatalog(profileId: String): CachedCatalog? = runCatching {
@@ -178,9 +288,28 @@ class OfflineContentCache(context: Context) {
         )
     }.getOrNull()
 
+    /**
+     * Offline start check (bloc #211). Blocking I/O: call off the main thread.
+     * The fast path never trusts a file's mere existence: the authenticated
+     * metadata must attest the exact size and SHA-256 of the catalog file, so
+     * a truncated, corrupted or replaced cache is never declared usable.
+     * Without such metadata, the catalog is fully decoded once instead.
+     */
     fun hasUsableOfflineData(profileId: String?): Boolean {
         if (profileId.isNullOrBlank()) return false
-        return loadCatalog(profileId) != null && loadLibrary(profileId) != null
+        if (loadLibrary(profileId) == null) return false
+        val file = catalogFile(profileId)
+        val metadata = if (file.exists()) readMetadata(profileId) else null
+        if (metadata != null) {
+            val stamp = runCatching { CatalogFileStamp.of(file) }.getOrNull()
+            if (metadata.attests(stamp)) {
+                CatalogPerformanceDiagnostics.event("offline_check", "method=metadata usable=true")
+                return true
+            }
+        }
+        val usable = restoreCatalog(profileId) != null
+        CatalogPerformanceDiagnostics.event("offline_check", "method=full_decode usable=$usable")
+        return usable
     }
 
     private fun catalogKey(profileId: String) = "catalog_" + profileId
@@ -313,6 +442,9 @@ class OfflineContentCache(context: Context) {
             .joinToString("") { byte -> "%02x".format(byte) }
         return File(catalogDirectory, "$digest.catalog")
     }
+
+    private fun metadataFile(profileId: String): File =
+        File(catalogDirectory, catalogFile(profileId).nameWithoutExtension + ".meta")
 
     private fun secretKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
