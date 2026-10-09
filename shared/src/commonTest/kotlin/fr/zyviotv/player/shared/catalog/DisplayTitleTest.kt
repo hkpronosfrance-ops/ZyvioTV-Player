@@ -42,4 +42,22 @@ class DisplayTitleTest {
     fun bracketGroupsWithOrdinaryWordsAreKept() {
         assertEquals("Le Grand Voyage (Version longue)", DisplayTitle.clean("Le Grand Voyage (Version longue)"))
     }
+
+    @Test
+    fun providerTitlesEndingWithAYearKeepTheYear() {
+        // Format observed on the Pixel 7 recette (bloc #211).
+        assertEquals("Animals (2026)", DisplayTitle.clean("Animals (MULTI) FHD 2026"))
+        assertEquals("Matchbox \u2013 Le film (2026)", DisplayTitle.clean("Matchbox \u2013 Le film (MULTI) FHD 2026"))
+        assertEquals("Le Grand Voyage (2021)", DisplayTitle.clean("Le Grand Voyage [4K] (2021)"))
+        assertEquals("Le Grand Voyage (2021)", DisplayTitle.clean("FR | Le Grand Voyage 2021"))
+    }
+
+    @Test
+    fun yearsThatBelongToTheTitleAreKept() {
+        assertEquals("Blade Runner 2049", DisplayTitle.clean("Blade Runner 2049"))
+        assertEquals("Animals 2026", DisplayTitle.clean("Animals 2026"))
+        assertEquals("Le Grand Voyage (2021)", DisplayTitle.clean("Le Grand Voyage (2021)"))
+        assertEquals("1917", DisplayTitle.clean("1917"))
+        assertEquals("(MULTI) FHD 2026", DisplayTitle.clean("(MULTI) FHD 2026"))
+    }
 }

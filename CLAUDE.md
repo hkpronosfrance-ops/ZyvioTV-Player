@@ -1,7 +1,7 @@
 # ZYVIOTV Player — Instructions permanentes pour Claude Code
 
 > Référence du projet depuis sa création. À lire AVANT toute analyse, modification, PR ou fusion.
-> État de référence documentaire : 9 octobre 2026, `main` après PR #210 : `da7a9de` (PR #211 en cours, voir §8).
+> État de référence documentaire : 9 octobre 2026, `main` après PR #211 : `f1e3591` (correctif titres en cours, voir §8).
 > Ce document décrit la vision, les décisions immuables, les réalisations observées et les anomalies connues. **Il ne constitue pas une attestation que chaque fonctionnalité est opérationnelle.**
 
 ## 0. Règles de travail non négociables
@@ -185,9 +185,9 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Téléchargement M3U 27 401 ms, parsing 65 313 ms, sauvegarde du catalogue 45 611 ms.
 - GC très fréquents, `Skipped 297 frames`, plusieurs `Davey` > 2 s dont un > 5 s.
 - Resynchronisation complète du catalogue peu après le chargement d'un cache exploitable : à auditer.
-- Supabase `player_devices` HTTP 403 (inchangé).
+- Supabase `player_devices` HTTP 403 : cause identifiée après #211 (voir ci-dessous).
 
-**PR #211 — Télémétrie, travail inutile, stabilité, intégrité, UX** (branche `claude/fix-android-playback-xru14n` ; consulter GitHub pour l'état de la PR). Rapport d'audit : fichiers du projet `audits/audit-211.md`.
+**PR #211 — Télémétrie, travail inutile, stabilité, intégrité, UX** (PR #211 fusionnée, `main` = `f1e359195180ccb207e7e84a58aec8be0a01943a`, CI post-fusion verte). Rapport d'audit : fichiers du projet `audits/audit-211.md`.
 - Découpage validé par l'utilisateur : #211 = mesurer, supprimer le travail inutile, intégrité, UX ; **#212** = stockage paginé/générationnel (Room) et objectif de démarrage < 2 s (chiffrement AES-GCM par champ des URL de lecture, clé Keystore). #211 ne promet pas de démarrage plus rapide à froid.
 - Rafraîchissement : `CatalogRefreshPolicy` (fraîcheur 12 h ; démarrage/changement de profil = automatique, Réessayer/playlist/parental = manuel, toujours exécuté). Aucune synchronisation automatique ne démarre pendant une lecture (`PlaybackActivity`, attente avant le démarrage ; jamais de parseur suspendu). Log `refresh_decision`.
 - Date de fraîcheur authentifiée : fichier `<digest>.meta` AES-GCM (clé Keystore, AAD dédiée) liant la date au SHA-256 et à la taille du catalogue, écrit seulement après le catalogue. Format catalogue V1 inchangé et toujours lu ; aucun cache supprimé. Un catalogue remplacé/corrompu n'est jamais « attesté ».
@@ -197,6 +197,13 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Télémétrie (anonyme, bornée, sans log périodique) : GC/mémoire native dans les phases `ZyvioCatalog` ; `ZyvioUi frames screen=…` une ligne par visite d'écran ; `ZyvioPlayback summary …` une ligne par lecture à la libération ; `ZyvioNetwork` Supabase avec `sqlstate=` et `pg=` (`missing-table-grant` / `rls-violation`…) ; Xtream une ligne par saut HTTP (`profile= hop= redirect= content= set_cookie=`). Pas de modification `LoadControl`.
 - UX : affiches dans les grilles Films/Séries (aucune requête si URL vide, repli icône+titre), logos de chaînes, titres films/séries nettoyés à l'affichage seulement (`DisplayTitle`), contrôle Ajuster/Remplir distinct du plein écran.
 - Aucun changement Supabase. Non vérifié : Pixel 7, appareil réel, TV, fournisseur réel.
+
+**Recette Pixel 7 émulateur après #211** (rapportée le 09/10/2026, `main` = `f1e3591`)
+- Vérifié sur émulateur : affiches Films/Séries et logos de chaînes affichés ; lecture Live MPEG-TS (`ZyvioPlayback summary … first_frame_ms=5652`), `release reason=dispose` ; lignes `ZyvioUi frames` par écran.
+- `catalog_cache_load` 35 166 ms (47 s avant), `ui_map_movies` 1 519 ms, `ui_map_series` 823 ms, `ui_map_live` 374 ms hors thread principal ; démarrage encore `Skipped 297 frames`, splash `frozen=1 max_ms=4651` (objet de #212).
+- Premier lancement après mise à jour : `catalog_cache_freshness status=missing` puis `refresh_decision decision=unknown_age` → resynchronisation attendue (cache écrit avant #211, sans `.meta`). Confirmé au lancement suivant : `status=valid age_min=8` et `decision=use_fresh_cache`, sans téléchargement M3U (cache lu en 40 867 ms : démarrage toujours lent, objet du bloc Room).
+- `player_devices` : `sqlstate=42501 pg=missing-table-grant` → privilège de table manquant pour `authenticated` (pas un refus RLS). La migration du dépôt crée la table et les politiques propriétaires mais aucun `GRANT` ; GRANT ciblé à `authenticated` (select/insert/update/delete, rien pour `anon`, RLS conservée) **appliqué en production par le propriétaire le 09/10/2026** après vérification en lecture seule ; migration `20261009230000_player_devices_authenticated_grant.sql`. Vérifié : `player_devices response=201` sur Pixel 7 émulateur.
+- Titres « Animals (MULTI) FHD 2026 » non nettoyés : l'année finale bloquait `DisplayTitle` (correctif « Titre (2026) » sur la branche `claude/fix-android-playback-xru14n`). Classification : « |BH| ARENA SPORT » apparaît dans Séries (P1 ouvert).
 
 **Xtream fournisseur réel — problème ouvert**
 - Même abonnement déclaré fonctionnel en M3U **et Xtream** sur IPTV Smarters Pro, ainsi que Zen IPTV et SET IPTV.
@@ -231,17 +238,17 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Corrigé dans le code par #208, à recetter sur Pixel 7 : `blocked reason=missingsource` (cache hérité sans URL), en-têtes d'accès M3U, redémarrage sans perte des sources.
 - #209 validé sur Pixel 7 pour Retour/retour Android et libération Media3 ; à recetter : pistes, message HEVC émulateur.
 - Corrigé dans le code par #210, à recetter sur Pixel 7 : bouton Plein écran visible, paysage/portrait, Retour depuis le plein écran, Ajuster/Remplir.
-- #211, à recetter sur Pixel 7 : pas de resynchronisation après un cache de moins de 12 h, affiches, icône Ajuster/Remplir, lignes `refresh_decision`, `ZyvioUi frames`, `ZyvioPlayback summary`.
+- #211 recetté sur Pixel 7 émulateur (affiches, logos, `ZyvioUi frames`, `ZyvioPlayback summary`) ; `refresh_decision decision=use_fresh_cache` confirmé au 2ᵉ lancement ; reste l'icône Ajuster/Remplir.
 - Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, HEVC sur appareil physique, erreurs et retour (Logcat `tag:ZyvioPlayback`).
 
 **P1 — fiabilité/sécurité**
-- `player_devices` HTTP 403 Supabase, audit grants/RLS/exposition ciblée ; pas de correction prod non approuvée.
+- `player_devices` HTTP 403 Supabase : `pg=missing-table-grant` (42501), GRANT ciblé appliqué par le propriétaire le 09/10/2026 ; **résolu** (`response=201` sur émulateur).
 - Xtream réel HTTP 512 encore non résolu/non retesté sur #205+ ; ne pas supposer que l'URL ou le fournisseur est mauvais.
 - Performance : cache chiffré 47 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s (voir mesures §8). Resynchronisation après cache valide traitée par #211 ; démarrage < 2 s prévu par #212 (stockage paginé).
 - Classification M3U à vérifier, notamment chaînes sport apparaissant comme séries ; distinguer source/mapping et alias.
 
 **P2 — UX et parité**
-- Posters VOD/séries : grilles corrigées par #211 (à recetter) ; détails incomplets.
+- Posters VOD/séries : grilles validées sur émulateur après #211 ; détails incomplets ; titres avec année finale corrigés après #211 (à recetter).
 - Traductions résiduelles (ex. « My account »), intégrité FR/EN.
 - Guide EPG, favoris/historique, lecture continue, recherche, profils, contrôles parentaux, QR TV, multi-appareils : refaire une recette réelle par plateforme ; ne pas prendre les maquettes pour des tests d'exécution.
 
