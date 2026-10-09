@@ -30,6 +30,9 @@ jobs:
       - name: Validate D7 cross-platform source contract
         run: python3 scripts/d7_source_audit.py
 
+      - name: Validate D7 final source regression and evidence status
+        run: python3 -m unittest discover -s tests -p 'test_d7_final_193.py' -v
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
