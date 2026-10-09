@@ -5,6 +5,7 @@ import java.net.ConnectException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import fr.zyviotv.player.ui.player.DiagnosticsSafety
 import javax.net.ssl.SSLException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,5 +56,37 @@ class NetworkDiagnosticsTest {
         assertEquals("connection-interrupted", NetworkDiagnostics.failureKind(SocketException("secret-url")))
         assertEquals("tls", NetworkDiagnostics.failureKind(SSLException("secret-url")))
         assertEquals("security-policy", NetworkDiagnostics.failureKind(SecurityException("secret-url")))
+    }
+
+    @Test
+    fun postgresPermissionErrorsAreSplitBetweenGrantAndRowLevelSecurity() {
+        val missingGrant = "{\"code\":\"42501\",\"details\":null,\"hint\":null," +
+            "\"message\":\"permission denied for table player_devices\"}"
+        val rlsRefusal = "{\"code\":\"42501\",\"message\":\"new row violates row-level security policy for table \\\"player_devices\\\"\"}"
+        assertEquals("42501", NetworkDiagnostics.supabaseErrorCode(missingGrant))
+        assertEquals("missing-table-grant", NetworkDiagnostics.postgresErrorCategory(missingGrant))
+        assertEquals("rls-violation", NetworkDiagnostics.postgresErrorCategory(rlsRefusal))
+        assertEquals("missing-function-grant", NetworkDiagnostics.postgresErrorCategory("permission denied for function x"))
+        assertEquals("PGRST301", NetworkDiagnostics.supabaseErrorCode("{\"code\":\"PGRST301\"}"))
+        assertEquals("none", NetworkDiagnostics.supabaseErrorCode("<html>Forbidden</html>"))
+        assertEquals("other", NetworkDiagnostics.supabaseErrorCode("{\"code\":\"eyJhbGciOi\"}"))
+        assertEquals("none", NetworkDiagnostics.postgresErrorCategory("{}"))
+    }
+
+    @Test
+    fun supabaseLineNeverCarriesTheBodyOrSecrets() {
+        val hostile = "{\"code\":\"42501\",\"message\":\"permission denied for table player_devices\"," +
+            "\"hint\":\"Authorization: Bearer eyJ.token https://x.supabase.co/rest/v1/player_devices?username=a&password=b\"}"
+        val line = NetworkDiagnostics.supabaseLine("player_devices", 403, "fresh", hostile, retried = false)
+        assertEquals(
+            "supabase operation=player_devices response=403 session=fresh authError=permission-denied " +
+                "sqlstate=42501 pg=missing-table-grant retried=false",
+            line,
+        )
+        DiagnosticsSafety.assertSafe(line)
+        DiagnosticsSafety.assertSafe(
+            NetworkDiagnostics.supabaseLine("https://evil?token=1", 401, "Bearer x", "missing authorization header", true),
+        )
+        assertEquals("missing-auth-header", NetworkDiagnostics.supabaseErrorKind("Missing authorization header"))
     }
 }

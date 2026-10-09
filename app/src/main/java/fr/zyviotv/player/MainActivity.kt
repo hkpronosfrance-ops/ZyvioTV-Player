@@ -10,6 +10,7 @@ import androidx.media3.common.util.UnstableApi
 import fr.zyviotv.player.data.settings.InterfaceLanguageController
 import fr.zyviotv.player.data.settings.OnboardingSetupPreferences
 import fr.zyviotv.player.ui.ZyvioTVPlayerApp
+import fr.zyviotv.player.ui.diagnostics.FrameStatsMonitor
 import fr.zyviotv.player.ui.theme.ZyvioTVTheme
 
 @UnstableApi
@@ -24,6 +25,7 @@ class MainActivity : ComponentActivity() {
         )
         pendingDeepLink.value = intent?.dataString
         enableEdgeToEdge()
+        FrameStatsMonitor.attach(this)
         setContent {
             ZyvioTVTheme {
                 ZyvioTVPlayerApp(
@@ -32,6 +34,17 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onStop() {
+        // One frame summary for the screen in use when the app is left.
+        FrameStatsMonitor.flush()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        FrameStatsMonitor.detach(this)
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -1,6 +1,7 @@
 package fr.zyviotv.player.ui.catalog
 
 import fr.zyviotv.player.shared.catalog.CatalogSnapshot
+import fr.zyviotv.player.shared.catalog.DisplayTitle
 import fr.zyviotv.player.ui.live.LiveChannelUi
 import fr.zyviotv.player.ui.live.LiveScreenState
 import fr.zyviotv.player.ui.movies.MovieCatalogItem
@@ -22,6 +23,7 @@ fun ProviderCatalogState.toLiveState(): LiveScreenState =
                     LiveChannelUi(
                         id = channel.id,
                         name = channel.name,
+                        logoUrl = channel.logoUrl?.takeIf { it.isNotBlank() },
                         category = channel.categoryId?.let(categories::get) ?: "Autres",
                         isLocked = contentLocks?.parentalEnabled == true &&
                             contentLocks?.isChild == true &&
@@ -53,7 +55,7 @@ fun ProviderCatalogState.toMoviesState(
                 items = snapshot.movies.map { movie ->
                     MovieCatalogItem(
                         id = movie.id,
-                        title = movie.title,
+                        title = DisplayTitle.clean(movie.title),
                         category = movie.categoryId?.let(categories::get) ?: "Autres",
                         posterUrl = movie.posterUrl,
                         progress = progressByMovieId[movie.id],
@@ -88,7 +90,7 @@ fun ProviderCatalogState.toSeriesState(
                 items = snapshot.series.map { series ->
                     SeriesCatalogItem(
                         id = series.id,
-                        title = series.title,
+                        title = DisplayTitle.clean(series.title),
                         category = series.categoryId?.let(categories::get) ?: "Autres",
                         posterUrl = series.posterUrl,
                         progress = progressBySeriesId[series.id],

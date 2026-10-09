@@ -51,10 +51,10 @@ class AndroidXtreamClient : XtreamClient {
                 NetworkDiagnostics.failure("xtream-auth", endpoint, error)
                 throw error
             } catch (error: SocketTimeoutException) {
-                NetworkDiagnostics.failure("xtream", endpoint, error)
+                NetworkDiagnostics.failure("xtream-auth", endpoint, error)
                 XtreamConnectionResult.Failure("Le serveur IPTV met trop de temps à répondre.")
             } catch (error: Exception) {
-                NetworkDiagnostics.failure("xtream", endpoint, error)
+                NetworkDiagnostics.failure("xtream-auth", endpoint, error)
                 XtreamConnectionResult.Failure(
                     "Impossible de joindre le serveur IPTV. Vérifiez l’adresse et votre connexion.",
                 )

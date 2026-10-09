@@ -26,7 +26,9 @@ import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.auth.SupabaseAuthRepository
 import fr.zyviotv.player.data.cache.OfflineContentCache
 import fr.zyviotv.player.data.settings.ProfilePreferences
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 @Composable
 fun StartupSplashScreen(
@@ -47,10 +49,13 @@ fun StartupSplashScreen(
                 sessionStore = SecureSessionStore(appContext),
             ),
             canUseOffline = {
-                offlineCache.hasUsableOfflineData(
-                    profilePreferences.selectedProfileId()
-                        ?: profilePreferences.defaultProfileId(),
-                )
+                // Never on the main thread: this may hash or decode the cache.
+                withContext(Dispatchers.IO) {
+                    offlineCache.hasUsableOfflineData(
+                        profilePreferences.selectedProfileId()
+                            ?: profilePreferences.defaultProfileId(),
+                    )
+                }
             },
         )
     }

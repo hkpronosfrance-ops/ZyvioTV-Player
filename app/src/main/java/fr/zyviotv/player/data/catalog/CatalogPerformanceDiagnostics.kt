@@ -1,5 +1,6 @@
 package fr.zyviotv.player.data.catalog
 
+import android.os.Debug
 import android.os.SystemClock
 import android.util.Log
 
@@ -27,6 +28,14 @@ object CatalogPerformanceDiagnostics {
             }
             append(" heap_used_mb=")
             append(usedBytes / BYTES_PER_MEBIBYTE)
+            // Bloc #211: process-wide counters; the difference between two
+            // lines gives the collections and native growth of a phase.
+            append(" native_heap_mb=")
+            append(runCatching { Debug.getNativeHeapAllocatedSize() }.getOrDefault(0L) / BYTES_PER_MEBIBYTE)
+            append(" gc_count=")
+            append(runtimeStat("art.gc.gc-count"))
+            append(" gc_time_ms=")
+            append(runtimeStat("art.gc.gc-time"))
         }
         Log.i(TAG, fields)
     }
@@ -36,6 +45,10 @@ object CatalogPerformanceDiagnostics {
         val message = "catalog event=" + name + if (fields.isBlank()) "" else " " + fields
         if (warning) Log.w(TAG, message) else Log.i(TAG, message)
     }
+
+    private fun runtimeStat(name: String): String =
+        runCatching { Debug.getRuntimeStat(name) }.getOrNull()?.takeIf { it.all(Char::isDigit) && it.isNotEmpty() }
+            ?: "unknown"
 
     private const val TAG = "ZyvioCatalog"
     private const val BYTES_PER_MEBIBYTE = 1024L * 1024L

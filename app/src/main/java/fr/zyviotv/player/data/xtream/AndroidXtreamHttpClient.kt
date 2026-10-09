@@ -51,7 +51,18 @@ internal class AndroidXtreamHttpClient(
                 }
 
                 val code = connection.responseCode
-                NetworkDiagnostics.response(operation, current.toExternalForm(), code, attempt)
+                val redirectTarget = if (code in REDIRECT_CODES) connection.getHeaderField("Location") else null
+                NetworkDiagnostics.xtreamResponse(
+                    operation = operation,
+                    url = current.toExternalForm(),
+                    statusCode = code,
+                    attempt = attempt,
+                    profile = profile.logName,
+                    hop = redirectCount,
+                    redirect = redirectKind(current, redirectTarget),
+                    contentType = connection.contentType,
+                    hasSetCookie = connection.headerFields.keys.any { it.equals("Set-Cookie", ignoreCase = true) },
+                )
                 cookies.put(
                     current.toURI(),
                     buildMap {
@@ -63,7 +74,7 @@ internal class AndroidXtreamHttpClient(
 
                 if (code in REDIRECT_CODES) {
                     if (redirectCount >= MAX_REDIRECTS) throw ProtocolException("Too many redirects")
-                    val location = connection.getHeaderField("Location")
+                    val location = redirectTarget
                         ?: throw ProtocolException("Redirect without Location")
                     current = redirectedUrl(current, location)
                     return@repeat
@@ -81,6 +92,17 @@ internal class AndroidXtreamHttpClient(
         throw ProtocolException("Too many redirects")
     }
 
+    /** Whether a redirect stays on the same server; never the target itself. */
+    private fun redirectKind(current: URL, location: String?): String {
+        if (location == null) return "none"
+        val next = runCatching { URL(current, location) }.getOrNull() ?: return "invalid"
+        return if (next.host.equals(current.host, ignoreCase = true) && next.port == current.port) {
+            if (next.protocol == current.protocol) "same-origin" else "same-host-other-scheme"
+        } else {
+            "cross-host"
+        }
+    }
+
     private fun redirectedUrl(current: URL, location: String): URL {
         var next = URL(current, location)
         if (next.protocol != "http" && next.protocol != "https") {
@@ -95,9 +117,9 @@ internal class AndroidXtreamHttpClient(
         return next
     }
 
-    private enum class HeaderProfile(val userAgent: String) {
-        Primary("ZYVIOTV-Player/0.1 (Android)"),
-        Compatibility("Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 Safari/537.36"),
+    private enum class HeaderProfile(val userAgent: String, val logName: String) {
+        Primary("ZYVIOTV-Player/0.1 (Android)", "primary"),
+        Compatibility("Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 Safari/537.36", "compatibility"),
     }
 
     private companion object {

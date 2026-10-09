@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -92,9 +93,18 @@ fun HomeScreen(
     val readyProvider = providerState as? ProviderCatalogState.Ready
     val readyLibrary = libraryState as? LibraryState.Ready
 
-    val allowedMovieIds = readyProvider?.snapshot?.movies?.mapTo(hashSetOf()) { it.id }.orEmpty()
-    val allowedSeriesIds = readyProvider?.snapshot?.series?.mapTo(hashSetOf()) { it.id }.orEmpty()
-    val allowedLiveIds = readyProvider?.snapshot?.liveChannels?.mapTo(hashSetOf()) { it.id }.orEmpty()
+    // Bloc #211: everything derived from the whole catalogue is computed once
+    // per snapshot, not on every recomposition of the home screen.
+    val catalogSnapshot = readyProvider?.snapshot
+    val allowedMovieIds = remember(catalogSnapshot) {
+        catalogSnapshot?.movies?.mapTo(hashSetOf()) { it.id }.orEmpty()
+    }
+    val allowedSeriesIds = remember(catalogSnapshot) {
+        catalogSnapshot?.series?.mapTo(hashSetOf()) { it.id }.orEmpty()
+    }
+    val allowedLiveIds = remember(catalogSnapshot) {
+        catalogSnapshot?.liveChannels?.mapTo(hashSetOf()) { it.id }.orEmpty()
+    }
 
     val filteredProgress = readyLibrary?.snapshot?.progress
         .orEmpty()
@@ -173,10 +183,12 @@ fun HomeScreen(
             }
         }
 
-    val recentMovies = readyProvider?.snapshot?.movies
-        .orEmpty()
-        .filter { it.addedAtEpochSeconds != null }
-        .sortedByDescending { it.addedAtEpochSeconds }
+    val recentMovies = remember(catalogSnapshot) {
+        catalogSnapshot?.movies
+            .orEmpty()
+            .filter { it.addedAtEpochSeconds != null }
+            .sortedByDescending { it.addedAtEpochSeconds }
+    }
     val recentMovieItems = recentMovies
         .take(MAX_HOME_ITEMS)
         .map { movie ->
@@ -188,10 +200,12 @@ fun HomeScreen(
             )
         }
 
-    val recentSeries = readyProvider?.snapshot?.series
-        .orEmpty()
-        .filter { it.addedAtEpochSeconds != null }
-        .sortedByDescending { it.addedAtEpochSeconds }
+    val recentSeries = remember(catalogSnapshot) {
+        catalogSnapshot?.series
+            .orEmpty()
+            .filter { it.addedAtEpochSeconds != null }
+            .sortedByDescending { it.addedAtEpochSeconds }
+    }
     val recentSeriesItems = recentSeries
         .take(MAX_HOME_ITEMS)
         .map { series ->
@@ -214,39 +228,28 @@ fun HomeScreen(
         }
     }
 
-    val sameCategoryMovies = if (lastWatched?.contentType == ProgressContentType.Movie) {
-        val source = readyProvider?.snapshot?.movies
-            .orEmpty()
-            .firstOrNull { it.id == lastWatched.contentId }
+    val lastWatchedMovieId = lastWatched?.takeIf { it.contentType == ProgressContentType.Movie }?.contentId
+    val lastWatchedSeriesId = lastWatched?.takeIf { it.contentType == ProgressContentType.Episode }?.seriesId
+    val sameCategoryMovies = remember(catalogSnapshot, lastWatchedMovieId) {
+        val movies = catalogSnapshot?.movies.orEmpty()
+        val source = lastWatchedMovieId?.let { id -> movies.firstOrNull { it.id == id } }
         val categoryId = source?.categoryId
         if (categoryId != null) {
-            readyProvider?.snapshot?.movies
-                .orEmpty()
-                .filter { it.categoryId == categoryId && it.id != source.id }
-                .orEmpty()
+            movies.filter { it.categoryId == categoryId && it.id != source.id }
         } else {
             emptyList()
         }
-    } else {
-        emptyList()
     }
 
-    val sameCategorySeries = if (lastWatched?.contentType == ProgressContentType.Episode) {
-        val sourceSeriesId = lastWatched.seriesId
-        val source = readyProvider?.snapshot?.series
-            .orEmpty()
-            .firstOrNull { it.id == sourceSeriesId }
+    val sameCategorySeries = remember(catalogSnapshot, lastWatchedSeriesId) {
+        val series = catalogSnapshot?.series.orEmpty()
+        val source = lastWatchedSeriesId?.let { id -> series.firstOrNull { it.id == id } }
         val categoryId = source?.categoryId
         if (categoryId != null) {
-            readyProvider?.snapshot?.series
-                .orEmpty()
-                .filter { it.categoryId == categoryId && it.id != source.id }
-                .orEmpty()
+            series.filter { it.categoryId == categoryId && it.id != source.id }
         } else {
             emptyList()
         }
-    } else {
-        emptyList()
     }
 
     val sameCategorySource = when {
@@ -278,9 +281,11 @@ fun HomeScreen(
         null -> emptyList()
     }
 
-    val liveById = readyProvider?.snapshot?.liveChannels
-        .orEmpty()
-        .associateBy { it.id }
+    val liveById = remember(catalogSnapshot) {
+        catalogSnapshot?.liveChannels
+            .orEmpty()
+            .associateBy { it.id }
+    }
     val recentChannels = readyLibrary?.snapshot?.liveHistory
         .orEmpty()
         .asSequence()

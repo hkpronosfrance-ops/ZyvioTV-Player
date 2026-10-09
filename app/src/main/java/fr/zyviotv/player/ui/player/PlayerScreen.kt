@@ -31,7 +31,8 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.List
@@ -40,7 +41,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.ZoomOutMap
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -476,20 +477,33 @@ private fun PlayerControlsOverlay(
             }
             if (layout.showFullscreenToggle) {
                 Spacer(Modifier.width(8.dp))
-                IconButton(onClick = onToggleScaleMode) {
-                    Icon(
-                        imageVector = if (state.scaleMode == PlayerScaleMode.Fit) {
-                            Icons.Default.ZoomOutMap
-                        } else {
-                            Icons.Default.FitScreen
-                        },
-                        contentDescription = if (state.scaleMode == PlayerScaleMode.Fit) {
-                            "Remplir l'écran"
-                        } else {
-                            "Ajuster à l'écran"
-                        },
-                        tint = ZyvioTextPrimary,
-                    )
+                // Bloc #211: an aspect-ratio / crop pictogram and its own
+                // label, so it is never mistaken for the fullscreen button.
+                val fit = state.scaleMode == PlayerScaleMode.Fit
+                val scaleIcon = if (fit) Icons.Default.AspectRatio else Icons.Default.Crop
+                val scaleDescription = if (fit) "Mode d'image : ajuster" else "Mode d'image : remplir"
+                if (layout.iconOnlyActions) {
+                    IconButton(onClick = onToggleScaleMode) {
+                        Icon(
+                            imageVector = scaleIcon,
+                            contentDescription = scaleDescription,
+                            tint = ZyvioTextPrimary,
+                        )
+                    }
+                } else {
+                    TextButton(onClick = onToggleScaleMode) {
+                        Icon(
+                            imageVector = scaleIcon,
+                            contentDescription = null,
+                            tint = ZyvioTextPrimary,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (fit) "Image : ajuster" else "Image : remplir",
+                            color = ZyvioTextPrimary,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
