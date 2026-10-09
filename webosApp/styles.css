@@ -26,3 +26,17 @@ button:focus-visible, [data-focusable]:focus-visible { outline: 4px solid var(--
 .cards { overflow-x: auto; }
 
 @media (prefers-reduced-motion: reduce) { .content { scroll-behavior: auto; } }
+
+
+/* Phase 192 — device-independent focus visibility and modal refinement. */
+.rail{scrollbar-width:thin;scrollbar-color:#403B43 transparent}
+.content:focus-within{scroll-padding-block:30px}
+.catalog-card,.card,.profile-card{transition:transform 150ms var(--ease),border-color 150ms var(--ease),box-shadow 150ms var(--ease)}
+.shelf-more:focus{color:#fff;background:#24242A}
+.catalog-panel .catalog-header{min-height:54px}
+.auth-card .status,.profile-shell .status{line-height:1.4}
+.auth-card .primary,.pin-actions .primary{box-shadow:0 6px 24px #E0102F28}
+.profile-card:focus .profile-avatar{box-shadow:0 0 0 3px #F4F4F655}
+@media(max-width:1280px){.catalog-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,156px),1fr))}.auth-card{width:min(720px,88vw)}}
+@media(min-width:2560px){.catalog-grid{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}}
+@media(prefers-reduced-motion:reduce){.content{scroll-behavior:auto}.catalog-card,.card,.profile-card{transition:none!important}}

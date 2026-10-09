@@ -696,3 +696,29 @@ button:disabled, [data-focusable][aria-disabled="true"] {
   .cards { scroll-snap-type: none; }
   .catalog-card:focus-visible, .profile-card:focus-visible, .nav-item:focus-visible { transform: none; }
 }
+
+
+/* Phase 192: align Tizen TV stage with D6/LG ten-foot presentation. */
+:root{--d6-base:#050506;--d6-surface:#121215;--d6-surface-raised:#1A1A1F;--d6-accent:#E0102F;--d6-light:#FF3B52;--d6-text:#F4F4F6;--d6-muted:#A9A9B3;--d6-safe:clamp(24px,3.2vw,68px)}
+.app-shell{grid-template-columns:clamp(204px,17vw,310px) minmax(0,1fr);min-width:0}
+.rail{display:flex;flex-direction:column;gap:clamp(24px,3vw,55px);padding:var(--d6-safe) 18px var(--d6-safe) var(--d6-safe);background:linear-gradient(160deg,#171317,#121215 60%,#0B0B0D);border-right:1px solid #343036}
+.nav-item{min-height:clamp(52px,4vw,82px);display:flex;align-items:center;color:var(--d6-muted);font-weight:800;border-radius:14px}
+.nav-item.active{background:#2A0A10;color:var(--d6-text);border-left:3px solid var(--d6-accent)}
+.nav-item:focus{color:#fff;background:#24242A}
+.content{min-width:0;padding:var(--d6-safe) var(--d6-safe) calc(var(--d6-safe) + 30px);overflow-x:hidden}
+.hero{min-height:clamp(255px,36vh,590px);padding:clamp(30px,4vw,76px);border:1px solid #381A21;background:radial-gradient(circle at 82% 25%,#E0102F50,transparent 44%),linear-gradient(112deg,#270B10,#141215 58%,#08080A);box-shadow:0 25px 60px #0006}
+.hero h1{font-size:clamp(35px,3.4vw,72px);line-height:1.08;letter-spacing:-.03em}
+.hero p{font-size:clamp(17px,1.3vw,26px);color:#D4CDD0}
+.shelf{margin-top:clamp(26px,2.7vw,56px);min-width:0}
+.shelf h2,.catalog-header h2{font-size:clamp(22px,1.7vw,37px);letter-spacing:-.02em}
+.cards{display:flex;gap:clamp(14px,1.4vw,28px);max-width:100%;overflow-x:auto;overflow-y:hidden;padding:12px 10px 20px;scroll-padding:12px}
+.cards .card{flex:0 0 clamp(195px,17vw,330px);min-height:clamp(145px,13vw,255px);border-radius:20px;border:2px solid #302C33;background:linear-gradient(155deg,#29232A,#161519 55%,#101013)}
+.catalog-grid{gap:clamp(14px,1.4vw,30px);padding:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,176px),1fr))}
+.catalog-card{border:2px solid #37313A;border-radius:18px;background:linear-gradient(180deg,#232027,#121114 55%,#09090B)}
+.primary:active{background:#B30C25}
+[data-focusable]:focus,.nav-item:focus,.card:focus,.catalog-card:focus{outline:4px solid #F4F4F6;outline-offset:4px;border-color:#F4F4F6;transform:scale(1.02);box-shadow:0 16px 42px #0009}
+.auth-card,.pin-card{border:1px solid #342A30;background:linear-gradient(155deg,#1B161B,#101013);box-shadow:0 30px 90px #0009}
+.profile-card{border:2px solid #353039;background:var(--d6-surface)}
+@media(max-width:1280px){:root{--d6-safe:24px}.app-shell{grid-template-columns:182px minmax(0,1fr)}.hero{min-height:245px;padding:28px}.cards .card{flex-basis:195px;min-height:138px}.catalog-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,156px),1fr))}}
+@media(min-width:2560px){:root{--d6-safe:64px}.app-shell{grid-template-columns:330px minmax(0,1fr)}.catalog-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}}
+@media(prefers-reduced-motion:reduce){[data-focusable]:focus,.nav-item:focus,.card:focus,.catalog-card:focus{transform:none!important}.content,.cards{scroll-behavior:auto!important}}

@@ -10,7 +10,7 @@ struct MoviesView: View {
     @State private var errorMessage: String?
 
     private var columns: [GridItem] {
-        let minimumPosterWidth: CGFloat = horizontalSizeClass == .regular ? 168 : 132
+        let minimumPosterWidth: CGFloat = horizontalSizeClass == .regular ? 184 : 142
         return [GridItem(.adaptive(minimum: minimumPosterWidth), spacing: ZyvioDesign.Space.s3)]
     }
 
@@ -51,6 +51,8 @@ struct MoviesView: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel(movie.title)
+                                .accessibilityHint("Ouvrir la fiche film")
                             }
                         }
                         .padding(.horizontal, horizontalSizeClass == .regular ? ZyvioDesign.Space.s7 : ZyvioDesign.Space.s4)
