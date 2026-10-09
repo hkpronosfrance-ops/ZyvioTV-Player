@@ -211,6 +211,7 @@ struct MoviePlayerScreen: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.headline)
+                    .accessibilityLabel(Locale.current.language.languageCode?.identifier == "fr" ? "Fermer le lecteur" : "Close player")
                     .padding(12)
                     .background(.black.opacity(0.65))
                     .clipShape(Circle())
@@ -235,7 +236,10 @@ struct MoviePlayerScreen: View {
                 }
                 .padding(ZyvioDesign.Space.s6)
                 .background(ZyvioDesign.Palette.surface1.opacity(0.96))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .clipShape(RoundedRectangle(cornerRadius: ZyvioDesign.Radius.xl))
+                .frame(maxWidth: 440)
+                .padding(.horizontal, ZyvioDesign.Space.s4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .preferredColorScheme(.dark)
