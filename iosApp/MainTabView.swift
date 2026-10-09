@@ -137,8 +137,9 @@ private struct AccountView: View {
             ZStack {
                 ZyvioDesign.Palette.base.ignoresSafeArea()
 
-                VStack(alignment: .leading, spacing: 20) {
-                    Text((Locale.current.language.languageCode?.identifier == "fr" ? (Locale.current.language.languageCode?.identifier == "fr" ? "Compte" : "Account") : "Account"))
+                ScrollView {
+                    VStack(alignment: .leading, spacing: ZyvioDesign.Space.s5) {
+                    Text((Locale.current.language.languageCode?.identifier == "fr" ? "Compte" : "Account"))
                         .font(.largeTitle.bold())
 
                     Text((Locale.current.language.languageCode?.identifier == "fr" ? "Votre compte ZYVIOTV Player synchronise vos appareils, favoris et progressions." : "Your ZYVIOTV Player account syncs your devices, favorites and watch progress."))
@@ -147,7 +148,7 @@ private struct AccountView: View {
                     HStack(spacing: 14) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.white.opacity(0.08))
+                                .fill(ZyvioDesign.Palette.surface2)
                             Image(systemName: profile.isChild ? "figure.and.child.holdinghands" : "person.crop.circle.fill")
                                 .font(.title)
                                 .foregroundStyle(.white)
@@ -165,8 +166,8 @@ private struct AccountView: View {
                         Spacer()
                     }
                     .padding(14)
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .background(ZyvioDesign.Palette.surface1)
+                    .clipShape(RoundedRectangle(cornerRadius: ZyvioDesign.Radius.xl))
 
                     Button {
                         onSwitchProfile()
@@ -225,7 +226,10 @@ private struct AccountView: View {
 
                     Spacer()
                 }
-                .padding(ZyvioDesign.Space.s6)
+                    .padding(ZyvioDesign.Space.s6)
+                    .frame(maxWidth: 720)
+                    .frame(maxWidth: .infinity)
+                }
             }
             .navigationTitle("Plus")
         }

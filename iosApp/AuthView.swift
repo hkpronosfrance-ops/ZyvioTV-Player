@@ -101,8 +101,11 @@ struct AuthView: View {
                     }
                     .padding(ZyvioDesign.Space.s6)
                     .frame(maxWidth: 480)
+                    .background(ZyvioDesign.Palette.surface1)
+                    .clipShape(RoundedRectangle(cornerRadius: ZyvioDesign.Radius.xl))
                     .frame(maxWidth: .infinity)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
         }
         .preferredColorScheme(.dark)
