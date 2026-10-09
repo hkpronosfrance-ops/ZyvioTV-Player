@@ -1,11 +1,10 @@
 package fr.zyviotv.player.data.m3u
 
-import com.sun.net.httpserver.HttpServer
 import fr.zyviotv.player.shared.m3u.M3uImportResult
 import fr.zyviotv.player.shared.m3u.M3uSource
-import java.net.InetSocketAddress
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -13,55 +12,52 @@ import org.junit.Before
 import org.junit.Test
 
 class AndroidM3uClientTest {
-    private lateinit var server: HttpServer
+    private lateinit var server: MockWebServer
 
     @Before
     fun setUp() {
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server = MockWebServer()
         server.start()
     }
 
     @After
     fun tearDown() {
-        server.stop(0)
+        server.shutdown()
     }
 
     @Test
     fun interruptedBodyIsRetriedAndNeverReturnedAsSuccess() = runBlocking {
-        val requests = AtomicInteger()
-        val partial = "#EXTM3U\n#EXTINF:-1,Channel 1\nhttp://stream.example/1.ts\n".toByteArray()
-        server.createContext("/interrupted") { exchange ->
-            requests.incrementAndGet()
-            exchange.sendResponseHeaders(200, partial.size.toLong() + 128L)
-            exchange.responseBody.use { it.write(partial) }
+        val partial = "#EXTM3U\n#EXTINF:-1,Channel 1\nhttp://stream.example/1.ts\n"
+        repeat(2) {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setBody(partial)
+                    .setHeader("Content-Length", partial.toByteArray().size + 128),
+            )
         }
 
         val result = AndroidM3uClient(readTimeoutMs = 2_000).import(
-            M3uSource(url("/interrupted")),
+            M3uSource(server.url("/interrupted").toString()),
             maxEntries = Int.MAX_VALUE,
         )
 
         assertTrue(result is M3uImportResult.Failure)
-        assertEquals(2, requests.get())
+        assertEquals(2, server.requestCount)
         val message = (result as M3uImportResult.Failure).message
         assertTrue("fin" in message || "interrompue" in message)
     }
 
     @Test
     fun transientHttpFailureIsRetriedOnlyOnce() = runBlocking {
-        val requests = AtomicInteger()
-        server.createContext("/unavailable") { exchange ->
-            requests.incrementAndGet()
-            exchange.sendResponseHeaders(503, -1)
-            exchange.close()
-        }
+        repeat(2) { server.enqueue(MockResponse().setResponseCode(503)) }
 
         val result = AndroidM3uClient().import(
-            M3uSource(url("/unavailable")),
+            M3uSource(server.url("/unavailable").toString()),
             maxEntries = Int.MAX_VALUE,
         )
 
-        assertEquals(2, requests.get())
+        assertEquals(2, server.requestCount)
         assertEquals(
             "Le serveur M3U a répondu avec le code 503.",
             (result as M3uImportResult.Failure).message,
@@ -76,16 +72,14 @@ class AndroidM3uClientTest {
                 appendLine("#EXTINF:-1,Channel $index")
                 appendLine("http://stream.example/$index.ts")
             }
-        }.toByteArray()
-        server.createContext("/large") { exchange ->
-            exchange.sendResponseHeaders(200, body.size.toLong())
-            exchange.responseBody.use { it.write(body) }
         }
+        server.enqueue(MockResponse().setResponseCode(200).setBody(body))
 
-        val result = AndroidM3uClient().import(M3uSource(url("/large")), maxEntries = 5)
+        val result = AndroidM3uClient().import(
+            M3uSource(server.url("/large").toString()),
+            maxEntries = 5,
+        )
 
         assertEquals(5, (result as M3uImportResult.Success).totalParsed)
     }
-
-    private fun url(path: String): String = "http://127.0.0.1:${server.address.port}$path"
 }

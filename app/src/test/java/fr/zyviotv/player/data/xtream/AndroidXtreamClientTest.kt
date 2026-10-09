@@ -1,11 +1,12 @@
 package fr.zyviotv.player.data.xtream
 
-import com.sun.net.httpserver.HttpServer
 import fr.zyviotv.player.shared.xtream.XtreamConnectionResult
 import fr.zyviotv.player.shared.xtream.XtreamCredentials
-import java.net.InetSocketAddress
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -13,60 +14,55 @@ import org.junit.Before
 import org.junit.Test
 
 class AndroidXtreamClientTest {
-    private lateinit var server: HttpServer
+    private lateinit var server: MockWebServer
 
     @Before
     fun setUp() {
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server = MockWebServer()
         server.start()
     }
 
     @After
     fun tearDown() {
-        server.stop(0)
+        server.shutdown()
     }
 
     @Test
     fun http512RetriesWithCompatibilityHeadersAndStillValidatesBody() = runBlocking {
-        val requests = AtomicInteger()
-        server.createContext("/panel/player_api.php") { exchange ->
-            requests.incrementAndGet()
-            val compatible = exchange.requestHeaders.getFirst("User-Agent").startsWith("Mozilla/")
-            if (compatible) {
-                val body = activeProfile().toByteArray()
-                exchange.sendResponseHeaders(200, body.size.toLong())
-                exchange.responseBody.use { it.write(body) }
-            } else {
-                exchange.sendResponseHeaders(512, -1)
-                exchange.close()
-            }
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.getHeader("User-Agent")?.startsWith("Mozilla/") == true) {
+                    MockResponse().setResponseCode(200).setBody(activeProfile())
+                } else {
+                    MockResponse().setResponseCode(512)
+                }
         }
 
         val result = AndroidXtreamClient().authenticate(credentials("/panel"))
 
         assertTrue(result is XtreamConnectionResult.Success)
-        assertEquals(2, requests.get())
+        assertEquals(2, server.requestCount)
     }
 
     @Test
     fun redirectKeepsSameOriginQueryAndCookie() = runBlocking {
-        server.createContext("/redirect/player_api.php") { exchange ->
-            exchange.responseHeaders.add("Location", "/redirect/login")
-            exchange.responseHeaders.add("Set-Cookie", "panel_session=ok; Path=/redirect")
-            exchange.sendResponseHeaders(302, -1)
-            exchange.close()
-        }
-        server.createContext("/redirect/login") { exchange ->
-            val hasCredentials = exchange.requestURI.rawQuery?.contains("username=user") == true &&
-                exchange.requestURI.rawQuery?.contains("password=secret") == true
-            val hasCookie = exchange.requestHeaders.getFirst("Cookie")?.contains("panel_session=ok") == true
-            if (hasCredentials && hasCookie) {
-                val body = activeProfile().toByteArray()
-                exchange.sendResponseHeaders(200, body.size.toLong())
-                exchange.responseBody.use { it.write(body) }
-            } else {
-                exchange.sendResponseHeaders(400, -1)
-                exchange.close()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                "/redirect/player_api.php" -> MockResponse()
+                    .setResponseCode(302)
+                    .setHeader("Location", "/redirect/login")
+                    .setHeader("Set-Cookie", "panel_session=ok; Path=/redirect")
+                "/redirect/login" -> {
+                    val hasCredentials = request.requestUrl?.queryParameter("username") == "user" &&
+                        request.requestUrl?.queryParameter("password") == "secret"
+                    val hasCookie = request.getHeader("Cookie")?.contains("panel_session=ok") == true
+                    if (hasCredentials && hasCookie) {
+                        MockResponse().setResponseCode(200).setBody(activeProfile())
+                    } else {
+                        MockResponse().setResponseCode(400)
+                    }
+                }
+                else -> MockResponse().setResponseCode(404)
             }
         }
 
@@ -77,16 +73,11 @@ class AndroidXtreamClientTest {
 
     @Test
     fun repeated512RemainsAFailure() = runBlocking {
-        val requests = AtomicInteger()
-        server.createContext("/blocked/player_api.php") { exchange ->
-            requests.incrementAndGet()
-            exchange.sendResponseHeaders(512, -1)
-            exchange.close()
-        }
+        repeat(2) { server.enqueue(MockResponse().setResponseCode(512)) }
 
         val result = AndroidXtreamClient().authenticate(credentials("/blocked"))
 
-        assertEquals(2, requests.get())
+        assertEquals(2, server.requestCount)
         assertEquals(
             "Le serveur IPTV a répondu avec le code 512.",
             (result as XtreamConnectionResult.Failure).message,
@@ -94,7 +85,7 @@ class AndroidXtreamClientTest {
     }
 
     private fun credentials(path: String) = XtreamCredentials(
-        serverUrl = "http://127.0.0.1:${server.address.port}$path",
+        serverUrl = server.url(path).toString().trimEnd('/'),
         username = "user",
         password = "secret",
     )
