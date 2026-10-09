@@ -33,6 +33,9 @@ jobs:
       - name: Check D6 TV and iOS presentation contracts
         run: python3 -m unittest discover -s tests -p 'test_d6_crossplatform_polish_192.py' -v
 
+      - name: Validate TV remote input editing navigation
+        run: python3 -m unittest discover -s tests -p 'test_tv_navigation_198.py' -v
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
