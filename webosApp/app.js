@@ -580,7 +580,7 @@
     const target = nextFocus(current, direction);
     if (target) {
       target.focus();
-      target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
     }
   }
 
@@ -592,8 +592,16 @@
 
   function activate(section) {
     activeSection = section;
+    const content = appShell?.querySelector(".content");
+    if (content) {
+      content.dataset.view = section;
+      content.scrollTop = 0;
+    }
     document.querySelectorAll(".nav").forEach((item) => {
-      item.classList.toggle("active", item.dataset.section === section);
+      const selected = item.dataset.section === section;
+      item.classList.toggle("active", selected);
+      if (selected) item.setAttribute("aria-current", "page");
+      else item.removeAttribute("aria-current");
     });
 
     hidePanels();
@@ -945,6 +953,14 @@
       liveCount.textContent = liveChannels.length + " chaîne" + (liveChannels.length > 1 ? "s" : "");
     }
 
+    if (!visible.length) {
+      const empty = document.createElement("p");
+      empty.className = "catalog-empty";
+      empty.setAttribute("role", "status");
+      empty.textContent = "Aucune chaîne disponible dans cette playlist.";
+      liveGrid.append(empty);
+    }
+
     visible.forEach((channel) => {
       const button = document.createElement("button");
       button.className = "catalog-card";
@@ -998,6 +1014,14 @@
       catalogCount.textContent = entries.length + " élément" + (entries.length > 1 ? "s" : "");
     }
     catalogGrid.replaceChildren();
+
+    if (!entries.length) {
+      const empty = document.createElement("p");
+      empty.className = "catalog-empty";
+      empty.setAttribute("role", "status");
+      empty.textContent = "Aucun contenu disponible pour cette sélection.";
+      catalogGrid.append(empty);
+    }
 
     entries.slice(0, 80).forEach((entry) => {
       const button = document.createElement("button");
@@ -1839,7 +1863,7 @@
       ArrowDown: "down",
     };
 
-    if (directions[event.key]) {
+    if (directions[event.key] && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
       event.preventDefault();
       move(directions[event.key]);
       return;
@@ -1891,7 +1915,8 @@
       return;
     }
 
-    if (event.keyCode === 461 || event.key === "Escape" || event.key === "Backspace") {
+    if (event.keyCode === 461 || event.key === "Escape" ||
+        (event.key === "Backspace" && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName))) {
       event.preventDefault();
 
       if (pinScreen && !pinScreen.hidden) {
