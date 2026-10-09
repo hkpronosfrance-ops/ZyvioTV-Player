@@ -13,7 +13,7 @@ class M3uCatalogMapperTest {
             builder.add(
                 M3uEntry(
                     name = "Chaîne $index",
-                    streamUrl = "http://iptv.invalid/live/user/redacted/$index.ts",
+                    streamUrl = "https://media.invalid/channels/$index.ts",
                     tvgId = "channel-$index",
                     groupTitle = "TV ${(index % 20) + 1}",
                 ),
@@ -23,7 +23,7 @@ class M3uCatalogMapperTest {
             builder.add(
                 M3uEntry(
                     name = "Film $index",
-                    streamUrl = "http://iptv.invalid/movie/user/redacted/$index.mkv",
+                    streamUrl = "https://media.invalid/films/$index.mkv",
                     groupTitle = "FILMS ${(index % 20) + 1}",
                 ),
             )
@@ -34,7 +34,7 @@ class M3uCatalogMapperTest {
             builder.add(
                 M3uEntry(
                     name = "Série $series S01E${episode.toString().padStart(3, '0')} Épisode $episode",
-                    streamUrl = "http://iptv.invalid/series/user/redacted/$index.mkv",
+                    streamUrl = "https://media.invalid/episodes/$index.mkv",
                     groupTitle = "SERIES ${(series % 10) + 1}",
                 ),
             )

@@ -30,7 +30,7 @@ class CatalogCacheCodecTest {
                         name = "Chaîne $index",
                         categoryId = "live",
                         logoUrl = "https://images.invalid/$index.png",
-                        streamUrl = "http://iptv.invalid/live/user/redacted/$index.ts",
+                        streamUrl = "https://media.invalid/channels/$index.ts",
                         epgId = "epg-$index",
                     )
                 },
@@ -41,7 +41,7 @@ class CatalogCacheCodecTest {
                         title = "Film $index",
                         categoryId = "movies",
                         posterUrl = null,
-                        streamUrl = "http://iptv.invalid/movie/user/redacted/$index.mkv",
+                        streamUrl = "https://media.invalid/films/$index.mkv",
                         containerExtension = "mkv",
                     )
                 },
@@ -61,7 +61,7 @@ class CatalogCacheCodecTest {
                             number = 1,
                             title = "Pilote",
                             synopsis = null,
-                            streamUrl = "http://iptv.invalid/series/user/redacted/1.mkv",
+                            streamUrl = "https://media.invalid/episodes/1.mkv",
                         ),
                     ),
                 ),
