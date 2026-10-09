@@ -86,3 +86,22 @@ Not yet verified: real provider streams on Pixel 7 emulator, physical phone, tab
 - Tests: `PlayerLifecycleTest` (JVM) and `tests/test_android_player_209.py`.
   Not verified on Pixel 7, physical phone, TV or with a real provider.
 
+## PR #210 — Full screen, orientation and Media3 teardown (October 2026)
+
+- Root cause of the missing full screen button: the player route has no
+  `Surface` above it, so `LocalContentColor` was Compose's default black and
+  the untinted full screen `IconButton` was black on black. `PlayerScreen`
+  now provides `ZyvioTextPrimary`; the full screen button is tinted, 48 dp,
+  fixed at the end of the bottom row (outside the scroll) for Live, films
+  and episodes.
+- `PlayerFullscreenPolicy`: button → hidden bars + sensor landscape; a phone
+  turned sideways is full screen; leaving while sideways requests portrait;
+  Back leaves full screen before the player; the opening orientation and the
+  bars are restored when the player closes. TV is never changed.
+- Teardown: the `PlayerView` surface is detached before the single
+  `release()`. `Handler sending message to a Handler on a dead thread` after
+  `ExoPlayerImpl Release` comes from late emulator codec (`c2.goldfish.*`)
+  callbacks; no double release or late app callback was found.
+- Tests: `PlayerLifecycleTest` (JVM) and
+  `tests/test_android_player_fullscreen_210.py`. Not verified on a device.
+

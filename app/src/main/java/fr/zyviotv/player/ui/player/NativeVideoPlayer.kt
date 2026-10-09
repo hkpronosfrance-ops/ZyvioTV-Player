@@ -133,6 +133,9 @@ fun NativeVideoPlayer(
                 playWhenReady = autoPlay
             }
     }
+    // The view showing this player, so the surface can be detached before the
+    // player is released (see the release effect below).
+    val attachedView = remember(player) { arrayOfNulls<PlayerView>(1) }
     // Commands sent before this player existed belong to the previous one.
     val commandGate = remember(player) { PlayerCommandGate(commandToken) }
 
@@ -384,6 +387,12 @@ fun NativeVideoPlayer(
             scope.cancel()
             positionChanged(player.currentPosition.coerceAtLeast(0L))
             player.removeListener(listener)
+            // Order matters (#210): detach the surface first so the decoder
+            // stops rendering into it, then release once. Releasing while the
+            // surface is still attached lets the view's surface callbacks
+            // reach an already released player.
+            attachedView[0]?.takeIf { it.player === player }?.player = null
+            attachedView[0] = null
             player.release()
             PlaybackDiagnostics.released("dispose")
         }
@@ -394,6 +403,7 @@ fun NativeVideoPlayer(
         factory = { viewContext ->
             PlayerView(viewContext).apply {
                 this.player = player
+                attachedView[0] = this
                 useController = showNativeControls
                 keepScreenOn = true
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
@@ -405,7 +415,10 @@ fun NativeVideoPlayer(
             }
         },
         update = { view ->
-            if (view.player !== player) view.player = player
+            if (view.player !== player) {
+                view.player = player
+                attachedView[0] = view
+            }
             view.useController = showNativeControls
             view.resizeMode = scaleMode.resizeMode()
         },
