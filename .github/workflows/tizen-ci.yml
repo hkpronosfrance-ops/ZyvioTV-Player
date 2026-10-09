@@ -53,6 +53,9 @@ jobs:
       - name: Validate provider core
         run: node tizenApp/provider.test.cjs
 
+      - name: Validate phase 196 player failure recovery
+        run: node tests/player-reliability-196.cjs tizenApp
+
       - name: Validate playback adapter syntax
         run: node --check tizenApp/player.js
 
