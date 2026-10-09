@@ -1855,8 +1855,9 @@
             ArrowDown: "down",
         };
 
+        const editingText = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
         const direction = keyMap[event.key];
-        if (direction) {
+        if (direction && !editingText) {
             event.preventDefault();
             moveFocus(direction);
             return;
@@ -1922,7 +1923,7 @@
         }
 
         const isBack =
-            event.key === "Backspace" ||
+            (event.key === "Backspace" && !editingText) ||
             event.key === "Escape" ||
             event.key === "XF86Back" ||
             event.keyCode === 10009;
