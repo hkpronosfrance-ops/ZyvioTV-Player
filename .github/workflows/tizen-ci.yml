@@ -30,6 +30,9 @@ jobs:
       - name: Validate D7 cross-platform source contract
         run: python3 scripts/d7_source_audit.py
 
+      - name: Check D6 TV and iOS presentation contracts
+        run: python3 -m unittest discover -s tests -p 'test_d6_crossplatform_polish_192.py' -v
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
