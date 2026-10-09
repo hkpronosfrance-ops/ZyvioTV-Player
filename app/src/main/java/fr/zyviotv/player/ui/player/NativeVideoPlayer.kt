@@ -530,7 +530,6 @@ fun NativeVideoPlayer(
     )
 }
 
-@UnstableApi
 /** Fixed names for Media3 discontinuity reasons (bounded log values). */
 private fun discontinuityName(reason: Int): String = when (reason) {
     Player.DISCONTINUITY_REASON_AUTO_TRANSITION -> "auto_transition"
@@ -542,6 +541,7 @@ private fun discontinuityName(reason: Int): String = when (reason) {
     else -> "other"
 }
 
+@UnstableApi
 private fun PlayerScaleMode.resizeMode(): Int = when (this) {
     PlayerScaleMode.Fit -> AspectRatioFrameLayout.RESIZE_MODE_FIT
     PlayerScaleMode.Zoom -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
