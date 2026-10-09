@@ -322,7 +322,7 @@ private struct GuideList: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: ZyvioDesign.Space.s3) {
                     ForEach(channels) { channel in
                         let programmes = guide[channel.id] ?? []
                         let current = current(programmes)
@@ -348,8 +348,8 @@ private struct GuideList: View {
                             }
                         }
                         .padding(14)
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .background(ZyvioDesign.Palette.surface1)
+                        .clipShape(RoundedRectangle(cornerRadius: ZyvioDesign.Radius.lg))
                     }
                 }
                 .padding(ZyvioDesign.Space.s4)
@@ -379,7 +379,9 @@ private struct GuideList: View {
         let threshold = current?.endEpochSeconds
             ?? Int64(Date().timeIntervalSince1970)
 
-        return programmes.first { $0.startEpochSeconds >= threshold }
+        return programmes
+            .filter { $0.startEpochSeconds >= threshold }
+            .min { $0.startEpochSeconds < $1.startEpochSeconds }
     }
 }
 
