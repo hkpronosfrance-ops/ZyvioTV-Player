@@ -20,8 +20,13 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import fr.zyviotv.player.shared.playback.PlaybackKind
 import fr.zyviotv.player.shared.playback.PlaybackMediaType
 import fr.zyviotv.player.shared.playback.PlaybackMediaTypeResolver
 import fr.zyviotv.player.shared.playback.PlaybackRequest
@@ -61,24 +66,42 @@ fun NativeVideoPlayer(
     val validation = remember(request) { PlaybackValidator.validate(request) }
 
     if (validation !is PlaybackValidationResult.Valid) {
-        onStateChanged(PlaybackState.Error)
-        onError(
-            (validation as? PlaybackValidationResult.Invalid)?.message
-                ?: "Le flux vidéo est invalide.",
-        )
+        // Report through an effect: callbacks must not mutate caller state
+        // during composition.
+        LaunchedEffect(validation) {
+            onStateChanged(PlaybackState.Error)
+            onError(
+                (validation as? PlaybackValidationResult.Invalid)?.message
+                    ?: "Le flux vidéo est invalide.",
+            )
+        }
         return
     }
 
+    val mediaAttempts = remember(request.streamUrl, request.kind) {
+        PlaybackMediaTypeResolver.attempts(request)
+    }
+    val attemptIndex = remember(request.streamUrl, request.resumePositionMs) { intArrayOf(0) }
+
     val player = remember(request.streamUrl, request.resumePositionMs) {
-        ExoPlayer.Builder(context).build().apply {
-            setHandleAudioBecomingNoisy(true)
-            setMediaItem(buildMediaItem(request))
-            if (request.resumePositionMs > 0L) {
-                seekTo(request.resumePositionMs)
+        PlaybackDiagnostics.launch(request)
+        PlaybackDiagnostics.attempt(mediaAttempts[0], 0)
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(
+                    DefaultDataSource.Factory(context, providerHttpDataSourceFactory()),
+                ),
+            )
+            .build()
+            .apply {
+                setHandleAudioBecomingNoisy(true)
+                setMediaItem(buildMediaItem(request, mediaAttempts[0]))
+                if (request.resumePositionMs > 0L) {
+                    seekTo(request.resumePositionMs)
+                }
+                prepare()
+                playWhenReady = autoPlay
             }
-            prepare()
-            playWhenReady = autoPlay
-        }
     }
 
     LaunchedEffect(
@@ -134,7 +157,7 @@ fun NativeVideoPlayer(
             NativePlayerCommand.Retry -> {
                 val position = player.currentPosition.coerceAtLeast(0L)
                 player.stop()
-                player.setMediaItem(buildMediaItem(request))
+                player.setMediaItem(buildMediaItem(request, mediaAttempts[attemptIndex[0]]))
                 if (position > 0L) player.seekTo(position)
                 player.prepare()
                 player.playWhenReady = true
@@ -154,24 +177,62 @@ fun NativeVideoPlayer(
 
         fun failPlayback(message: String) {
             bufferingJob?.cancel()
+            PlaybackDiagnostics.state("error")
             onStateChanged(PlaybackState.Error)
             onError(message)
+        }
+
+        fun reload(mediaType: PlaybackMediaType) {
+            val position = if (request.kind == PlaybackKind.Live) {
+                0L
+            } else {
+                player.currentPosition.coerceAtLeast(0L)
+            }
+            player.stop()
+            player.setMediaItem(buildMediaItem(request, mediaType))
+            if (position > 0L) {
+                player.seekTo(position)
+            }
+            player.prepare()
+            player.playWhenReady = true
         }
 
         fun silentRetryOrFail(message: String) {
             bufferingJob?.cancel()
             if (!silentRetryUsed) {
                 silentRetryUsed = true
-                val position = player.currentPosition.coerceAtLeast(0L)
-                player.stop()
-                player.setMediaItem(buildMediaItem(request))
-                if (position > 0L) {
-                    player.seekTo(position)
-                }
-                player.prepare()
-                player.playWhenReady = true
+                reload(mediaAttempts[attemptIndex[0]])
             } else {
                 failPlayback(message)
+            }
+        }
+
+        fun handlePlayerError(error: PlaybackException) {
+            val httpStatus = (error.cause as? HttpDataSource.InvalidResponseCodeException)
+                ?.responseCode
+            val failure = PlaybackErrorClassifier.classify(error.errorCode, httpStatus)
+            val nextAttempt = attemptIndex[0] + 1
+            when {
+                failure.kind == PlaybackErrorKind.BehindLiveWindow -> {
+                    PlaybackDiagnostics.failure(failure, error.errorCodeName, terminal = false)
+                    player.seekToDefaultPosition()
+                    player.prepare()
+                }
+                failure.canTryNextContainer && nextAttempt < mediaAttempts.size -> {
+                    PlaybackDiagnostics.failure(failure, error.errorCodeName, terminal = false)
+                    attemptIndex[0] = nextAttempt
+                    PlaybackDiagnostics.attempt(mediaAttempts[nextAttempt], nextAttempt)
+                    bufferingJob?.cancel()
+                    reload(mediaAttempts[nextAttempt])
+                }
+                failure.isTransient && !silentRetryUsed -> {
+                    PlaybackDiagnostics.failure(failure, error.errorCodeName, terminal = false)
+                    silentRetryOrFail(failure.userMessage)
+                }
+                else -> {
+                    PlaybackDiagnostics.failure(failure, error.errorCodeName, terminal = true)
+                    failPlayback(failure.userMessage)
+                }
             }
         }
 
@@ -199,6 +260,7 @@ fun NativeVideoPlayer(
                     Player.STATE_READY -> {
                         bufferingJob?.cancel()
                         silentRetryUsed = false
+                        PlaybackDiagnostics.state("ready")
                         onStateChanged(PlaybackState.Ready)
                         onPositionChanged(player.currentPosition.coerceAtLeast(0L))
                         publishDuration()
@@ -226,9 +288,7 @@ fun NativeVideoPlayer(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                silentRetryOrFail(
-                    "Impossible de lire ce flux. Réessayez ou choisissez un autre contenu.",
-                )
+                handlePlayerError(error)
             }
         }
 
@@ -344,8 +404,21 @@ enum class NativePlayerCommand {
     Retry,
 }
 
-private fun buildMediaItem(request: PlaybackRequest): MediaItem {
-    val mimeType = when (PlaybackMediaTypeResolver.resolve(request)) {
+/**
+ * Provider HTTP stack shared by every stream: IPTV panels commonly redirect
+ * between HTTP and HTTPS hosts (load balancers, tokenised edges), which the
+ * Media3 default refuses. Cleartext stays governed by the app network policy.
+ */
+@UnstableApi
+private fun providerHttpDataSourceFactory(): HttpDataSource.Factory =
+    DefaultHttpDataSource.Factory()
+        .setUserAgent(PROVIDER_USER_AGENT)
+        .setAllowCrossProtocolRedirects(true)
+        .setConnectTimeoutMs(PROVIDER_CONNECT_TIMEOUT_MS)
+        .setReadTimeoutMs(PROVIDER_READ_TIMEOUT_MS)
+
+private fun buildMediaItem(request: PlaybackRequest, mediaType: PlaybackMediaType): MediaItem {
+    val mimeType = when (mediaType) {
         PlaybackMediaType.Hls -> MimeTypes.APPLICATION_M3U8
         PlaybackMediaType.TransportStream -> MimeTypes.VIDEO_MP2T
         PlaybackMediaType.Progressive,
@@ -362,6 +435,9 @@ private fun buildMediaItem(request: PlaybackRequest): MediaItem {
 }
 
 
+private const val PROVIDER_USER_AGENT = "ZYVIOTV-Player/0.1 (Android)"
+private const val PROVIDER_CONNECT_TIMEOUT_MS = 15_000
+private const val PROVIDER_READ_TIMEOUT_MS = 20_000
 private const val BUFFERING_INDICATOR_DELAY_MS = 500L
 private const val BUFFERING_ERROR_TIMEOUT_MS = 15_000L
 private const val SEEK_STEP_MS = 10_000L

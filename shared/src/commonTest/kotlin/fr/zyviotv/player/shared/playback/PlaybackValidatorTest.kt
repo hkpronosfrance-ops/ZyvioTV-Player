@@ -29,4 +29,27 @@ class PlaybackValidatorTest {
             ),
         )
     }
+
+    @Test
+    fun cleartextProviderStreamPasses() {
+        // PR #203: many IPTV providers only expose HTTP streams.
+        assertIs<PlaybackValidationResult.Valid>(
+            PlaybackValidator.validate(
+                PlaybackRequest(
+                    title = "Live",
+                    streamUrl = "http://provider.example:8080/user/pass/42",
+                    kind = PlaybackKind.Live,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun blankStreamFails() {
+        assertIs<PlaybackValidationResult.Invalid>(
+            PlaybackValidator.validate(
+                PlaybackRequest(title = "Live", streamUrl = "  ", kind = PlaybackKind.Live),
+            ),
+        )
+    }
 }

@@ -58,6 +58,7 @@ fun FavoritesScreen(
     onRetry: () -> Unit,
     onOpenFavorite: (SyncedFavorite) -> Unit,
     onRemoveFavorite: (SyncedFavorite) -> Unit,
+    isOffline: Boolean = false,
 ) {
     when (state) {
         LibraryState.Loading -> LoadingFavorites()
@@ -65,7 +66,8 @@ fun FavoritesScreen(
         is LibraryState.Ready -> ReadyFavorites(
             profile = profile,
             favorites = state.snapshot.favorites,
-            isOffline = state.snapshot.isOffline,
+            isOffline = isOffline,
+            isFromCache = state.snapshot.isFromCache,
             onOpenFavorite = onOpenFavorite,
             onRemoveFavorite = onRemoveFavorite,
         )
@@ -77,6 +79,7 @@ private fun ReadyFavorites(
     profile: DeviceProfile,
     favorites: List<SyncedFavorite>,
     isOffline: Boolean,
+    isFromCache: Boolean,
     onOpenFavorite: (SyncedFavorite) -> Unit,
     onRemoveFavorite: (SyncedFavorite) -> Unit,
 ) {
@@ -114,10 +117,15 @@ private fun ReadyFavorites(
             }
         }
 
-        if (isOffline) {
+        val statusMessage = when {
+            isOffline -> "Hors connexion : favoris consultables en lecture seule."
+            isFromCache -> "Favoris affichés depuis l’appareil : la synchronisation du compte n’a pas abouti."
+            else -> null
+        }
+        if (statusMessage != null) {
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Hors connexion : favoris consultables en lecture seule.",
+                text = statusMessage,
                 color = ZyvioTextSecondary,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -167,7 +175,7 @@ private fun ReadyFavorites(
                     favorite = favorite,
                     isTelevision = profile == DeviceProfile.Television,
                     enabled = !isOffline || favorite.contentType != FavoriteContentType.Live,
-                    canRemove = !isOffline,
+                    canRemove = !isOffline && !isFromCache,
                     onOpen = { onOpenFavorite(favorite) },
                     onRemove = { onRemoveFavorite(favorite) },
                 )

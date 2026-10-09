@@ -4,7 +4,6 @@ import fr.zyviotv.player.data.catalog.AndroidSeriesDetailLoader
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
 import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
-import fr.zyviotv.player.shared.sync.PlaylistSecret
 
 class SeriesAutoNextResolver(
     private val cloudRepository: SupabaseCloudSyncRepository,
@@ -16,10 +15,10 @@ class SeriesAutoNextResolver(
         currentSeason: Int?,
         currentEpisode: Int?,
     ): SeriesEpisodeSource? {
-        val secret = cloudRepository.getPlaylistSecret(playlistId).getOrNull()
-            ?: return null
-
-        val detail = (AndroidSeriesDetailLoader.load(secret, seriesId) as? SeriesDetailLoadResult.Success)?.detail
+        val result = AndroidSeriesDetailLoader.loadPreferLocal(seriesId) {
+            cloudRepository.getPlaylistSecret(playlistId)
+        }
+        val detail = (result as? SeriesDetailLoadResult.Success)?.detail
             ?: return null
         // Provider responses may return episodes in arbitrary order; auto-next must
         // follow season/episode numbering, never the raw API response order.

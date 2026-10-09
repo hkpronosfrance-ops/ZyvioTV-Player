@@ -43,6 +43,7 @@ fun ContinueWatchingScreen(
     activePlaylistId: String?,
     onRetry: () -> Unit,
     onOpen: (SyncedWatchProgress) -> Unit,
+    isOffline: Boolean = false,
 ) {
     when (state) {
         LibraryState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -87,10 +88,17 @@ fun ContinueWatchingScreen(
                     text = "${visibleItems.size} contenu" + if (visibleItems.size > 1) "s" else "",
                     color = ZyvioTextSecondary,
                 )
-                if (state.snapshot.isOffline) {
+                val statusMessage = when {
+                    isOffline ->
+                        "Hors connexion : votre progression reste consultable, mais la lecture nécessite Internet."
+                    state.snapshot.isFromCache ->
+                        "Progression affichée depuis l’appareil : la synchronisation du compte n’a pas abouti."
+                    else -> null
+                }
+                if (statusMessage != null) {
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "Hors connexion : votre progression reste consultable, mais la lecture nécessite Internet.",
+                        text = statusMessage,
                         color = ZyvioTextSecondary,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -115,7 +123,9 @@ fun ContinueWatchingScreen(
                             ContinueWatchingRow(
                                 progress = progress,
                                 isTelevision = profile == DeviceProfile.Television,
-                                enabled = !state.snapshot.isOffline,
+                                // Opening a detail page is local; playback is
+                                // gated (with a message) by PlaybackLaunchPolicy.
+                                enabled = true,
                                 onClick = { onOpen(progress) },
                             )
                         }
