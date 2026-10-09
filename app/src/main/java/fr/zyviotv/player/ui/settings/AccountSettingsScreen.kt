@@ -1,5 +1,9 @@
 package fr.zyviotv.player.ui.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.auth.SupabaseAuthRepository
 import fr.zyviotv.player.shared.auth.AuthResult
@@ -52,7 +57,9 @@ fun AccountSettingsScreen(
     var message by remember { mutableStateOf<String?>(null) }
 
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = ZyvioSpace.s4, vertical = ZyvioSpace.s6),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -69,7 +76,7 @@ fun AccountSettingsScreen(
         Spacer(Modifier.height(20.dp))
 
         OutlinedButton(
-            modifier = Modifier.fillMaxWidth(0.6f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             onClick = onOpenPlaylists,
         ) {
             Text(stringResource(R.string.playlist_title))
@@ -78,7 +85,7 @@ fun AccountSettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            modifier = Modifier.fillMaxWidth(0.6f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             onClick = onOpenDevices,
         ) {
             Text(stringResource(R.string.settings_devices))
@@ -87,7 +94,7 @@ fun AccountSettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            modifier = Modifier.fillMaxWidth(0.6f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             onClick = onOpenPlaybackData,
         ) {
             Text(stringResource(R.string.settings_playback_data))
@@ -96,7 +103,7 @@ fun AccountSettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            modifier = Modifier.fillMaxWidth(0.6f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             onClick = onOpenCache,
         ) {
             Text(stringResource(R.string.settings_data_cache))
@@ -105,7 +112,7 @@ fun AccountSettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            modifier = Modifier.fillMaxWidth(0.6f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             onClick = onOpenParentalControls,
         ) {
             Text(stringResource(R.string.settings_parental))
@@ -114,7 +121,7 @@ fun AccountSettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            modifier = Modifier.fillMaxWidth(0.6f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             onClick = onOpenProfiles,
         ) {
             Text(stringResource(R.string.settings_profiles))
@@ -123,7 +130,7 @@ fun AccountSettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            modifier = Modifier.fillMaxWidth(0.6f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             onClick = onSwitchProfile,
         ) {
             Text(stringResource(R.string.settings_switch_profile))
@@ -140,7 +147,7 @@ fun AccountSettingsScreen(
         }
 
         Button(
-            modifier = Modifier.fillMaxWidth(0.6f),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             enabled = !isLoading,
             onClick = {
                 scope.launch {
