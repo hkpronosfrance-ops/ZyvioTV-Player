@@ -163,7 +163,7 @@ class SupabaseAuthRepository(
             return SessionRestoreResult.NetworkUnavailable
         }
 
-        when {
+        return when {
             response.code in 200..299 -> {
                 saveSessionFromResponse(response.body)
                 SessionRestoreResult.Valid

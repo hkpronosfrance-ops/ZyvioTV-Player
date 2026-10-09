@@ -35,13 +35,15 @@ internal object NetworkDiagnostics {
         )
     }
 
-    internal fun safeEndpoint(value: String): String = try {
-        val url = URL(value)
-        val scheme = url.protocol.lowercase()
-        if (url.host.isBlank()) return "invalid-url"
-        if (scheme == "http" || scheme == "https") scheme else "other"
-    } catch (_: Exception) {
-        "invalid-url"
+    internal fun safeEndpoint(value: String): String {
+        return try {
+            val url = URL(value)
+            val scheme = url.protocol.lowercase()
+            if (url.host.isBlank()) "invalid-url"
+            else if (scheme == "http" || scheme == "https") scheme else "other"
+        } catch (_: Exception) {
+            "invalid-url"
+        }
     }
 
     internal fun failureKind(error: Throwable): String = when (error) {
