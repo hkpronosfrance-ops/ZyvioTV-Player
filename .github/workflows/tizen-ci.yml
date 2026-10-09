@@ -59,6 +59,9 @@ jobs:
       - name: Validate phase 197 account playlist restore
         run: node tests/account-playlist-197.cjs tizenApp
 
+      - name: Validate phase 200 bounded M3U caching
+        run: node tests/m3u-cache-stability-200.cjs tizenApp
+
       - name: Validate provider core
         run: node tizenApp/provider.test.cjs
 
