@@ -100,7 +100,7 @@
       ])
     );
 
-    return (Array.isArray(streams) ? streams : []).map((item) => ({
+    return (Array.isArray(streams) ? streams : []).filter((item) => item?.stream_id != null && String(item.stream_id).trim() !== "").map((item) => ({
       id: String(item.stream_id),
       name: String(item.name || "Chaîne"),
       number: Number(item.num || 0),
@@ -126,7 +126,7 @@
       ])
     );
 
-    return (Array.isArray(streams) ? streams : []).map((item) => ({
+    return (Array.isArray(streams) ? streams : []).filter((item) => item?.stream_id != null && String(item.stream_id).trim() !== "").map((item) => ({
       id: String(item.stream_id),
       title: String(item.name || "Film"),
       categoryId: String(item.category_id || ""),
@@ -155,7 +155,7 @@
       ])
     );
 
-    return (Array.isArray(series) ? series : []).map((item) => ({
+    return (Array.isArray(series) ? series : []).filter((item) => item?.series_id != null && String(item.series_id).trim() !== "").map((item) => ({
       id: String(item.series_id),
       title: String(item.name || "Série"),
       categoryId: String(item.category_id || ""),
@@ -176,7 +176,7 @@
     const normalizedEpisodes = {};
     Object.entries(episodesBySeason).forEach(([seasonKey, values]) => {
       normalizedEpisodes[seasonKey] = (Array.isArray(values) ? values : []).map((item, index) => {
-        const id = String(item?.id || item?.stream_id || "");
+        const id = String(item?.id ?? item?.stream_id ?? "").trim();
         const extension = String(item?.container_extension || "mp4");
         return {
           id,
@@ -406,12 +406,12 @@
         seriesMap.set(seriesKey, series);
       }
 
-      const seasonKey = String(Math.max(1, Number(episode.season || 1)));
+      const seasonKey = String(Number(episode.season));
       if (!series.episodesBySeason[seasonKey]) series.episodesBySeason[seasonKey] = [];
       series.episodesBySeason[seasonKey].push({
         id: entry.id,
         season: Number(seasonKey),
-        number: Math.max(1, Number(episode.episode || series.episodesBySeason[seasonKey].length + 1)),
+        number: Number(episode.episode),
         title: episode.episodeTitle || ("Épisode " + Math.max(1, Number(episode.episode || 1))),
         synopsis: "",
         streamUrl: entry.streamUrl,
