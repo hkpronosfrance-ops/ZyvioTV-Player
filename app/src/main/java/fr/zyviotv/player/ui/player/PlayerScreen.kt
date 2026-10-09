@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -41,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -373,8 +375,12 @@ private fun PlayerControlsOverlay(
                 ),
             )
             .padding(
-                horizontal = if (profile == DeviceProfile.Television) 48.dp else 18.dp,
-                vertical = if (profile == DeviceProfile.Television) 28.dp else 14.dp,
+                horizontal = when (profile) {
+                    DeviceProfile.Mobile -> ZyvioSpace.s4
+                    DeviceProfile.Tablet -> ZyvioSpace.s8
+                    DeviceProfile.Television -> ZyvioSpace.s12
+                },
+                vertical = if (profile == DeviceProfile.Television) ZyvioSpace.s7 else ZyvioSpace.s4,
             ),
     ) {
         Row(
@@ -704,12 +710,18 @@ private fun TracksPanel(
     onSelectSubtitleTrack: (PlayerTrackUi) -> Unit,
     onDisableSubtitles: () -> Unit,
 ) {
+    val availableWidth = LocalConfiguration.current.screenWidthDp.dp
+    val sidePanelOffset = if (profile == DeviceProfile.Television) {
+        (availableWidth * 0.42f).coerceAtMost(520.dp)
+    } else {
+        0.dp
+    }
     Surface(
         modifier = Modifier
             .fillMaxSize()
             .padding(
-                start = if (profile == DeviceProfile.Television) 520.dp else 28.dp,
-                top = if (profile == DeviceProfile.Television) 0.dp else 180.dp,
+                start = sidePanelOffset,
+                top = if (profile == DeviceProfile.Television) 0.dp else 120.dp,
             ),
         color = ZyvioSurface1,
     ) {
@@ -812,7 +824,9 @@ private fun ResumePanel(
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            modifier = Modifier.width(if (profile == DeviceProfile.Television) 520.dp else 320.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .widthIn(max = if (profile == DeviceProfile.Television) 520.dp else 400.dp),
             color = ZyvioSurface1,
             shape = RoundedCornerShape(18.dp),
         ) {
