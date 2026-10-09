@@ -24,13 +24,13 @@ fun Modifier.tvFocusEffect(
     this
         .onFocusChanged { focused = it.isFocused }
         .graphicsLayer {
-            val scale = if (enabled && focused) 1.06f else 1f
+            val scale = if (enabled && focused) 1.02f else 1f
             scaleX = scale
             scaleY = scale
-            shadowElevation = if (enabled && focused) 20f else 0f
+            shadowElevation = if (enabled && focused) 16f else 0f
         }
         .border(
-            width = if (enabled && focused) 3.dp else 0.dp,
+            width = if (enabled && focused) 4.dp else 0.dp,
             color = if (enabled && focused) ZyvioTextPrimary else Color.Transparent,
             shape = shape,
         )

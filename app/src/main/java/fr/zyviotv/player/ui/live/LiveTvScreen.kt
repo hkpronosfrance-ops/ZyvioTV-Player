@@ -295,7 +295,7 @@ private fun LargeLiveLayout(
 ) {
     val availableWidth = LocalConfiguration.current.screenWidthDp.dp
     val channelListWidth = if (isTelevision) {
-        (availableWidth * 0.32f).coerceAtMost(420.dp)
+        (availableWidth * 0.30f).coerceAtMost(440.dp)
     } else {
         (availableWidth * 0.40f).coerceAtMost(330.dp)
     }
@@ -307,7 +307,7 @@ private fun LargeLiveLayout(
 
         Row(
             modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 28.dp else 18.dp),
         ) {
             Column(
                 modifier = Modifier
