@@ -26,6 +26,7 @@ import fr.zyviotv.player.data.m3u.M3uStreamingResult
 import fr.zyviotv.player.data.settings.ParentalControlsRepository
 import fr.zyviotv.player.data.settings.ProfileContentLocks
 import fr.zyviotv.player.data.settings.ProfilePreferences
+import fr.zyviotv.player.data.store.CatalogStore
 import fr.zyviotv.player.data.sync.SupabaseCloudSyncRepository
 import fr.zyviotv.player.shared.catalog.CatalogLoadResult
 import fr.zyviotv.player.shared.catalog.CatalogSnapshot
@@ -133,6 +134,10 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
     val offlineCache = remember(applicationContext) {
         OfflineContentCache(applicationContext)
     }
+    // Bloc #213 (PR A): filled in the background, not read yet.
+    val catalogStore = remember(applicationContext) {
+        CatalogStore.get(applicationContext)
+    }
 
     val state = remember {
         mutableStateOf<ProviderCatalogState>(ProviderCatalogState.Loading)
@@ -172,6 +177,8 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                 session.readyProfileId = profileId
                 session.fetchedAtEpochMs = restored.fetchedAtEpochMs
                 session.idAliases = restored.idAliases
+                // One-time copy of the V1 cache into the store (skipped once mirrored).
+                catalogStore.mirrorRestoredCache(profileId, restored)
             } else {
                 state.value = ProviderCatalogState.Loading
                 session.readyProfileId = null
@@ -246,22 +253,36 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     )
                 }
                 val fresh = withContext(Dispatchers.IO) {
+                    val allDetails = M3uSeriesDetailRegistry.snapshot()
                     val visibleSeriesIds = filtered.series.mapTo(HashSet()) { it.id }
                     CachedCatalog(
                         playlistId = loaded.playlistId,
                         playlistName = loaded.playlistName,
                         snapshot = filtered,
-                        seriesDetails = M3uSeriesDetailRegistry.snapshot()
-                            .filterKeys(visibleSeriesIds::contains),
+                        seriesDetails = allDetails.filterKeys(visibleSeriesIds::contains),
                     ).also { catalog ->
                         // saveCatalog only replaces the cache with a catalog
                         // whose every source survived (bloc #208), then attests
                         // it with its fetch date (bloc #211).
-                        offlineCache.saveCatalog(
+                        val v1Stamp = offlineCache.saveCatalog(
                             profileId = profileId,
                             catalog = catalog,
                             fetchedAtEpochMs = outcome.fetchedAtEpochMs,
                             idAliases = outcome.idAliases,
+                        )
+                        // Bloc #213: the store keeps the raw catalogue; parental
+                        // rules will be applied when reading (PR B).
+                        catalogStore.mirrorRefresh(
+                            profileId = profileId,
+                            rawCatalog = CachedCatalog(
+                                playlistId = loaded.playlistId,
+                                playlistName = loaded.playlistName,
+                                snapshot = loaded.snapshot,
+                                seriesDetails = allDetails,
+                            ),
+                            fetchedAtEpochMs = outcome.fetchedAtEpochMs,
+                            idAliases = outcome.idAliases,
+                            v1Stamp = v1Stamp,
                         )
                     }
                 }

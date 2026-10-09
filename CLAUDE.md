@@ -1,7 +1,7 @@
 # ZYVIOTV Player — Instructions permanentes pour Claude Code
 
 > Référence du projet depuis sa création. À lire AVANT toute analyse, modification, PR ou fusion.
-> État de référence documentaire : 9 octobre 2026, `main` après PR #211 : `f1e3591` (correctif titres en cours, voir §8).
+> État de référence documentaire : 10 octobre 2026, `main` après PR #212 : `394ba49` ; bloc Room en cours (PR #213 = PR A, voir §8).
 > Ce document décrit la vision, les décisions immuables, les réalisations observées et les anomalies connues. **Il ne constitue pas une attestation que chaque fonctionnalité est opérationnelle.**
 
 ## 0. Règles de travail non négociables
@@ -71,7 +71,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Profils individuels, profil par défaut, changement de profil, préférences audio/sous-titres/qualité/langue, lecture automatique de l'épisode suivant selon préférence, contrôles parentaux/PIN et états adaptés à chaque appareil.
 - Parcours TV pouvant comprendre la connexion par **QR / code TV**, états code expiré, succès, erreurs, retour et focus ; conserver les règles d'auth TV validées dans les maquettes.
 - Playlists enregistrées côté compte, portabilité multi-appareils : **ne pas obliger à les ressaisir** en changeant d'appareil. Protéger les données d'accès et les informations affichées.
-- Compte/appareils et synchronisation des sessions doivent rester limités au propriétaire authentifié. Le 403 actuel `player_devices` doit être audité séparément.
+- Compte/appareils et synchronisation des sessions doivent rester limités au propriétaire authentifié. Le 403 `player_devices` a été résolu le 09/10/2026 (voir §5).
 
 ### Formats M3U et Xtream : parité obligatoire
 
@@ -99,7 +99,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Au cours des recettes : exposition **sélective** de `public.player_profiles` et `public.player_playlists` pour résoudre d'anciens 403/401. `player_playlists` : politiques RLS propriétaires pour SELECT, INSERT, UPDATE et DELETE et privilèges `authenticated` vérifiés lors des tests.
 - L'enregistrement des secrets de playlists repose sur une couche sécurisée et des RPC, notamment `player_set_playlist_secret` et `player_get_playlist_secret`. La table `player_playlist_secrets` ne doit **JAMAIS être exposée directement** via Data API.
 - Le 9 octobre 2026 : `player_playlists` GET 200, création 201, set secret 204, get secret 200 sur le Pixel 7. **Cela ne prouve pas que toutes les tables et RPC fonctionnent.**
-- Anomalie persistante : `supabase operation=player_devices response=403 session=fresh authError=permission-denied`. Faire d'abord audit ciblé de l'exposition API, des grants effectifs, des politiques RLS, schéma et utilisateur auth. Proposer migration minimale revue si nécessaire ; **aucun changement de prod sans validation explicite**.
+- Ancienne anomalie `player_devices` 403 (`authError=permission-denied`) : résolue le 09/10/2026 par un GRANT ciblé à `authenticated` après audit en lecture seule (voir §8 et §11). Méthode à reproduire pour tout futur 403 : audit ciblé de l'exposition API, des grants effectifs, des politiques RLS, schéma et utilisateur auth ; migration minimale revue ; **aucun changement de prod sans validation explicite**.
 - Ne jamais « corriger » un 403 en désactivant RLS, accordant `anon` à des données privées, autorisant `public`, ou exposant toutes les tables/fonctions.
 - Sur clients, respecter le rafraîchissement de session authentifiée (PR #204), le retry raisonnable et des erreurs distinctes (401/403 vs réseau), sans journaliser de tokens.
 - En multi-playlists, préserver l'isolation par compte, playlist et profil. Tester le comportement lors de déconnexion, reconnexion et changement de profil.
@@ -188,7 +188,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Supabase `player_devices` HTTP 403 : cause identifiée après #211 (voir ci-dessous).
 
 **PR #211 — Télémétrie, travail inutile, stabilité, intégrité, UX** (PR #211 fusionnée, `main` = `f1e359195180ccb207e7e84a58aec8be0a01943a`, CI post-fusion verte). Rapport d'audit : fichiers du projet `audits/audit-211.md`.
-- Découpage validé par l'utilisateur : #211 = mesurer, supprimer le travail inutile, intégrité, UX ; **#212** = stockage paginé/générationnel (Room) et objectif de démarrage < 2 s (chiffrement AES-GCM par champ des URL de lecture, clé Keystore). #211 ne promet pas de démarrage plus rapide à froid.
+- Découpage validé par l'utilisateur : #211 = mesurer, supprimer le travail inutile, intégrité, UX ; bloc suivant = stockage paginé/générationnel (Room) et objectif de démarrage < 2 s (chiffrement AES-GCM par champ des URL de lecture, clé Keystore). Ce bloc a pris le n° **#213** (PR A), #212 ayant servi aux titres et au GRANT. #211 ne promet pas de démarrage plus rapide à froid.
 - Rafraîchissement : `CatalogRefreshPolicy` (fraîcheur 12 h ; démarrage/changement de profil = automatique, Réessayer/playlist/parental = manuel, toujours exécuté). Aucune synchronisation automatique ne démarre pendant une lecture (`PlaybackActivity`, attente avant le démarrage ; jamais de parseur suspendu). Log `refresh_decision`.
 - Date de fraîcheur authentifiée : fichier `<digest>.meta` AES-GCM (clé Keystore, AAD dédiée) liant la date au SHA-256 et à la taille du catalogue, écrit seulement après le catalogue. Format catalogue V1 inchangé et toujours lu ; aucun cache supprimé. Un catalogue remplacé/corrompu n'est jamais « attesté ».
 - Vérification hors ligne au démarrage sur `Dispatchers.IO`, une fois par restauration ; états Live/Films/Séries construits hors thread principal (`CatalogUiStateCache`) ; accueil calculé une fois par catalogue ; `CatalogSingleFlight` libère une tâche terminée.
@@ -204,6 +204,16 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Premier lancement après mise à jour : `catalog_cache_freshness status=missing` puis `refresh_decision decision=unknown_age` → resynchronisation attendue (cache écrit avant #211, sans `.meta`). Confirmé au lancement suivant : `status=valid age_min=8` et `decision=use_fresh_cache`, sans téléchargement M3U (cache lu en 40 867 ms : démarrage toujours lent, objet du bloc Room).
 - `player_devices` : `sqlstate=42501 pg=missing-table-grant` → privilège de table manquant pour `authenticated` (pas un refus RLS). La migration du dépôt crée la table et les politiques propriétaires mais aucun `GRANT` ; GRANT ciblé à `authenticated` (select/insert/update/delete, rien pour `anon`, RLS conservée) **appliqué en production par le propriétaire le 09/10/2026** après vérification en lecture seule ; migration `20261009230000_player_devices_authenticated_grant.sql`. Vérifié : `player_devices response=201` sur Pixel 7 émulateur.
 - Titres « Animals (MULTI) FHD 2026 » non nettoyés : l'année finale bloquait `DisplayTitle` (correctif « Titre (2026) » sur la branche `claude/fix-android-playback-xru14n`). Classification : « |BH| ARENA SPORT » apparaît dans Séries (P1 ouvert).
+
+**PR #212 — Titres avec année finale + GRANT `player_devices`** (PR #212 fusionnée, `main` = `394ba49`, CI post-fusion verte)
+- « Animals (MULTI) FHD 2026 » → « Animals (2026) » (`DisplayTitle`). Migration `20261009230000_player_devices_authenticated_grant.sql` (GRANT déjà appliqué en production par le propriétaire). Vérifié sur Pixel 7 émulateur : titres nettoyés, `player_devices` 201 puis 200.
+
+**Bloc Room #213 — stockage générationnel paginé** (plan validé par l'utilisateur le 10/10/2026)
+- Décisions : (1) contrôle parental appliqué **à la lecture** (catalogue brut stocké, filtré dans les requêtes, PR B) ; (2) suppression du cache V1 dès qu'une génération Room complète est active, **au plus tôt avec la PR B** (la PR A lit encore le V1) ; (3) découpage A (socle), B (lecture paginée, démarrage < 2 s visé), C (écriture en flux pendant l'analyse).
+- **PR A (#213)** : Room 2.7.2 + KSP, base privée `catalog-store.db` (`data/store/`). Tables `generation` (`building`/`active`/`retired`), `category`, `live_channel`, `movie`, `series`, `series_detail`, `episode`, `id_alias`, lignes clés par ordre fournisseur (`ordinal`) pour qu'un id dupliqué ne fasse jamais échouer un import. Écriture par lots transactionnels de 1 000, vérification de chaque compte, puis bascule `active` en **une seule transaction** ; l'ancienne génération est supprimée ensuite ; une génération incomplète (échec, annulation, processus tué) est jetée au prochain passage.
+- Chiffrement : URL de lecture (avec en-têtes Kodi) en `iv | AES-GCM`, AAD `generationId|kind|id`. **Enveloppe** : une clé de données AES-256 aléatoire par génération, enveloppée par la clé Keystore `zyviotv_player_catalog_url_key` (évite ~140 000 opérations Keystore par import). Titres, catégories, affiches et ids restent en clair dans la base privée (`allowBackup="false"`).
+- Remplissage en arrière-plan (`CatalogStore`) : import unique du V1 restauré (portée `profile_filtered`, jamais par-dessus une génération plus récente ou identique) et génération brute (`raw`) après chaque synchronisation validée. Aucun démarrage pendant une lecture. Logs `ZyvioCatalog` : `catalog_store_write`, `catalog_store_generation` (comptes, `db_size_mb`), `catalog_store_skipped`, `catalog_store_rejected`, `catalog_store_failed`. **L'app lit toujours le cache V1** ; rien n'est supprimé.
+- Recherche : la recherche actuelle est un `contains` sur titre + catégorie (+ numéro de chaîne). FTS4 ne fait que des préfixes de mots : la PR A stocke donc une colonne `search_key` normalisée (même normalisation que `CatalogSearchEngine`) ; le choix LIKE/FTS sera tranché et mesuré en PR B.
 
 **Xtream fournisseur réel — problème ouvert**
 - Même abonnement déclaré fonctionnel en M3U **et Xtream** sur IPTV Smarters Pro, ainsi que Zen IPTV et SET IPTV.
@@ -242,9 +252,9 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - Vérifier flux en lecture réelle, compatibilité HLS/TS/MP4, HEVC sur appareil physique, erreurs et retour (Logcat `tag:ZyvioPlayback`).
 
 **P1 — fiabilité/sécurité**
-- `player_devices` HTTP 403 Supabase : `pg=missing-table-grant` (42501), GRANT ciblé appliqué par le propriétaire le 09/10/2026 ; **résolu** (`response=201` sur émulateur).
+- `player_devices` HTTP 403 Supabase : `pg=missing-table-grant` (42501), GRANT ciblé appliqué par le propriétaire le 09/10/2026 ; **résolu** (`response=201` sur émulateur, migration #212).
 - Xtream réel HTTP 512 encore non résolu/non retesté sur #205+ ; ne pas supposer que l'URL ou le fournisseur est mauvais.
-- Performance : cache chiffré 47 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s (voir mesures §8). Resynchronisation après cache valide traitée par #211 ; démarrage < 2 s prévu par #212 (stockage paginé).
+- Performance : cache chiffré 35 à 77 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s (voir mesures §8). Resynchronisation après cache valide traitée par #211 ; démarrage < 2 s visé par le bloc Room #213 (PR B), la PR A ne change pas encore le démarrage.
 - Classification M3U à vérifier, notamment chaînes sport apparaissant comme séries ; distinguer source/mapping et alias.
 
 **P2 — UX et parité**
@@ -268,8 +278,8 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 ## 13. Première tâche au prochain lancement de Claude Code
 
 1. Lire ce fichier puis vérifier que les chemins et l'architecture correspondent au `main` actuel.
-2. Vérifier sur GitHub l'état de la PR #211 et le résultat de la recette Pixel 7 rapportée par l'utilisateur (lignes `refresh_decision`, `ZyvioUi frames`, `ZyvioPlayback summary`, `ZyvioNetwork … sqlstate= pg=`) avant d'ouvrir un nouveau bloc.
-3. Prochains candidats : PR #212 (stockage paginé Room, démarrage < 2 s), `player_devices` 403 (résultats de l'audit en lecture seule à présenter, aucun GRANT sans validation), Xtream HTTP 512, classification M3U.
+2. Vérifier sur GitHub l'état du bloc Room (#213 = PR A, puis PR B et C) et la recette Pixel 7 rapportée par l'utilisateur (lignes `catalog_store_generation`, `catalog_store_write`, `catalog_cache_load`) avant d'ouvrir un nouveau bloc.
+3. Prochains candidats : PR B du bloc Room (écrans sur Room, démarrage < 2 s visé), PR C (écriture en flux), Xtream HTTP 512, classification M3U, puis bloc « fidélité design Android » (Manrope, barre basse D6, onglet inactif, i18n).
 4. **Ne pas commencer** par changer la base Supabase de production, ajouter un `largeHeap`, inventer des streams, réécrire les maquettes ou prétendre tester le fournisseur depuis CI.
 
 ---

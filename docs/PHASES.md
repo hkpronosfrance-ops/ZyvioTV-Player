@@ -30,4 +30,5 @@
 - Phase 25 — Samsung/LG functional provider playback
 - Phase 26 — Final QA and publication hardening (in progress)
 - PR #211 — Catalogue telemetry, useless work, stability, integrity and UX (Android)
-- PR #212 (planned) — Paged generational catalogue store (Room) and < 2 s start
+- PR #212 — Catalogue titles with trailing year + `player_devices` GRANT migration
+- Room block #213 — Generational catalogue store (Room): PR A storage foundation (#213, in progress), PR B paged reads and < 2 s start (planned), PR C streaming writes (planned)

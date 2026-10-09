@@ -61,6 +61,8 @@ class RestoredCatalog(
     val catalog: CachedCatalog,
     val fetchedAtEpochMs: Long?,
     val idAliases: Map<String, Long>,
+    /** Size and SHA-256 of the decoded cache file; null when read from the backup or legacy JSON. */
+    val fileStamp: CatalogFileStamp? = null,
 )
 
 data class CachedLibrary(
@@ -80,15 +82,16 @@ class OfflineContentCache(context: Context) {
 
     /**
      * Replaces the cached catalog only with a validated one: every channel,
-     * film and indexed episode must carry its source. Returns false (and keeps
-     * the previous cache) otherwise or when the write fails.
+     * film and indexed episode must carry its source. Returns the stamp of the
+     * committed file, or null (keeping the previous cache) otherwise or when
+     * the write fails.
      */
     fun saveCatalog(
         profileId: String,
         catalog: CachedCatalog,
         fetchedAtEpochMs: Long,
         idAliases: Map<String, Long> = emptyMap(),
-    ): Boolean {
+    ): CatalogFileStamp? {
         val startedAt = CatalogPerformanceDiagnostics.startedAt()
         val report = catalog.sourceReport
         if (catalog.origin != CatalogCacheOrigin.Encrypted || !report.isPlayable) {
@@ -97,7 +100,7 @@ class OfflineContentCache(context: Context) {
                 fields = "reason=missing_sources " + report.logFields(),
                 warning = true,
             )
-            return false
+            return null
         }
         return try {
             val stamp = encryptedFile.write(catalogFile(profileId), catalog)
@@ -110,14 +113,14 @@ class OfflineContentCache(context: Context) {
                 startedAtMs = startedAt,
                 itemCount = catalog.snapshot.itemCount(),
             )
-            true
+            stamp
         } catch (error: Exception) {
             CatalogPerformanceDiagnostics.event(
                 name = "catalog_persist_failed",
                 fields = "failure=" + error.javaClass.simpleName,
                 warning = true,
             )
-            false
+            null
         }
     }
 
@@ -188,7 +191,7 @@ class OfflineContentCache(context: Context) {
                 "catalog_cache_freshness",
                 "status=valid age_min=" + (ageMinutes?.toString() ?: "unknown"),
             )
-            return RestoredCatalog(catalog, metadata.fetchedAtEpochMs, aliases)
+            return RestoredCatalog(catalog, metadata.fetchedAtEpochMs, aliases, fileStamp = stamp)
         }
         CatalogPerformanceDiagnostics.event(
             "catalog_cache_freshness",
@@ -200,7 +203,7 @@ class OfflineContentCache(context: Context) {
         if (stamp != null && catalog.isPlayable) {
             writeMetadata(profileId, catalog, stamp, fetchedAtEpochMs = null, idAliases = aliases)
         }
-        return RestoredCatalog(catalog, fetchedAtEpochMs = null, idAliases = aliases)
+        return RestoredCatalog(catalog, fetchedAtEpochMs = null, idAliases = aliases, fileStamp = stamp)
     }
 
     /** Authentic id aliases of the last saved catalog, even if that file changed since. */

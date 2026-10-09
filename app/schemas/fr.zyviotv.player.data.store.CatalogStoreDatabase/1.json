@@ -1,0 +1,656 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "07ec123c85f5f14cfa1464a3050e8cdd",
+    "entities": [
+      {
+        "tableName": "generation",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `profile_key` TEXT NOT NULL, `playlist_id` TEXT NOT NULL, `playlist_name` TEXT NOT NULL, `state` TEXT NOT NULL, `scope` TEXT NOT NULL, `origin` TEXT NOT NULL, `fetched_at_ms` INTEGER, `created_at_ms` INTEGER NOT NULL, `live_count` INTEGER NOT NULL, `movie_count` INTEGER NOT NULL, `series_count` INTEGER NOT NULL, `episode_count` INTEGER NOT NULL, `v1_length` INTEGER, `v1_sha256` TEXT, `wrapped_key` BLOB NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profileKey",
+            "columnName": "profile_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "playlistId",
+            "columnName": "playlist_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "playlistName",
+            "columnName": "playlist_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "origin",
+            "columnName": "origin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMs",
+            "columnName": "fetched_at_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAtEpochMs",
+            "columnName": "created_at_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "liveCount",
+            "columnName": "live_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "movieCount",
+            "columnName": "movie_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesCount",
+            "columnName": "series_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episodeCount",
+            "columnName": "episode_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "v1Length",
+            "columnName": "v1_length",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "v1Sha256",
+            "columnName": "v1_sha256",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "wrappedKey",
+            "columnName": "wrapped_key",
+            "affinity": "BLOB",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_generation_profile_key_state",
+            "unique": false,
+            "columnNames": [
+              "profile_key",
+              "state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_generation_profile_key_state` ON `${TABLE_NAME}` (`profile_key`, `state`)"
+          }
+        ]
+      },
+      {
+        "tableName": "category",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`generation_id` INTEGER NOT NULL, `kind` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `id` TEXT NOT NULL, `name` TEXT NOT NULL, PRIMARY KEY(`generation_id`, `kind`, `ordinal`))",
+        "fields": [
+          {
+            "fieldPath": "generationId",
+            "columnName": "generation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "generation_id",
+            "kind",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_category_generation_id_kind_id",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "kind",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_category_generation_id_kind_id` ON `${TABLE_NAME}` (`generation_id`, `kind`, `id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "live_channel",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`generation_id` INTEGER NOT NULL, `ordinal` INTEGER NOT NULL, `id` TEXT NOT NULL, `name` TEXT NOT NULL, `category_id` TEXT, `logo_url` TEXT, `epg_id` TEXT, `search_key` TEXT NOT NULL, `url_blob` BLOB NOT NULL, PRIMARY KEY(`generation_id`, `ordinal`))",
+        "fields": [
+          {
+            "fieldPath": "generationId",
+            "columnName": "generation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "category_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "logoUrl",
+            "columnName": "logo_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "epgId",
+            "columnName": "epg_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "searchKey",
+            "columnName": "search_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "urlBlob",
+            "columnName": "url_blob",
+            "affinity": "BLOB",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "generation_id",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_live_channel_generation_id_id",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_live_channel_generation_id_id` ON `${TABLE_NAME}` (`generation_id`, `id`)"
+          },
+          {
+            "name": "index_live_channel_generation_id_category_id_ordinal",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "category_id",
+              "ordinal"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_live_channel_generation_id_category_id_ordinal` ON `${TABLE_NAME}` (`generation_id`, `category_id`, `ordinal`)"
+          }
+        ]
+      },
+      {
+        "tableName": "movie",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`generation_id` INTEGER NOT NULL, `ordinal` INTEGER NOT NULL, `id` TEXT NOT NULL, `title` TEXT NOT NULL, `sort_title` TEXT NOT NULL, `category_id` TEXT, `poster_url` TEXT, `container_extension` TEXT NOT NULL, `added_at` INTEGER, `search_key` TEXT NOT NULL, `url_blob` BLOB NOT NULL, PRIMARY KEY(`generation_id`, `ordinal`))",
+        "fields": [
+          {
+            "fieldPath": "generationId",
+            "columnName": "generation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortTitle",
+            "columnName": "sort_title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "category_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "posterUrl",
+            "columnName": "poster_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "containerExtension",
+            "columnName": "container_extension",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addedAtEpochSeconds",
+            "columnName": "added_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "searchKey",
+            "columnName": "search_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "urlBlob",
+            "columnName": "url_blob",
+            "affinity": "BLOB",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "generation_id",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_movie_generation_id_id",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_movie_generation_id_id` ON `${TABLE_NAME}` (`generation_id`, `id`)"
+          },
+          {
+            "name": "index_movie_generation_id_category_id_sort_title",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "category_id",
+              "sort_title"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_movie_generation_id_category_id_sort_title` ON `${TABLE_NAME}` (`generation_id`, `category_id`, `sort_title`)"
+          },
+          {
+            "name": "index_movie_generation_id_added_at",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "added_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_movie_generation_id_added_at` ON `${TABLE_NAME}` (`generation_id`, `added_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "series",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`generation_id` INTEGER NOT NULL, `ordinal` INTEGER NOT NULL, `id` TEXT NOT NULL, `title` TEXT NOT NULL, `sort_title` TEXT NOT NULL, `category_id` TEXT, `poster_url` TEXT, `added_at` INTEGER, `search_key` TEXT NOT NULL, PRIMARY KEY(`generation_id`, `ordinal`))",
+        "fields": [
+          {
+            "fieldPath": "generationId",
+            "columnName": "generation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortTitle",
+            "columnName": "sort_title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "category_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "posterUrl",
+            "columnName": "poster_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "addedAtEpochSeconds",
+            "columnName": "added_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "searchKey",
+            "columnName": "search_key",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "generation_id",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_series_generation_id_id",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_series_generation_id_id` ON `${TABLE_NAME}` (`generation_id`, `id`)"
+          },
+          {
+            "name": "index_series_generation_id_category_id_sort_title",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "category_id",
+              "sort_title"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_series_generation_id_category_id_sort_title` ON `${TABLE_NAME}` (`generation_id`, `category_id`, `sort_title`)"
+          },
+          {
+            "name": "index_series_generation_id_added_at",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "added_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_series_generation_id_added_at` ON `${TABLE_NAME}` (`generation_id`, `added_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "series_detail",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`generation_id` INTEGER NOT NULL, `ordinal` INTEGER NOT NULL, `series_id` TEXT NOT NULL, `title` TEXT, `year` TEXT, `synopsis` TEXT, `genres` TEXT NOT NULL, PRIMARY KEY(`generation_id`, `ordinal`))",
+        "fields": [
+          {
+            "fieldPath": "generationId",
+            "columnName": "generation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesId",
+            "columnName": "series_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "year",
+            "columnName": "year",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "synopsis",
+            "columnName": "synopsis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "genres",
+            "columnName": "genres",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "generation_id",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_series_detail_generation_id_series_id",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "series_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_series_detail_generation_id_series_id` ON `${TABLE_NAME}` (`generation_id`, `series_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "episode",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`generation_id` INTEGER NOT NULL, `series_id` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `id` TEXT NOT NULL, `season` INTEGER NOT NULL, `number` INTEGER NOT NULL, `title` TEXT NOT NULL, `synopsis` TEXT, `url_blob` BLOB NOT NULL, PRIMARY KEY(`generation_id`, `series_id`, `ordinal`))",
+        "fields": [
+          {
+            "fieldPath": "generationId",
+            "columnName": "generation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesId",
+            "columnName": "series_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "number",
+            "columnName": "number",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "synopsis",
+            "columnName": "synopsis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "urlBlob",
+            "columnName": "url_blob",
+            "affinity": "BLOB",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "generation_id",
+            "series_id",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_episode_generation_id_series_id_season_number",
+            "unique": false,
+            "columnNames": [
+              "generation_id",
+              "series_id",
+              "season",
+              "number"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_episode_generation_id_series_id_season_number` ON `${TABLE_NAME}` (`generation_id`, `series_id`, `season`, `number`)"
+          }
+        ]
+      },
+      {
+        "tableName": "id_alias",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`generation_id` INTEGER NOT NULL, `alias` TEXT NOT NULL, `fingerprint` INTEGER NOT NULL, PRIMARY KEY(`generation_id`, `alias`))",
+        "fields": [
+          {
+            "fieldPath": "generationId",
+            "columnName": "generation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alias",
+            "columnName": "alias",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fingerprint",
+            "columnName": "fingerprint",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "generation_id",
+            "alias"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '07ec123c85f5f14cfa1464a3050e8cdd')"
+    ]
+  }
+}
