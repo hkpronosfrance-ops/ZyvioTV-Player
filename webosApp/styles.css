@@ -16,3 +16,11 @@
 .content[data-view]:not([data-view="home"])>.hero,.content[data-view]:not([data-view="home"])>.shelf{display:none!important}
 .content[data-view="home"]>.catalog-panel{display:none!important}
 .catalog-empty{grid-column:1/-1;padding:42px 26px;border:1px dashed #49434B;border-radius:18px;background:#121215;color:#A9A9B3;text-align:center;font-size:20px}
+
+/* D7 source audit contracts and physical-screen safe regions. */
+:root { --zyvio-tv-safe: 32px; --zyvio-focus-ring: #F4F4F6; }
+@media(max-width:1280px) { :root { --zyvio-tv-safe: 20px; } }
+@media(min-width:2560px) { :root { --zyvio-tv-safe: 48px; } }
+button:focus-visible, [data-focusable]:focus-visible { outline: 4px solid var(--zyvio-focus-ring); }
+.catalog-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 176px), 1fr)); }
+.cards { overflow-x: auto; }
