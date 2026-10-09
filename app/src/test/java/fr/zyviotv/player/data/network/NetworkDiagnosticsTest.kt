@@ -17,7 +17,8 @@ class NetworkDiagnosticsTest {
 
         val diagnostic = NetworkDiagnostics.safeEndpoint(original)
 
-        assertEquals("http://provider.example:8080", diagnostic)
+        assertEquals("http", diagnostic)
+        assertFalse(diagnostic.contains("provider.example"))
         assertFalse(diagnostic.contains("alice"))
         assertFalse(diagnostic.contains("super-secret"))
         assertFalse(diagnostic.contains("private"))
@@ -27,10 +28,19 @@ class NetworkDiagnosticsTest {
     @Test
     fun safeEndpointOmitsDefaultPortAndRejectsInvalidUrls() {
         assertEquals(
-            "https://iptv.example",
+            "https",
             NetworkDiagnostics.safeEndpoint("https://iptv.example:443/list.m3u"),
         )
         assertEquals("invalid-url", NetworkDiagnostics.safeEndpoint("not a url password=secret"))
+    }
+
+    @Test
+    fun supabaseErrorsAreClassifiedWithoutReturningTheResponse() {
+        assertEquals("invalid-jwt", NetworkDiagnostics.supabaseErrorKind("{\"message\":\"Invalid JWT\"}"))
+        assertEquals("expired-jwt", NetworkDiagnostics.supabaseErrorKind("{\"message\":\"JWT expired\"}"))
+        assertEquals("missing-credentials", NetworkDiagnostics.supabaseErrorKind("MISSING_CREDENTIALS"))
+        assertEquals("permission-denied", NetworkDiagnostics.supabaseErrorKind("permission denied for table"))
+        assertEquals("unclassified", NetworkDiagnostics.supabaseErrorKind("private-token-value"))
     }
 
     @Test

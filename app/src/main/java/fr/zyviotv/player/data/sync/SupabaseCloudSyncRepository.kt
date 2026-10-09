@@ -2,6 +2,9 @@ package fr.zyviotv.player.data.sync
 
 import fr.zyviotv.player.BuildConfig
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.auth.SupabaseAuthRepository
+import fr.zyviotv.player.data.network.NetworkDiagnostics
+import fr.zyviotv.player.data.network.SupabaseSessionDiagnostics
 import fr.zyviotv.player.shared.sync.CloudSyncRepository
 import fr.zyviotv.player.shared.sync.DeviceRegistration
 import fr.zyviotv.player.shared.sync.PlaylistSecret
@@ -16,6 +19,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -368,7 +373,7 @@ class SupabaseCloudSyncRepository(
             else SyncResult.Failure("Impossible de supprimer les identifiants du fournisseur.")
         }
 
-    private fun fetchCurrentUserId(accessToken: String): String? {
+    private suspend fun fetchCurrentUserId(accessToken: String): String? {
         val response = request(
             path = "/auth/v1/user",
             method = "GET",
@@ -380,12 +385,70 @@ class SupabaseCloudSyncRepository(
         return runCatching { JSONObject(response.body).getString("id") }.getOrNull()
     }
 
-    private fun request(
+    private suspend fun request(
         path: String,
         method: String,
         body: String?,
         accessToken: String,
         extraHeaders: Map<String, String> = emptyMap(),
+    ): HttpResponse {
+        var token = accessToken
+        var session = sessionStore.load()
+        var sessionState = sessionState(session)
+        var refreshed = false
+
+        if (SupabaseSessionDiagnostics.shouldRefreshBeforeRequest(sessionState)) {
+            token = refreshAccessToken(previousAccessToken = token) ?: token
+            session = sessionStore.load()
+            sessionState = sessionState(session)
+            refreshed = token != accessToken
+        }
+
+        var response = rawRequest(path, method, body, token, extraHeaders)
+        NetworkDiagnostics.supabaseResponse(
+            operation = SupabaseSessionDiagnostics.operation(path),
+            statusCode = response.code,
+            sessionState = sessionState,
+            responseBody = response.body,
+            retried = false,
+        )
+
+        if (SupabaseSessionDiagnostics.shouldRetryUnauthorized(response.code, refreshed)) {
+            val refreshedToken = refreshAccessToken(previousAccessToken = token)
+            if (refreshedToken != null) {
+                response = rawRequest(path, method, body, refreshedToken, extraHeaders)
+                NetworkDiagnostics.supabaseResponse(
+                    operation = SupabaseSessionDiagnostics.operation(path),
+                    statusCode = response.code,
+                    sessionState = sessionState(sessionStore.load()),
+                    responseBody = response.body,
+                    retried = true,
+                )
+            }
+        }
+        return response
+    }
+
+    private suspend fun refreshAccessToken(previousAccessToken: String): String? =
+        sessionRefreshMutex.withLock {
+            val latest = sessionStore.load() ?: return@withLock null
+            if (latest.accessToken != previousAccessToken && sessionState(latest) == "fresh") {
+                return@withLock latest.accessToken
+            }
+
+            when (SupabaseAuthRepository(sessionStore).refreshSession()) {
+                SupabaseAuthRepository.SessionRestoreResult.Valid ->
+                    sessionStore.load()?.accessToken
+                else -> null
+            }
+        }
+
+    private fun rawRequest(
+        path: String,
+        method: String,
+        body: String?,
+        accessToken: String,
+        extraHeaders: Map<String, String>,
     ): HttpResponse {
         val connection = (URL(BuildConfig.SUPABASE_URL + path).openConnection() as HttpURLConnection)
         try {
@@ -424,4 +487,14 @@ class SupabaseCloudSyncRepository(
         val code: Int,
         val body: String,
     )
+
+    private companion object {
+        val sessionRefreshMutex = Mutex()
+    }
+
+    private fun sessionState(session: SecureSessionStore.StoredSession?): String =
+        SupabaseSessionDiagnostics.state(
+            accessToken = session?.accessToken,
+            expiresAtEpochSeconds = session?.expiresAtEpochSeconds,
+        )
 }

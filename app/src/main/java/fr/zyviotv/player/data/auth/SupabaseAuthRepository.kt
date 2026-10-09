@@ -139,6 +139,16 @@ class SupabaseAuthRepository(
             return@withContext verifyStoredAccessToken(stored.accessToken)
         }
 
+        refreshStoredSession(stored)
+    }
+
+    /** Refreshes even when the local expiry still looks valid (for example after a server-side revoke). */
+    suspend fun refreshSession(): SessionRestoreResult = withContext(Dispatchers.IO) {
+        val stored = sessionStore.load() ?: return@withContext SessionRestoreResult.NoSession
+        refreshStoredSession(stored)
+    }
+
+    private fun refreshStoredSession(stored: SecureSessionStore.StoredSession): SessionRestoreResult {
         val response = runCatching {
             request(
                 path = "/auth/v1/token?grant_type=refresh_token",
@@ -150,7 +160,7 @@ class SupabaseAuthRepository(
                 readTimeoutMs = SESSION_VERIFY_TIMEOUT_MS,
             )
         }.getOrElse {
-            return@withContext SessionRestoreResult.NetworkUnavailable
+            return SessionRestoreResult.NetworkUnavailable
         }
 
         when {
@@ -234,10 +244,9 @@ class SupabaseAuthRepository(
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
-            connection.setRequestProperty(
-                "Authorization",
-                "Bearer " + (bearerToken ?: BuildConfig.SUPABASE_PUBLISHABLE_KEY),
-            )
+            if (bearerToken != null) {
+                connection.setRequestProperty("Authorization", "Bearer $bearerToken")
+            }
 
             connection.outputStream.bufferedWriter(StandardCharsets.UTF_8).use {
                 it.write(body)

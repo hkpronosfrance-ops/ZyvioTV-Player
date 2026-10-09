@@ -539,10 +539,9 @@ class ParentalControlsRepository(
             connection.doOutput = body != null
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
-            connection.setRequestProperty(
-                "Authorization",
-                "Bearer " + (bearerToken ?: BuildConfig.SUPABASE_PUBLISHABLE_KEY),
-            )
+            if (bearerToken != null) {
+                connection.setRequestProperty("Authorization", "Bearer $bearerToken")
+            }
             if (body != null) {
                 connection.outputStream.bufferedWriter(StandardCharsets.UTF_8).use {
                     it.write(body)
