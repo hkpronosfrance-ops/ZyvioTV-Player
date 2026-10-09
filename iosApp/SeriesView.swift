@@ -10,7 +10,7 @@ struct SeriesView: View {
     @State private var errorMessage: String?
 
     private var columns: [GridItem] {
-        let minimumPosterWidth: CGFloat = horizontalSizeClass == .regular ? 168 : 132
+        let minimumPosterWidth: CGFloat = horizontalSizeClass == .regular ? 184 : 142
         return [GridItem(.adaptive(minimum: minimumPosterWidth), spacing: ZyvioDesign.Space.s3)]
     }
 
@@ -51,6 +51,8 @@ struct SeriesView: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel(item.title)
+                                .accessibilityHint("Ouvrir la fiche série")
                             }
                         }
                         .padding(.horizontal, horizontalSizeClass == .regular ? ZyvioDesign.Space.s7 : ZyvioDesign.Space.s4)
