@@ -588,6 +588,7 @@
     if (livePanel) livePanel.hidden = true;
     if (catalogPanel) catalogPanel.hidden = true;
     if (accountPanel) accountPanel.hidden = true;
+    if (devicesPanel) devicesPanel.hidden = true;
   }
 
   function activate(section) {
