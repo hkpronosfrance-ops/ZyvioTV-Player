@@ -359,6 +359,13 @@
     });
   }
 
+  function validProviderUrl(value) {
+    try {
+      const url = new URL(String(value || "").trim());
+      return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
+    } catch (_) { return false; }
+  }
+
   function providerConfigFromSecret(secret) {
     if (!secret || typeof secret !== "object") throw new Error("Source fournisseur indisponible.");
 
@@ -366,13 +373,13 @@
       const serverUrl = String(secret.server_url || "").trim();
       const username = String(secret.username || "").trim();
       const password = String(secret.password || "");
-      if (!serverUrl || !username || !password) throw new Error("Configuration Xtream incomplète.");
+      if (!validProviderUrl(serverUrl) || !username || !password) throw new Error("Configuration Xtream incomplète.");
       return { type: "xtream", serverUrl, username, password };
     }
 
     if (secret.provider_type === "m3u") {
       const url = String(secret.url || "").trim();
-      if (!url) throw new Error("Configuration M3U incomplète.");
+      if (!validProviderUrl(url)) throw new Error("Configuration M3U incomplète.");
       return {
         type: "m3u",
         url,
