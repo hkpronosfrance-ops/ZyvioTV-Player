@@ -40,3 +40,12 @@ button:focus-visible, [data-focusable]:focus-visible { outline: 4px solid var(--
 @media(max-width:1280px){.catalog-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,156px),1fr))}.auth-card{width:min(720px,88vw)}}
 @media(min-width:2560px){.catalog-grid{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}}
 @media(prefers-reduced-motion:reduce){.content{scroll-behavior:auto}.catalog-card,.card,.profile-card{transition:none!important}}
+
+/* D7 #199: accessible focus, text readability and small-screen overscan. */
+[data-focusable]:focus-visible,button:focus-visible,input:focus-visible{outline:4px solid #F4F4F6;outline-offset:4px;z-index:5}
+button:disabled,[data-focusable][aria-disabled="true"]{opacity:.45;cursor:default}
+input:focus-visible{box-shadow:0 0 0 7px rgba(224,16,47,.16)}
+.hero h1,.auth-card h1,.pin-card h1{overflow-wrap:break-word}
+.catalog-card,.card,.nav-item{scroll-margin:18px}
+@media (max-width:1280px){.content{padding-left:24px;padding-right:24px}.cards{scroll-padding-inline:16px}}
+@media (prefers-reduced-motion: reduce){[data-focusable],button,.card,.catalog-card,.nav-item{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
