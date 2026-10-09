@@ -23,6 +23,9 @@
 
     async play(url) {
       this.stop();
+      if (typeof url !== "string" || !/^https?:\/\//i.test(url.trim())) {
+        throw new Error("Adresse du flux vidéo invalide.");
+      }
       if (!this.video) throw new Error("Lecteur indisponible.");
       this.currentUrl = url;
       this.video.src = url;
