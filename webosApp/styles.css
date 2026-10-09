@@ -11,3 +11,8 @@
 @media(max-width:1280px){:root{--safe:24px}.shell{grid-template-columns:182px minmax(0,1fr)}.rail{gap:25px;padding-right:12px}.nav{min-height:48px;padding:9px 12px}.content{padding-bottom:52px}.hero{min-height:245px;padding:28px}.catalog-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.catalog-card{min-height:190px}.card{flex-basis:195px;min-height:130px}.card.home-item{min-height:165px}.profile-card{min-height:210px}}
 @media(min-width:2560px){:root{--safe:64px}.shell{grid-template-columns:330px minmax(0,1fr)}.nav{min-height:82px}.cards{gap:30px}.catalog-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}button:focus,[data-focusable]:focus{transform:none!important}}
+
+/* TV view isolation */
+.content[data-view]:not([data-view="home"])>.hero,.content[data-view]:not([data-view="home"])>.shelf{display:none!important}
+.content[data-view="home"]>.catalog-panel{display:none!important}
+.catalog-empty{grid-column:1/-1;padding:42px 26px;border:1px dashed #49434B;border-radius:18px;background:#121215;color:#A9A9B3;text-align:center;font-size:20px}
