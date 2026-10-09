@@ -53,6 +53,9 @@ jobs:
       - name: Validate Xtream Live Movies Series and episodes
         run: node tests/xtream-functional-195.cjs webosApp
 
+      - name: Validate phase 197 account playlist restore
+        run: node tests/account-playlist-197.cjs webosApp
+
       - name: Validate provider core
         run: node webosApp/provider.test.cjs
 
