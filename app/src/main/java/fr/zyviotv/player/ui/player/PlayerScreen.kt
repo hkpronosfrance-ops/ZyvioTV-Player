@@ -4,7 +4,11 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +17,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -22,15 +30,21 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.ZoomOutMap
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -52,6 +66,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.shared.playback.PlaybackKind
@@ -111,6 +126,8 @@ data class PlayerScreenUiState(
     val errorMessage: String? = null,
     val unavailable: Boolean = false,
     val channelNumberInput: String? = null,
+    val isFullscreen: Boolean = false,
+    val scaleMode: PlayerScaleMode = PlayerScaleMode.Fit,
 )
 
 @Composable
@@ -134,6 +151,8 @@ fun PlayerScreen(
     onChannelUp: () -> Unit = {},
     onChannelDown: () -> Unit = {},
     onChannelDigit: (Int) -> Unit = {},
+    onToggleFullscreen: () -> Unit = {},
+    onToggleScaleMode: () -> Unit = {},
     videoContent: @Composable () -> Unit = { VideoSurfacePlaceholder() },
 ) {
     var controlsVisible by remember(state.controlsVisible) { mutableStateOf(state.controlsVisible) }
@@ -286,7 +305,9 @@ fun PlayerScreen(
             )
 
             state.playbackState == PlaybackState.Buffering -> BufferingOverlay(
+                profile = profile,
                 title = state.metadata.title,
+                onBack = onBack,
             )
 
             else -> {
@@ -302,6 +323,8 @@ fun PlayerScreen(
                         onOpenTracks = onOpenTracks,
                         onOpenGuide = onOpenGuide,
                         onToggleFavorite = onToggleFavorite,
+                        onToggleFullscreen = onToggleFullscreen,
+                        onToggleScaleMode = onToggleScaleMode,
                     )
                 }
             }
@@ -361,8 +384,10 @@ private fun PlayerControlsOverlay(
     onOpenTracks: () -> Unit,
     onOpenGuide: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    onToggleScaleMode: () -> Unit,
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -374,6 +399,9 @@ private fun PlayerControlsOverlay(
                     ),
                 ),
             )
+            // Edge-to-edge: keep Retour and the actions out of the status bar,
+            // the camera cut-out and the gesture area, in both orientations.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(
                 horizontal = when (profile) {
                     DeviceProfile.Mobile -> ZyvioSpace.s4
@@ -383,29 +411,42 @@ private fun PlayerControlsOverlay(
                 vertical = if (profile == DeviceProfile.Television) ZyvioSpace.s7 else ZyvioSpace.s4,
             ),
     ) {
+        val layout = PlayerControlsLayout.of(
+            profile = profile,
+            widthDp = maxWidth.value.toInt(),
+            heightDp = maxHeight.value.toInt(),
+        )
+        val tv = profile == DeviceProfile.Television
+
         Row(
-            modifier = Modifier.align(Alignment.TopStart),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedButton(
-                modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 12),
+                modifier = Modifier.tvFocusEffect(tv, cornerRadiusDp = 12),
                 onClick = onBack,
             ) {
-                Icon(Icons.Default.ArrowBack, contentDescription = null)
+                Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
             }
             Spacer(Modifier.width(14.dp))
-            Column {
+            // Takes the remaining width only: long titles end with an ellipsis
+            // instead of pushing or wrapping the other controls.
+            Column(modifier = Modifier.weight(1f)) {
                 state.metadata.eyebrow?.let {
                     Text(
                         text = it,
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Text(
                     text = state.metadata.title,
-                    style = if (profile == DeviceProfile.Television) {
+                    style = if (tv) {
                         MaterialTheme.typography.headlineMedium
                     } else {
                         MaterialTheme.typography.titleLarge
@@ -419,6 +460,39 @@ private fun PlayerControlsOverlay(
                         text = it,
                         color = ZyvioTextSecondary,
                         style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (layout.showFullscreenToggle) {
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onToggleScaleMode) {
+                    Icon(
+                        imageVector = if (state.scaleMode == PlayerScaleMode.Fit) {
+                            Icons.Default.ZoomOutMap
+                        } else {
+                            Icons.Default.FitScreen
+                        },
+                        contentDescription = if (state.scaleMode == PlayerScaleMode.Fit) {
+                            "Remplir l'écran"
+                        } else {
+                            "Afficher l'image entière"
+                        },
+                    )
+                }
+                IconButton(onClick = onToggleFullscreen) {
+                    Icon(
+                        imageVector = if (state.isFullscreen) {
+                            Icons.Default.FullscreenExit
+                        } else {
+                            Icons.Default.Fullscreen
+                        },
+                        contentDescription = if (state.isFullscreen) {
+                            "Quitter le plein écran"
+                        } else {
+                            "Plein écran"
+                        },
                     )
                 }
             }
@@ -431,35 +505,29 @@ private fun PlayerControlsOverlay(
         ) {
             if (state.metadata.kind != PlaybackKind.Live) {
                 OutlinedButton(
-                    modifier = Modifier.tvFocusEffect(
-                        profile == DeviceProfile.Television,
-                        cornerRadiusDp = 999,
-                    ),
+                    modifier = Modifier.tvFocusEffect(tv, cornerRadiusDp = 999),
                     onClick = onSeekBack,
                 ) {
-                    Icon(Icons.Default.FastRewind, contentDescription = null)
+                    Icon(Icons.Default.FastRewind, contentDescription = "Reculer de 10 secondes")
                 }
             }
 
             Button(
-                modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 999),
+                modifier = Modifier.tvFocusEffect(tv, cornerRadiusDp = 999),
                 onClick = onTogglePlayPause,
             ) {
                 Icon(
                     imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = null,
+                    contentDescription = if (state.isPlaying) "Pause" else "Lecture",
                 )
             }
 
             if (state.metadata.kind != PlaybackKind.Live) {
                 OutlinedButton(
-                    modifier = Modifier.tvFocusEffect(
-                        profile == DeviceProfile.Television,
-                        cornerRadiusDp = 999,
-                    ),
+                    modifier = Modifier.tvFocusEffect(tv, cornerRadiusDp = 999),
                     onClick = onSeekForward,
                 ) {
-                    Icon(Icons.Default.FastForward, contentDescription = null)
+                    Icon(Icons.Default.FastForward, contentDescription = "Avancer de 10 secondes")
                 }
             }
         }
@@ -476,18 +544,30 @@ private fun PlayerControlsOverlay(
                 } else {
                     0f
                 }
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(if (profile == DeviceProfile.Television) 8.dp else 4.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = Color.White.copy(alpha = 0.24f),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(if (tv) 8.dp else 4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = Color.White.copy(alpha = 0.24f),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = PlayerTimeFormat.timeline(state.timeline.positionMs, duration),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = ZyvioTextSecondary,
+                        maxLines = 1,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
             }
 
+            // One line in every orientation: icon-only on narrow phones,
+            // scrollable rather than wrapped when labels do not fit.
             Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -495,12 +575,16 @@ private fun PlayerControlsOverlay(
                     profile = profile,
                     icon = Icons.Default.Audiotrack,
                     label = state.audioLabel ?: "Audio",
+                    description = "Pistes audio",
+                    iconOnly = layout.iconOnlyActions,
                     onClick = onOpenTracks,
                 )
                 PlayerAction(
                     profile = profile,
                     icon = Icons.Default.Subtitles,
                     label = state.subtitlesLabel ?: "Sous-titres",
+                    description = "Sous-titres",
+                    iconOnly = layout.iconOnlyActions,
                     onClick = onOpenTracks,
                 )
 
@@ -509,20 +593,27 @@ private fun PlayerControlsOverlay(
                         profile = profile,
                         icon = Icons.Default.List,
                         label = "Guide",
+                        description = "Guide des programmes",
+                        iconOnly = layout.iconOnlyActions,
                         onClick = onOpenGuide,
                     )
                     PlayerAction(
                         profile = profile,
                         icon = Icons.Default.Favorite,
                         label = "Favori",
+                        description = "Favori",
                         active = state.metadata.isFavorite,
+                        iconOnly = layout.iconOnlyActions,
                         onClick = onToggleFavorite,
                     )
-                } else {
+                } else if (state.metadata.kind == PlaybackKind.Episode) {
+                    // Films have no "next" item: no silent button.
                     PlayerAction(
                         profile = profile,
                         icon = Icons.Default.SkipNext,
-                        label = if (state.metadata.kind == PlaybackKind.Episode) "Épisode suivant" else "Suivant",
+                        label = "Épisode suivant",
+                        description = "Épisode suivant",
+                        iconOnly = layout.iconOnlyActions,
                         onClick = onNext,
                     )
                 }
@@ -534,6 +625,8 @@ private fun PlayerControlsOverlay(
                     text = it,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             state.metadata.nextProgramme?.let {
@@ -541,6 +634,8 @@ private fun PlayerControlsOverlay(
                     text = "À suivre : $it",
                     color = ZyvioTextSecondary,
                     style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -552,37 +647,87 @@ private fun PlayerAction(
     profile: DeviceProfile,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
+    description: String,
+    iconOnly: Boolean,
     active: Boolean = false,
     onClick: () -> Unit,
 ) {
     OutlinedButton(
         modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
+        contentPadding = if (iconOnly) PaddingValues(horizontal = 12.dp, vertical = 8.dp) else ButtonDefaults.ContentPadding,
         onClick = onClick,
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = if (iconOnly) description else null,
             tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
-        Spacer(Modifier.width(6.dp))
-        Text(label)
+        if (!iconOnly) {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 200.dp),
+            )
+        }
     }
 }
 
+/** "12:34 / 1:02:03" for the overlay timeline. */
+internal object PlayerTimeFormat {
+    fun clock(ms: Long): String {
+        val totalSeconds = (ms.coerceAtLeast(0L) / 1_000L)
+        val hours = totalSeconds / 3_600L
+        val minutes = (totalSeconds % 3_600L) / 60L
+        val seconds = totalSeconds % 60L
+        val mmss = "${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+        return if (hours > 0L) "$hours:$mmss" else "$minutes:${seconds.toString().padStart(2, '0')}"
+    }
+
+    fun timeline(positionMs: Long, durationMs: Long?): String =
+        if (durationMs != null && durationMs > 0L) {
+            "${clock(positionMs.coerceAtMost(durationMs))} / ${clock(durationMs)}"
+        } else {
+            clock(positionMs)
+        }
+}
+
 @Composable
-private fun BufferingOverlay(title: String) {
+private fun BufferingOverlay(
+    profile: DeviceProfile,
+    title: String,
+    onBack: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.42f)),
+            .background(Color.Black.copy(alpha = 0.42f))
+            .windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Retour stays reachable while a slow stream is loading.
+        OutlinedButton(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(ZyvioSpace.s4)
+                .tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 12),
+            onClick = onBack,
+        ) {
+            Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
+        }
+        Column(
+            modifier = Modifier.padding(horizontal = ZyvioSpace.s6),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             CircularProgressIndicator()
             Spacer(Modifier.height(12.dp))
             Text(
                 text = title,
                 fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
             )
             Text(
                 text = "Mise en mémoire…",
@@ -601,13 +746,20 @@ private fun ErrorOverlay(
     onNext: () -> Unit,
     onBack: () -> Unit,
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(ZyvioBase),
+            .background(ZyvioBase)
+            .windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        val stacked = maxWidth < PlayerControlsLayout.LABELLED_ACTIONS_MIN_WIDTH_DP.dp
+        Column(
+            modifier = Modifier
+                .padding(horizontal = ZyvioSpace.s6)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Icon(
                 imageVector = Icons.Default.ErrorOutline,
                 contentDescription = null,
@@ -623,9 +775,10 @@ private fun ErrorOverlay(
                 text = message,
                 modifier = Modifier.padding(top = 8.dp),
                 color = ZyvioTextSecondary,
+                textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ErrorActions(stacked = stacked) {
                 Button(
                     modifier = Modifier.tvFocusEffect(profile == DeviceProfile.Television, cornerRadiusDp = 10),
                     onClick = onRetry,
@@ -657,6 +810,20 @@ private fun ErrorOverlay(
                 }
             }
         }
+    }
+}
+
+/** Side by side when there is room, stacked full-width on portrait phones. */
+@Composable
+private fun ErrorActions(stacked: Boolean, content: @Composable () -> Unit) {
+    if (stacked) {
+        Column(
+            modifier = Modifier.widthIn(max = 360.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) { content() }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { content() }
     }
 }
 

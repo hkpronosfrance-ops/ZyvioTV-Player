@@ -1,5 +1,6 @@
 package fr.zyviotv.player.ui.player
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -7,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -111,6 +113,13 @@ fun PlayerHost(
     var selectedSubtitleLanguage by remember(effectiveRequest.streamUrl) {
         mutableStateOf(initialSubtitleLanguage)
     }
+    // Explicit picks from the tracks panel (Media3 "group:track" ids); they
+    // also reach tracks that carry no language tag.
+    var selectedAudioTrackId by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
+    var selectedSubtitleTrackId by remember(effectiveRequest.streamUrl) { mutableStateOf<String?>(null) }
+    // Kept across channels/episodes and rotation; reset when the player closes.
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
+    var scaleMode by rememberSaveable { mutableStateOf(PlayerScaleMode.Fit) }
     var subtitlesEnabled by remember(effectiveRequest.streamUrl) {
         mutableStateOf(initialSubtitlesEnabled)
     }
@@ -140,6 +149,24 @@ fun PlayerHost(
             onChannelNumberEntered(confirmed)
         }
     }
+
+    PlayerFullscreenEffect(enabled = fullscreen && profile != DeviceProfile.Television)
+
+    // The on-screen Retour and the Android back gesture/button take the same path.
+    val handleBack: () -> Unit = {
+        when (PlayerBackPolicy.onBack(panel)) {
+            PlayerBackAction.ExitPlayer -> {
+                onPlaybackExit(positionMs, durationMs)
+                onBack()
+            }
+            PlayerBackAction.CancelChannelNumber -> {
+                channelDigits = ""
+                panel = PlayerPanel.None
+            }
+            PlayerBackAction.ClosePanel -> panel = PlayerPanel.None
+        }
+    }
+    BackHandler(onBack = handleBack)
 
     val uiState = PlayerScreenUiState(
         playbackState = playbackState,
@@ -176,6 +203,8 @@ fun PlayerHost(
         subtitlesEnabled = subtitlesEnabled,
         errorMessage = errorMessage,
         channelNumberInput = channelDigits.takeIf { it.isNotBlank() },
+        isFullscreen = fullscreen,
+        scaleMode = scaleMode,
     )
 
     ParentalPlaybackGuard(
@@ -194,19 +223,7 @@ fun PlayerHost(
     PlayerScreen(
         profile = profile,
         state = uiState,
-        onBack = {
-            when (panel) {
-                PlayerPanel.None -> {
-                    onPlaybackExit(positionMs, durationMs)
-                    onBack()
-                }
-                PlayerPanel.ChannelNumber -> {
-                    channelDigits = ""
-                    panel = PlayerPanel.None
-                }
-                else -> panel = PlayerPanel.None
-            }
-        },
+        onBack = handleBack,
         onTogglePlayPause = { sendCommand(NativePlayerCommand.TogglePlayPause) },
         onSeekBack = { sendCommand(NativePlayerCommand.SeekBack10) },
         onSeekForward = { sendCommand(NativePlayerCommand.SeekForward10) },
@@ -218,7 +235,7 @@ fun PlayerHost(
         onNext = {
             if (request.kind == fr.zyviotv.player.shared.playback.PlaybackKind.Live) {
                 onNextChannel()
-            } else {
+            } else if (request.kind == fr.zyviotv.player.shared.playback.PlaybackKind.Episode) {
                 onNext()
             }
         },
@@ -237,17 +254,19 @@ fun PlayerHost(
         onOpenGuide = onOpenGuide,
         onToggleFavorite = onToggleFavorite,
         onSelectAudioTrack = { track ->
+            selectedAudioTrackId = track.id
             track.language?.let {
                 selectedAudioLanguage = it
                 playerPreferences.setPreferredAudioLanguage(it)
             }
         },
         onSelectSubtitleTrack = { track ->
+            selectedSubtitleTrackId = track.id
+            subtitlesEnabled = true
+            playerPreferences.setSubtitlesEnabled(true)
             track.language?.let {
                 selectedSubtitleLanguage = it
-                subtitlesEnabled = true
                 playerPreferences.setPreferredSubtitleLanguage(it)
-                playerPreferences.setSubtitlesEnabled(true)
             }
         },
         onDisableSubtitles = {
@@ -262,6 +281,8 @@ fun PlayerHost(
                 panel = PlayerPanel.ChannelNumber
             }
         },
+        onToggleFullscreen = { fullscreen = !fullscreen },
+        onToggleScaleMode = { scaleMode = scaleMode.toggled() },
         videoContent = {
             NativeVideoPlayer(
                 request = effectiveRequest,
@@ -281,8 +302,11 @@ fun PlayerHost(
                 onTracksChanged = { tracks = it },
                 selectedAudioLanguage = selectedAudioLanguage,
                 selectedSubtitleLanguage = selectedSubtitleLanguage,
+                selectedAudioTrackId = selectedAudioTrackId,
+                selectedSubtitleTrackId = selectedSubtitleTrackId,
                 subtitlesEnabled = subtitlesEnabled,
                 playbackQuality = devicePreferences.playbackQuality,
+                scaleMode = scaleMode,
                 showNativeControls = false,
                 autoPlay = !resumePromptPending,
                 command = command,

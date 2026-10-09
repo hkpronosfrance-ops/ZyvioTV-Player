@@ -62,3 +62,27 @@ Not yet verified: real provider streams on Pixel 7 emulator, physical phone, tab
 - Provider access headers from M3U playlists (`url|User-Agent=…&Referer=…`, `#EXTVLCOPT:http-user-agent`/`http-referrer`) are kept in the stream line (`PlaybackSource`) and sent by Media3 as HTTP headers. Only User-Agent, Referer and Origin are honoured; header values are never logged.
 - Logcat: `tag:ZyvioCatalog` shows `catalog event=catalog_cache_sources origin=… playable=… live=a/b movies=c/d episodes=e/f`.
 - Not verified yet: real playback on the Pixel 7 with the provider.
+
+## Phase #209 — Android player reliability (October 2026)
+
+- Back: the top Retour button and the system back share `PlayerBackPolicy`
+  (close panel → cancel channel number → save progress and exit). The player
+  route pops once, guarded by `PlayerExitNavigation.shouldPop`.
+- Media3 lifecycle: one `ExoPlayer` per stream, released exactly once in
+  `DisposableEffect(player)`; the `PlayerView` detaches in `onRelease`;
+  commands are token-gated (`PlayerCommandGate`) so a new player never replays
+  the previous command; ON_START resumes only what was playing
+  (`PlayerResumePolicy`).
+- Controls: `safeDrawing` insets, single-line title, icon-only actions below
+  600 dp, horizontally scrollable action row, elapsed/total time, no "Suivant"
+  for films. Phones/tablets get a real full screen (hidden system bars,
+  sensor landscape, restored on exit) and Fit/Zoom picture modes; video is
+  never stretched.
+- Tracks: explicit selection by Media3 track id (`TrackSelectionOverride`).
+- HEVC: decoder fallback enabled; decoder failures log
+  `mime=… codec=… emulator=…` and show an emulator-specific French message.
+  An emulator HEVC failure is not, by itself, an app defect: confirm on a
+  physical device.
+- Tests: `PlayerLifecycleTest` (JVM) and `tests/test_android_player_209.py`.
+  Not verified on Pixel 7, physical phone, TV or with a real provider.
+

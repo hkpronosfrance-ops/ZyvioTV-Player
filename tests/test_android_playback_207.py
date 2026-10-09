@@ -60,7 +60,7 @@ class AndroidPlayback207Test(unittest.TestCase):
         player = read("player/NativeVideoPlayer.kt")
         self.assertIn(".setAllowCrossProtocolRedirects(true)", player)
         self.assertIn("PlaybackMediaTypeResolver.attempts(request)", player)
-        self.assertIn("PlaybackErrorClassifier.classify(error.errorCode, httpStatus)", player)
+        self.assertIn("PlaybackErrorClassifier.classify(\n                errorCode = error.errorCode,\n                httpStatus = httpStatus,", player)
         self.assertIn("seekToDefaultPosition()", player)
 
     def test_playback_logs_never_include_urls(self):
