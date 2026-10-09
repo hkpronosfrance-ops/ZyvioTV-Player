@@ -35,6 +35,7 @@ import fr.zyviotv.player.shared.sync.PlaylistSecret
 import fr.zyviotv.player.shared.sync.SyncResult
 import fr.zyviotv.player.shared.xtream.XtreamConnectionResult
 import fr.zyviotv.player.shared.xtream.XtreamCredentials
+import fr.zyviotv.player.ui.theme.ZyvioTextPrimary
 import java.net.URL
 import kotlinx.coroutines.launch
 
@@ -81,6 +82,7 @@ fun AddPlaylistScreen(
             }
             Text(
                 text = "Ajouter une playlist",
+                color = ZyvioTextPrimary,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold,
             )

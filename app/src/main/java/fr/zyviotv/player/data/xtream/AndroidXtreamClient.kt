@@ -1,5 +1,6 @@
 package fr.zyviotv.player.data.xtream
 
+import fr.zyviotv.player.data.network.NetworkDiagnostics
 import fr.zyviotv.player.shared.xtream.XtreamClient
 import fr.zyviotv.player.shared.xtream.XtreamConnectionResult
 import fr.zyviotv.player.shared.xtream.XtreamCredentials
@@ -27,6 +28,7 @@ class AndroidXtreamClient : XtreamClient {
 
             try {
                 val response = get(endpoint)
+                NetworkDiagnostics.response("xtream", endpoint, response.code)
                 if (response.code !in 200..299) {
                     return@withContext XtreamConnectionResult.Failure(
                         "Le serveur IPTV a répondu avec le code ${response.code}.",
@@ -45,9 +47,11 @@ class AndroidXtreamClient : XtreamClient {
                 }
 
                 XtreamConnectionResult.Success(profile)
-            } catch (_: SocketTimeoutException) {
+            } catch (error: SocketTimeoutException) {
+                NetworkDiagnostics.failure("xtream", endpoint, error)
                 XtreamConnectionResult.Failure("Le serveur IPTV met trop de temps à répondre.")
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                NetworkDiagnostics.failure("xtream", endpoint, error)
                 XtreamConnectionResult.Failure(
                     "Impossible de joindre le serveur IPTV. Vérifiez l’adresse et votre connexion.",
                 )
