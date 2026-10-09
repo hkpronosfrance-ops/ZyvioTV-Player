@@ -47,6 +47,9 @@ jobs:
       - name: Validate D6 television UI regression contracts
         run: node webosApp/d6-interface.test.cjs
 
+      - name: Validate M3U functional and category isolation audit
+        run: node tests/m3u-functional-audit-194.cjs webosApp
+
       - name: Validate provider core
         run: node webosApp/provider.test.cjs
 
