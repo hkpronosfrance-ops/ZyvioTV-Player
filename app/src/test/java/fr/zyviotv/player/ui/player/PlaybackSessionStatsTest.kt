@@ -91,8 +91,8 @@ class PlaybackSessionStatsTest {
     @Test
     fun summaryNeverCarriesUrlsCredentialsOrTitlesEvenFromHostileInput() {
         val stats = PlaybackSessionStats("0000abcd", "movie", clock = { now })
-        stats.onPrepare("http://user:pass@host.invalid/live/user/pass/1.ts?username=u&password=p")
-        stats.onVideoDecoder("https://provider.invalid/get.php?username=u&password=p&token=t")
+        stats.onPrepare("http://user:pass@provider.example/live/user/pass/1.ts?username=u&password=p")
+        stats.onVideoDecoder("https://provider.example/get.php?username=u&password=p&token=t")
         stats.onVideoFormat("video/avc; Authorization: Bearer abc", 1920, 1080)
         stats.onAudioDecoder("Authorization: Bearer secret-token")
         stats.onDiscontinuity("seek?password=x")

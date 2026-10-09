@@ -76,7 +76,7 @@ class NetworkDiagnosticsTest {
     @Test
     fun supabaseLineNeverCarriesTheBodyOrSecrets() {
         val hostile = "{\"code\":\"42501\",\"message\":\"permission denied for table player_devices\"," +
-            "\"hint\":\"Authorization: Bearer eyJ.token https://x.supabase.co/rest/v1/player_devices?username=a&password=b\"}"
+            "\"hint\":\"Authorization: Bearer eyJ.token https://provider.example/rest/v1/player_devices?username=a&password=b\"}"
         val line = NetworkDiagnostics.supabaseLine("player_devices", 403, "fresh", hostile, retried = false)
         assertEquals(
             "supabase operation=player_devices response=403 session=fresh authError=permission-denied " +
