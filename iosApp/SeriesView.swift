@@ -183,7 +183,8 @@ struct SeriesDetailView: View {
 
     private var visibleEpisodes: [ProviderSeriesEpisodeDTO] {
         guard let selectedSeason else { return [] }
-        return detail?.episodes.filter { $0.season == selectedSeason } ?? []
+        return (detail?.episodes.filter { $0.season == selectedSeason } ?? [])
+            .sorted { $0.number < $1.number }
     }
 
     var body: some View {
@@ -308,7 +309,7 @@ struct SeriesDetailView: View {
             let progress = try await progressTask
 
             detail = loadedDetail
-            selectedSeason = selectedSeason ?? loadedDetail.episodes.first?.season
+            selectedSeason = selectedSeason ?? loadedDetail.episodes.map(\.season).min()
             progressByEpisodeId = Dictionary(
                 uniqueKeysWithValues: progress
                     .filter {

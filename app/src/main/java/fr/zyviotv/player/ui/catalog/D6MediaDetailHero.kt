@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,22 +30,28 @@ import fr.zyviotv.player.ui.theme.ZyvioTextPrimary
  * Never imply artwork is loaded when its URL cannot be rendered.
  */
 @Composable
-fun D6MediaDetailHero(title: String, height: Dp) {
+fun D6MediaDetailHero(title: String, height: Dp, artworkUrl: String? = null) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(height),
         color = ZyvioSurface1,
         shape = RoundedCornerShape(20.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+            if (!artworkUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = artworkUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            Box(modifier = Modifier.fillMaxSize().background(
                     Brush.verticalGradient(
-                        listOf(ZyvioSurface2, ZyvioRedTint, ZyvioSurface1),
+                        listOf(ZyvioSurface2.copy(alpha = 0.92f), ZyvioRedTint.copy(alpha = 0.82f), ZyvioSurface1.copy(alpha = 0.94f)),
                     ),
                 ),
-            contentAlignment = Alignment.BottomStart,
-        ) {
+                contentAlignment = Alignment.BottomStart,
+            ) {
             Text(
                 text = title,
                 modifier = Modifier.padding(24.dp),
@@ -53,6 +61,7 @@ fun D6MediaDetailHero(title: String, height: Dp) {
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+            }
         }
     }
 }
