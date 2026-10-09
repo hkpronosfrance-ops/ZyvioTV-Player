@@ -40,12 +40,15 @@ import fr.zyviotv.player.data.settings.ParentalWriteResult
 import fr.zyviotv.player.data.settings.ProfileParentalSettings
 import fr.zyviotv.player.data.settings.ProfileRepository
 import fr.zyviotv.player.ui.catalog.ProviderCatalogState
-import fr.zyviotv.player.ui.catalog.rememberProviderCatalogSession
 import fr.zyviotv.player.shared.sync.PlayerProfile
 import kotlinx.coroutines.launch
 
 @Composable
-fun ParentalControlsScreen(onBack: () -> Unit) {
+fun ParentalControlsScreen(
+    catalogState: ProviderCatalogState,
+    onCatalogReload: () -> Unit,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val repository = remember(appContext) {
@@ -55,9 +58,6 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
         ProfileRepository(SecureSessionStore(appContext))
     }
     val scope = rememberCoroutineScope()
-    val catalogSession = rememberProviderCatalogSession()
-    val catalogState by catalogSession.state
-
     var loading by remember { mutableStateOf(true) }
     var settings by remember { mutableStateOf<ParentalSettings?>(null) }
     var profiles by remember { mutableStateOf<List<PlayerProfile>>(emptyList()) }
@@ -429,7 +429,7 @@ fun ParentalControlsScreen(onBack: () -> Unit) {
                                             actionPin = ""
                                             message = "Verrouillages de ${profile.name} mis à jour."
                                             loadSelectedProfile()
-                                            catalogSession.reload()
+                                            onCatalogReload()
                                         }
                                         is ParentalWriteResult.Failure -> {
                                             message = result.message

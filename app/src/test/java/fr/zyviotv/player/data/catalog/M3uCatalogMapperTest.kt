@@ -7,6 +7,53 @@ import org.junit.Test
 
 class M3uCatalogMapperTest {
     @Test
+    fun streamingBuilderMapsMoreThanFiftyThousandEntriesCompletely() {
+        val builder = M3uCatalogMapper.builder()
+        repeat(30_000) { index ->
+            builder.add(
+                M3uEntry(
+                    name = "Chaîne $index",
+                    streamUrl = "https://media.invalid/channels/$index.ts",
+                    tvgId = "channel-$index",
+                    groupTitle = "TV ${(index % 20) + 1}",
+                ),
+            )
+        }
+        repeat(15_000) { index ->
+            builder.add(
+                M3uEntry(
+                    name = "Film $index",
+                    streamUrl = "https://media.invalid/films/$index.mkv",
+                    groupTitle = "FILMS ${(index % 20) + 1}",
+                ),
+            )
+        }
+        repeat(10_000) { index ->
+            val series = index % 100
+            val episode = (index / 100) + 1
+            builder.add(
+                M3uEntry(
+                    name = "Série $series S01E${episode.toString().padStart(3, '0')} Épisode $episode",
+                    streamUrl = "https://media.invalid/episodes/$index.mkv",
+                    groupTitle = "SERIES ${(series % 10) + 1}",
+                ),
+            )
+        }
+
+        val snapshot = builder.build()
+
+        assertEquals(30_000, snapshot.liveChannels.size)
+        assertEquals(15_000, snapshot.movies.size)
+        assertEquals(100, snapshot.series.size)
+        assertEquals(
+            10_000,
+            snapshot.series.sumOf { series ->
+                M3uSeriesDetailRegistry.load(series.id)?.episodes?.size ?: 0
+            },
+        )
+    }
+
+    @Test
     fun duplicateTvgIdsReceiveStableUniqueIds() {
         val snapshot = M3uCatalogMapper.map(
             listOf(

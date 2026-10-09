@@ -3,7 +3,6 @@ package fr.zyviotv.player.ui.movies
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +18,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterListOff
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
 import fr.zyviotv.player.ui.catalog.catalogPosterMinimumWidth
 import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
 import fr.zyviotv.player.ui.theme.ZyvioSpace
@@ -62,6 +64,7 @@ import fr.zyviotv.player.ui.theme.ZyvioSurface2
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.theme.ZyvioTextTertiary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
+import kotlinx.coroutines.yield
 
 data class MovieCatalogItem(
     val id: String,
@@ -129,17 +132,20 @@ private fun MoviesReady(
     var pendingMovie by remember { mutableStateOf<MovieCatalogItem?>(null) }
 
     val filtered = remember(items, selectedCategory, sort) {
+        val startedAt = CatalogPerformanceDiagnostics.startedAt()
         val base = when (selectedCategory) {
             "Toutes" -> items
             "Nouveautés" -> items.filter { it.isNew }
             else -> items.filter { it.category == selectedCategory }
         }
-        when (sort) {
+        val result = when (sort) {
             "A-Z" -> base.sortedBy { it.title.lowercase() }
             "Année" -> base.sortedByDescending { it.year ?: "" }
             "Note" -> base.sortedByDescending { it.rating?.replace(",", ".")?.toDoubleOrNull() ?: -1.0 }
             else -> base
         }
+        CatalogPerformanceDiagnostics.phase("open_movie_category", startedAt, result.size)
+        result
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -260,16 +266,15 @@ private fun MoviesBody(
     val posterMinWidth = catalogPosterMinimumWidth(profile)
 
     val gridState = rememberLazyGridState()
-    val focusRequesters = remember(items) {
-        items.associate { it.id to FocusRequester() }
-    }
+    val restoreRequester = remember { FocusRequester() }
 
     LaunchedEffect(profile, lastSelectedId, items) {
         if (profile == DeviceProfile.Television && lastSelectedId != null) {
             val index = items.indexOfFirst { it.id == lastSelectedId }
             if (index >= 0) {
                 gridState.scrollToItem(index)
-                focusRequesters[lastSelectedId]?.requestFocus()
+                yield()
+                runCatching { restoreRequester.requestFocus() }
             }
         }
     }
@@ -288,7 +293,7 @@ private fun MoviesBody(
             MovieCard(
                 item = movie,
                 isTelevision = profile == DeviceProfile.Television,
-                focusRequester = focusRequesters[movie.id],
+                focusRequester = restoreRequester.takeIf { movie.id == lastSelectedId },
                 onClick = { onMovieSelected(movie) },
             )
         }
@@ -333,13 +338,11 @@ private fun CategoryRow(
     onSelect: (String) -> Unit,
     isTelevision: Boolean,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        categories.forEach { category ->
+        listItems(categories, key = { it }) { category ->
             FilterChip(
                 modifier = Modifier.tvFocusEffect(isTelevision, cornerRadiusDp = 999),
                 selected = category == selected,
@@ -367,11 +370,11 @@ private fun CategoryPanel(
     modifier: Modifier,
     isTelevision: Boolean,
 ) {
-    Column(
+    LazyColumn(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        categories.forEach { category ->
+        listItems(categories, key = { it }) { category ->
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()

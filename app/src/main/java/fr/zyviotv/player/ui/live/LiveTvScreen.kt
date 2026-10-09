@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,9 +15,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Lock
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import fr.zyviotv.player.ui.DeviceProfile
+import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
 import fr.zyviotv.player.ui.settings.ParentalUnlockDialog
 import fr.zyviotv.player.ui.theme.ZyvioSpace
 import fr.zyviotv.player.ui.theme.ZyvioRedTint
@@ -59,6 +61,7 @@ import fr.zyviotv.player.ui.theme.ZyvioSurface2
 import fr.zyviotv.player.ui.theme.ZyvioTextSecondary
 import fr.zyviotv.player.ui.tv.tvFocusEffect
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 
 data class LiveChannelUi(
     val id: String,
@@ -133,7 +136,12 @@ private fun LiveReadyState(
     }
 
     val filteredChannels = remember(channels, selectedCategory) {
-        if (selectedCategory == "Toutes") channels else channels.filter { it.category == selectedCategory }
+        val startedAt = CatalogPerformanceDiagnostics.startedAt()
+        val result = if (selectedCategory == "Toutes") channels else {
+            channels.filter { it.category == selectedCategory }
+        }
+        CatalogPerformanceDiagnostics.phase("open_live_category", startedAt, result.size)
+        result
     }
 
     val selectedChannel = channels.firstOrNull { it.id == selectedChannelId }
@@ -253,9 +261,7 @@ private fun MobileLiveLayout(
     onOpenGuide: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize(),
     ) {
         LiveHeader(onOpenGuide = onOpenGuide, isTelevision = false)
         Spacer(Modifier.height(16.dp))
@@ -269,6 +275,7 @@ private fun MobileLiveLayout(
         )
         Spacer(Modifier.height(18.dp))
         ChannelList(
+            modifier = Modifier.weight(1f),
             channels = channels,
             selectedChannel = selectedChannel,
             onChannelSelected = onChannelSelected,
@@ -309,20 +316,16 @@ private fun LargeLiveLayout(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 28.dp else 18.dp),
         ) {
-            Column(
+            ChannelList(
                 modifier = Modifier
                     .width(channelListWidth)
-                    .fillMaxHeight()
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                ChannelList(
-                    channels = channels,
-                    selectedChannel = selectedChannel,
-                    onChannelSelected = onChannelSelected,
-                    isTelevision = isTelevision,
-                    restoreFocusChannelId = restoreFocusChannelId,
-                )
-            }
+                    .fillMaxHeight(),
+                channels = channels,
+                selectedChannel = selectedChannel,
+                onChannelSelected = onChannelSelected,
+                isTelevision = isTelevision,
+                restoreFocusChannelId = restoreFocusChannelId,
+            )
 
             Box(
                 modifier = Modifier
@@ -386,13 +389,11 @@ private fun CategoryRow(
     isTelevision: Boolean,
     lockedCategories: Set<String>,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        categories.forEach { category ->
+        items(categories, key = { it }) { category ->
             val selected = category == selectedCategory
             Card(
                 modifier = Modifier
@@ -512,30 +513,44 @@ private fun PlayerPanel(
 
 @Composable
 private fun ChannelList(
+    modifier: Modifier = Modifier,
     channels: List<LiveChannelUi>,
     selectedChannel: LiveChannelUi?,
     onChannelSelected: (LiveChannelUi) -> Unit,
     isTelevision: Boolean,
     restoreFocusChannelId: String?,
 ) {
-    val focusRequesters = remember(channels) {
-        channels.associate { it.id to FocusRequester() }
-    }
+    val listState = rememberLazyListState()
+    val restoreRequester = remember { FocusRequester() }
 
     LaunchedEffect(isTelevision, restoreFocusChannelId, channels) {
         if (isTelevision && restoreFocusChannelId != null) {
-            focusRequesters[restoreFocusChannelId]?.requestFocus()
+            val index = channels.indexOfFirst { it.id == restoreFocusChannelId }
+            if (index >= 0) {
+                listState.scrollToItem(index)
+                yield()
+                runCatching { restoreRequester.requestFocus() }
+            }
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        channels.forEach { channel ->
+    LazyColumn(
+        modifier = modifier,
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(channels, key = { it.id }) { channel ->
             val selected = channel.id == selectedChannel?.id
-            val requester = focusRequesters[channel.id]
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+                    .then(
+                        if (channel.id == restoreFocusChannelId) {
+                            Modifier.focusRequester(restoreRequester)
+                        } else {
+                            Modifier
+                        },
+                    )
                     .onFocusChanged {
                         if (isTelevision && it.isFocused) {
                             onChannelSelected(channel)
