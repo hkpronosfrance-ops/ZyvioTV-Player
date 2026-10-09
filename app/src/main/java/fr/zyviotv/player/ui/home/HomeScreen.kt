@@ -437,7 +437,7 @@ fun HomeScreen(
         }
 
         QuickActions(
-            isTelevision = profile == DeviceProfile.Television,
+            profile = profile,
             onOpenLive = onOpenLive,
             onOpenMovies = onOpenMovies,
             onOpenSeries = onOpenSeries,
@@ -901,7 +901,7 @@ private fun HomeNextEpisodesSection(
 
 @Composable
 private fun QuickActions(
-    isTelevision: Boolean,
+    profile: DeviceProfile,
     onOpenLive: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
@@ -910,19 +910,25 @@ private fun QuickActions(
     onOpenContinueWatching: () -> Unit,
     onOpenHistory: () -> Unit,
 ) {
+    val isTelevision = profile == DeviceProfile.Television
+    val cardWidth = when (profile) {
+        DeviceProfile.Mobile -> 150.dp
+        DeviceProfile.Tablet -> 176.dp
+        DeviceProfile.Television -> 190.dp
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        QuickActionCard("TV en direct", Icons.Default.LiveTv, isTelevision, onOpenLive)
-        QuickActionCard("Films", Icons.Default.Movie, isTelevision, onOpenMovies)
-        QuickActionCard("Séries", Icons.Default.VideoLibrary, isTelevision, onOpenSeries)
-        QuickActionCard("Recherche", Icons.Default.Search, isTelevision, onOpenSearch)
-        QuickActionCard("Favoris", Icons.Default.Favorite, isTelevision, onOpenFavorites)
-        QuickActionCard("Continuer", Icons.Default.PlayArrow, isTelevision, onOpenContinueWatching)
-        QuickActionCard("Historique", Icons.Default.History, isTelevision, onOpenHistory)
+        QuickActionCard("TV en direct", Icons.Default.LiveTv, isTelevision, cardWidth, onOpenLive)
+        QuickActionCard("Films", Icons.Default.Movie, isTelevision, cardWidth, onOpenMovies)
+        QuickActionCard("Séries", Icons.Default.VideoLibrary, isTelevision, cardWidth, onOpenSeries)
+        QuickActionCard("Recherche", Icons.Default.Search, isTelevision, cardWidth, onOpenSearch)
+        QuickActionCard("Favoris", Icons.Default.Favorite, isTelevision, cardWidth, onOpenFavorites)
+        QuickActionCard("Continuer", Icons.Default.PlayArrow, isTelevision, cardWidth, onOpenContinueWatching)
+        QuickActionCard("Historique", Icons.Default.History, isTelevision, cardWidth, onOpenHistory)
     }
 }
 
@@ -931,12 +937,13 @@ private fun QuickActionCard(
     label: String,
     icon: ImageVector,
     isTelevision: Boolean,
+    cardWidth: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
     Card(
         onClick = onClick,
         modifier = Modifier
-            .width(if (isTelevision) 190.dp else 150.dp)
+            .width(cardWidth)
             .tvFocusEffect(isTelevision, cornerRadiusDp = 18),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
