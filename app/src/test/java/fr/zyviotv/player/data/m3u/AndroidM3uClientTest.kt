@@ -5,6 +5,7 @@ import fr.zyviotv.player.shared.m3u.M3uSource
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -27,13 +28,19 @@ class AndroidM3uClientTest {
 
     @Test
     fun interruptedBodyIsRetriedAndNeverReturnedAsSuccess() = runBlocking {
-        val partial = "#EXTM3U\n#EXTINF:-1,Channel 1\nhttp://stream.example/1.ts\n"
+        val body = buildString {
+            appendLine("#EXTM3U")
+            repeat(200) { index ->
+                appendLine("#EXTINF:-1,Channel $index")
+                appendLine("http://stream.example/$index.ts")
+            }
+        }
         repeat(2) {
             server.enqueue(
                 MockResponse()
                     .setResponseCode(200)
-                    .setBody(partial)
-                    .setHeader("Content-Length", partial.toByteArray().size + 128),
+                    .setBody(body)
+                    .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY),
             )
         }
 
