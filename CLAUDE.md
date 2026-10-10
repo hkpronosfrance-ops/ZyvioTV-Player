@@ -1,7 +1,7 @@
 # ZYVIOTV Player — Instructions permanentes pour Claude Code
 
 > Référence du projet depuis sa création. À lire AVANT toute analyse, modification, PR ou fusion.
-> État de référence documentaire : 10 octobre 2026, `main` après PR #215 : `d3c1f06` ; PR #216 (variante de mesure `perf`) en cours, voir §8.
+> État de référence documentaire : 10 octobre 2026, `main` après PR #216 : `b6cec51` ; PR #217 (première synchronisation plus rapide) en cours, voir §8.
 > Ce document décrit la vision, les décisions immuables, les réalisations observées et les anomalies connues. **Il ne constitue pas une attestation que chaque fonctionnalité est opérationnelle.**
 
 ## 0. Règles de travail non négociables
@@ -223,7 +223,9 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 - **PR #215** : cause trouvée dans le code de la PR B : chaque référence était encodée en hexadécimal avec un `String.format` par octet (~1 million d'appels pour 18 681 éléments). Remplacé par un échappement de `%` et `:` seulement, avec un préfixe calculé une fois par type. Micro-mesure **JVM** (PC, pas appareil) : 550 ms → 3 ms pour 18 681 références. Écran de démarrage système Android 12+ : `windowSplashScreenBackground` = `#050506` (noir D6) au lieu du blanc par défaut. Gain réel sur `catalog_ready` à mesurer sur Pixel 7.
 - **PR #215 fusionnée (`main` = `d3c1f06`, CI post-fusion verte). Recette Pixel 7 émulateur (debug)** : écran de démarrage système noir avec le monogramme Z ; `catalog_ready` **12,2 s** (32 s avant), collectes mémoire 6 (74 à 85 avant) ; lecture Live OK avec le nouvel encodage. Ressenti utilisateur : changement d'onglet et lancement de chaîne encore lents (lancement → image 14,6 s, dont un gel de 8,8 s à la création du lecteur, précédé de nombreuses lignes `Verification of … took …` propres à la variante debug).
 - **PR #216 : variante `perf`** (copie de `release`, R8, non débogable, signée avec la clé de debug, paquet `.perf`, nom « ZyvioTV Perf », construite par la CI). Objectif : mesurer démarrage, onglets et lancement de lecture sans la variante debug avant toute nouvelle optimisation. Mode d'emploi : `docs/PERFORMANCE.md`.
-- Anomalies trouvées pendant la recette PR B (hors PR B, prévues en **PR #216**) : fiches film et série sans bouton « Retour » alors que la maquette D1 le prévoit (« Retour toujours disponible en haut à gauche ») ; onglet Films bloqué après fiche → lecteur en erreur → retour (navigation des onglets différente depuis les fiches : `launchSingleTop` seul, sans `popUpTo`/`saveState`/`restoreState`) ; titres d'épisodes en double (« Épisode 1 — Épisode 1 »).
+- **PR #216 fusionnée (`main` = `b6cec51`). Recette variante perf, Pixel 7 émulateur (10/10/2026, mesuré)** : `catalog_ready` **2,86 s** (12,2 s en debug), 0 GC ; `ui_map_live` 27 ms (374 ms) ; chaîne Live `first_frame_ms` **5 834** (14,6 s en debug) ; le gel de 8,8 s à la création du lecteur n'existait qu'en debug (12 ms en perf) ; 35 s de lecture sans coupure. La lenteur restante est la **première synchronisation** : `m3u_download` 144,6 s (27 s le 09/10), analyse et écriture Room avant l'Accueil, écran de synchro `slow=15132/15674`. Ouverture de l'onglet TV : une image bloquée 1,7 s. Après cette longue synchro, la liste des profils a reçu **HTTP 401** (journaux Supabase : `GET player_profiles 401`, aucun renouvellement) : `ProfileRepository` utilisait le jeton enregistré sans le renouveler. Écran « Finalisons votre expérience » : boutons Qualité écrasés, « Désactivés » coupé.
+- **PR #217 — Première synchronisation plus rapide** (en cours) : M3U analysée pendant le téléchargement (plus de fichier temporaire ; corps tronqué ou `#EXTINF` sans URL = échec, nouvelle tentative avec un catalogue vide), Accueil affiché avant l'écriture Room (`CatalogStore.persistRefresh`, portée du store, repli V1 inchangé), priorité basse pour l'analyse et l'écriture, `SupabaseRestClient` (renouvellement de session avant/après 401, verrou commun) pour les profils et le contrôle parental. Phases : `m3u_stream`, `m3u_stream_size`. Limite : une playlist M3U mélange les familles, l'Accueil ne peut pas s'ouvrir « dès les Chaînes TV » sans catalogue partiel. Aucun changement Supabase.
+- Anomalies trouvées pendant la recette PR B (hors PR B, reportées en **PR #218**) : fiches film et série sans bouton « Retour » alors que la maquette D1 le prévoit (« Retour toujours disponible en haut à gauche ») ; onglet Films bloqué après fiche → lecteur en erreur → retour (navigation des onglets différente depuis les fiches : `launchSingleTop` seul, sans `popUpTo`/`saveState`/`restoreState`) ; titres d'épisodes en double (« Épisode 1 — Épisode 1 »).
 
 **Xtream fournisseur réel — problème ouvert**
 - Même abonnement déclaré fonctionnel en M3U **et Xtream** sur IPTV Smarters Pro, ainsi que Zen IPTV et SET IPTV.
@@ -264,7 +266,8 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 **P1 — fiabilité/sécurité**
 - `player_devices` HTTP 403 Supabase : `pg=missing-table-grant` (42501), GRANT ciblé appliqué par le propriétaire le 09/10/2026 ; **résolu** (`response=201` sur émulateur, migration #212).
 - Xtream réel HTTP 512 encore non résolu/non retesté sur #205+ ; ne pas supposer que l'URL ou le fournisseur est mauvais.
-- Performance : cache chiffré 35 à 77 s à froid, parsing 65 s, sauvegarde 46 s, GC fréquents, `Skipped 297 frames`, `Davey` > 5 s (voir mesures §8). Resynchronisation après cache valide traitée par #211 ; démarrage < 2 s visé par le bloc Room #213 (PR B), la PR A ne change pas encore le démarrage.
+- Performance : démarrage depuis Room 2,86 s en variante perf (émulateur, #216) ; reste la **première synchronisation** (téléchargement 27 à 145 s selon le réseau, puis analyse et écriture) traitée par #217, à remesurer ; saccades à l'ouverture de l'onglet TV (1,7 s) et dans le lecteur.
+- Autres dépôts Supabase sans renouvellement de session (`SupabaseLibrarySyncRepository`, `SystemStateRepository`, `AppUpdateRepository`) : à migrer vers `SupabaseRestClient`. Si les verrous parentaux ne peuvent pas être lus, le catalogue est affiché sans filtre (`loadContentLocks(...).getOrNull()`) : comportement à décider (P1).
 - Classification M3U à vérifier, notamment chaînes sport apparaissant comme séries ; distinguer source/mapping et alias.
 
 **P2 — UX et parité**
@@ -289,7 +292,7 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 
 1. Lire ce fichier puis vérifier que les chemins et l'architecture correspondent au `main` actuel.
 2. Vérifier sur GitHub l'état du bloc Room (#213 = PR A, puis PR B et C) et la recette Pixel 7 rapportée par l'utilisateur (lignes `catalog_store_generation`, `catalog_store_write`, `catalog_cache_load`) avant d'ouvrir un nouveau bloc.
-3. Prochains candidats : PR B du bloc Room (écrans sur Room, démarrage < 2 s visé), PR C (écriture en flux), Xtream HTTP 512, classification M3U, puis bloc « fidélité design Android » (Manrope, barre basse D6, onglet inactif, i18n).
+3. Prochains candidats : recette Pixel 7 (variante perf) de #217, PR #218 (navigation des fiches, onglet Films bloqué, titres d'épisodes en double, boutons Qualité), Xtream HTTP 512, classification M3U, puis bloc « fidélité design Android » (Manrope, barre basse D6, onglet inactif, i18n).
 4. **Ne pas commencer** par changer la base Supabase de production, ajouter un `largeHeap`, inventer des streams, réécrire les maquettes ou prétendre tester le fournisseur depuis CI.
 
 ---

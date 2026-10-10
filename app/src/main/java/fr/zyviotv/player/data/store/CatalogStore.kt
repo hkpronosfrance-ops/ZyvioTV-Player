@@ -1,6 +1,7 @@
 package fr.zyviotv.player.data.store
 
 import android.content.Context
+import android.os.Process
 import fr.zyviotv.player.data.cache.CachedCatalog
 import fr.zyviotv.player.data.cache.CatalogCacheOrigin
 import fr.zyviotv.player.data.cache.CatalogFileStamp
@@ -98,6 +99,40 @@ class CatalogStore internal constructor(
     }
 
     /**
+     * PR #217: [writeRefreshNow] in the store's own scope, so the home screen
+     * no longer waits for the write and leaving the screen does not cancel it.
+     * [onDone] runs on IO with the result (true once the generation is active).
+     * The write is not deferred for playback: the refresh that produced the
+     * catalogue already waited for it, and an unpersisted catalogue would be
+     * downloaded again at the next launch. Generations are written at
+     * background thread priority (see [execute]).
+     */
+    fun persistRefresh(
+        profileId: String,
+        rawCatalog: CachedCatalog,
+        fetchedAtEpochMs: Long,
+        idAliases: Map<String, Long>,
+        onDone: suspend (Boolean) -> Unit,
+    ) {
+        scope.launch {
+            val stored = try {
+                writeRefreshNow(profileId, rawCatalog, fetchedAtEpochMs, idAliases)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                false
+            }
+            runCatching { onDone(stored) }.onFailure { error ->
+                CatalogPerformanceDiagnostics.event(
+                    name = "catalog_persist_followup_failed",
+                    fields = "failure=" + error.javaClass.simpleName,
+                    warning = true,
+                )
+            }
+        }
+    }
+
+    /**
      * Startup read of the profile's catalogue (blocking: call on IO). Null
      * when the store holds no active generation for it, or cannot be read.
      */
@@ -188,7 +223,8 @@ class CatalogStore internal constructor(
                 }
             }
             val startedAt = CatalogPerformanceDiagnostics.startedAt()
-            val result = writer.write(catalog, source) { context.ensureActive() }
+            // Blocking write on this thread, below the UI thread's priority.
+            val result = withBackgroundPriority { writer.write(catalog, source) { context.ensureActive() } }
             when (result) {
                 is GenerationWriteResult.Activated -> {
                     CatalogPerformanceDiagnostics.phase(
@@ -220,6 +256,17 @@ class CatalogStore internal constructor(
             )
             if (error is CancellationException) throw error
             return null
+        }
+    }
+
+    private inline fun <T> withBackgroundPriority(block: () -> T): T {
+        val tid = Process.myTid()
+        val previous = runCatching { Process.getThreadPriority(tid) }.getOrNull()
+        runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
+        try {
+            return block()
+        } finally {
+            if (previous != null) runCatching { Process.setThreadPriority(previous) }
         }
     }
 

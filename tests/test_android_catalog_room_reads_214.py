@@ -29,7 +29,8 @@ class AndroidCatalogRoomReads214Test(unittest.TestCase):
         session = read(APP / "ui/catalog/ProviderCatalogSession.kt")
         restore = session.split("private fun restoreCatalogForSession(", 1)[1].split("\nprivate fun ", 1)[0]
         self.assertLess(restore.index("val stored = catalogStore.restore(profileId)"), restore.index("offlineCache.deleteCatalogFiles(profileId)"))
-        refresh = session.split("val stored = catalogStore.writeRefreshNow(", 1)[1][:1600]
+        # PR #217: written in the background by CatalogStore.persistRefresh.
+        refresh = session.split("catalogStore.persistRefresh(", 1)[1][:1600]
         self.assertLess(refresh.index("if (stored) {"), refresh.index("offlineCache.deleteCatalogFiles(profileId)"))
         self.assertLess(refresh.index("} else {"), refresh.index("offlineCache.saveCatalog("))
         self.assertEqual(session.count("offlineCache.deleteCatalogFiles(profileId)"), 2)

@@ -4,6 +4,7 @@ import fr.zyviotv.player.BuildConfig
 import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.auth.SupabaseAuthRepository
 import fr.zyviotv.player.data.network.NetworkDiagnostics
+import fr.zyviotv.player.data.network.SupabaseRestClient
 import fr.zyviotv.player.data.network.SupabaseSessionDiagnostics
 import fr.zyviotv.player.shared.sync.CloudSyncRepository
 import fr.zyviotv.player.shared.sync.DeviceRegistration
@@ -19,7 +20,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -430,7 +430,7 @@ class SupabaseCloudSyncRepository(
     }
 
     private suspend fun refreshAccessToken(previousAccessToken: String): String? =
-        sessionRefreshMutex.withLock {
+        SupabaseRestClient.sessionRefreshMutex.withLock {
             val latest = sessionStore.load() ?: return@withLock null
             if (latest.accessToken != previousAccessToken && sessionState(latest) == "fresh") {
                 return@withLock latest.accessToken
@@ -487,10 +487,6 @@ class SupabaseCloudSyncRepository(
         val code: Int,
         val body: String,
     )
-
-    private companion object {
-        val sessionRefreshMutex = Mutex()
-    }
 
     private fun sessionState(session: SecureSessionStore.StoredSession?): String =
         SupabaseSessionDiagnostics.state(

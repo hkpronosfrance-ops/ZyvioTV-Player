@@ -31,4 +31,6 @@
 - Phase 26 — Final QA and publication hardening (in progress)
 - PR #211 — Catalogue telemetry, useless work, stability, integrity and UX (Android)
 - PR #212 — Catalogue titles with trailing year + `player_devices` GRANT migration
-- Room block #213 — Generational catalogue store (Room): PR A storage foundation (#213, merged), PR B screens read the store, URLs resolved at playback, V1 cache dropped (#214, merged), #215 fast source references + black system splash (in progress), #216 detail navigation (planned), PR C streaming writes (planned)
+- Room block #213 — Generational catalogue store (Room): PR A storage foundation (#213, merged), PR B screens read the store, URLs resolved at playback, V1 cache dropped (#214, merged), #215 fast source references + black system splash (merged), #216 perf measurement variant (merged)
+- PR #217 — Faster first synchronisation: M3U parsed while downloading, home shown before the Room write, background priority, Supabase session refresh for profiles and parental rules (in progress)
+- PR #218 — Detail screen navigation (Retour button, tab navigation, Films tab freeze, duplicated episode titles) and onboarding preference chips (planned)

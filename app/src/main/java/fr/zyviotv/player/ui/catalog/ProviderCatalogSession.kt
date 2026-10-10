@@ -183,7 +183,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
         ProfilePreferences(applicationContext)
     }
     val m3uClient = remember(applicationContext) {
-        AndroidM3uClient(tempDirectory = applicationContext.cacheDir)
+        AndroidM3uClient()
     }
     val offlineCache = remember(applicationContext) {
         OfflineContentCache(applicationContext)
@@ -307,22 +307,24 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                         locks = locks,
                     )
                 }
-                val fresh = withContext(Dispatchers.IO) {
-                    val allDetails = M3uSeriesDetailRegistry.snapshot()
-                    // Bloc #213: the store keeps the raw catalogue; parental
-                    // rules are applied when it is read (PR B).
-                    val raw = CachedCatalog(
-                        playlistId = loaded.playlistId,
-                        playlistName = loaded.playlistName,
-                        snapshot = loaded.snapshot,
-                        seriesDetails = allDetails,
-                    )
-                    val stored = catalogStore.writeRefreshNow(
-                        profileId = profileId,
-                        rawCatalog = raw,
-                        fetchedAtEpochMs = outcome.fetchedAtEpochMs,
-                        idAliases = outcome.idAliases,
-                    )
+                // Bloc #213: the store keeps the raw catalogue; parental
+                // rules are applied when it is read (PR B).
+                val raw = CachedCatalog(
+                    playlistId = loaded.playlistId,
+                    playlistName = loaded.playlistName,
+                    snapshot = loaded.snapshot,
+                    seriesDetails = M3uSeriesDetailRegistry.snapshot(),
+                )
+                val sourcesPending = withContext(Dispatchers.Default) { !raw.sourceReport.isPlayable }
+                // PR #217: the validated catalogue is shown now, from memory
+                // (its URLs are in it); writing it to the store no longer
+                // delays the home screen. The write outlives this effect.
+                catalogStore.persistRefresh(
+                    profileId = profileId,
+                    rawCatalog = raw,
+                    fetchedAtEpochMs = outcome.fetchedAtEpochMs,
+                    idAliases = outcome.idAliases,
+                ) { stored ->
                     if (stored) {
                         // The new generation is complete, verified and active:
                         // the V1 file cache is obsolete.
@@ -338,13 +340,12 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                                 playlistId = loaded.playlistId,
                                 playlistName = loaded.playlistName,
                                 snapshot = filtered,
-                                seriesDetails = allDetails.filterKeys(visibleSeriesIds::contains),
+                                seriesDetails = raw.seriesDetails.filterKeys(visibleSeriesIds::contains),
                             ),
                             fetchedAtEpochMs = outcome.fetchedAtEpochMs,
                             idAliases = outcome.idAliases,
                         )
                     }
-                    raw
                 }
                 session.readyProfileId = profileId
                 session.fetchedAtEpochMs = outcome.fetchedAtEpochMs
@@ -353,7 +354,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     snapshot = filtered,
                     rawSnapshot = loaded.snapshot,
                     contentLocks = locks,
-                    sourcesPending = !fresh.sourceReport.isPlayable,
+                    sourcesPending = sourcesPending,
                     isRefreshing = false,
                 )
             }
@@ -491,8 +492,14 @@ private suspend fun loadCatalog(
         }
 
         is PlaylistSecret.M3u -> {
-            val builder = M3uCatalogMapper.builder(idIncumbents = idAliases)
-            when (val result = m3uClient.importStreaming(M3uSource(secret.url), builder::add)) {
+            // A fresh builder per attempt: a retried download starts from zero.
+            var builder = M3uCatalogMapper.builder(idIncumbents = idAliases)
+            val result = m3uClient.importStreaming(
+                source = M3uSource(secret.url),
+                onAttemptStart = { builder = M3uCatalogMapper.builder(idIncumbents = idAliases) },
+                onEntry = { entry -> builder.add(entry) },
+            )
+            when (result) {
                 is M3uStreamingResult.Success -> {
                     val startedAt = CatalogPerformanceDiagnostics.startedAt()
                     builder.build().also {

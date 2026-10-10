@@ -56,6 +56,92 @@ class AndroidM3uClientTest {
     }
 
     @Test
+    fun streamingImportParsesWhileDownloadingAndReportsEveryEntry() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(playlist(entries = 300)))
+        val received = mutableListOf<String>()
+        var attempts = 0
+
+        val result = AndroidM3uClient().importStreaming(
+            source = M3uSource(server.url("/full").toString()),
+            onAttemptStart = {
+                attempts += 1
+                received.clear()
+            },
+            onEntry = { received += it.name },
+        )
+
+        assertEquals(300, (result as M3uStreamingResult.Success).totalParsed)
+        assertEquals(1, attempts)
+        assertEquals(300, received.size)
+        assertEquals("Channel 299", received.last())
+    }
+
+    @Test
+    fun streamingImportRestartsFromZeroAfterAnInterruptedBodyAndNeverSucceedsOnIt() = runBlocking {
+        repeat(2) {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setBody(playlist(entries = 2_000))
+                    .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY),
+            )
+        }
+        var attempts = 0
+
+        val result = AndroidM3uClient(readTimeoutMs = 2_000).importStreaming(
+            source = M3uSource(server.url("/interrupted").toString()),
+            onAttemptStart = { attempts += 1 },
+            onEntry = {},
+        )
+
+        assertTrue(result is M3uStreamingResult.Failure)
+        assertEquals(2, attempts)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun streamingImportRetriesATruncatedBodyThenKeepsTheCompleteOne() = runBlocking {
+        // Ends on a metadata line without its URL: cut in the middle of an entry.
+        val truncated = playlist(entries = 10) + "#EXTINF:-1,Channel 10\n"
+        server.enqueue(MockResponse().setResponseCode(200).setBody(truncated))
+        server.enqueue(MockResponse().setResponseCode(200).setBody(playlist(entries = 12)))
+        val received = mutableListOf<String>()
+
+        val result = AndroidM3uClient().importStreaming(
+            source = M3uSource(server.url("/truncated").toString()),
+            onAttemptStart = { received.clear() },
+            onEntry = { received += it.name },
+        )
+
+        assertEquals(12, (result as M3uStreamingResult.Success).totalParsed)
+        assertEquals(12, received.size)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun streamingImportRejectsAnEmptyPlaylist() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("#EXTM3U\n"))
+
+        val result = AndroidM3uClient().importStreaming(
+            source = M3uSource(server.url("/empty").toString()),
+            onEntry = {},
+        )
+
+        assertEquals(
+            "La playlist M3U est vide ou invalide.",
+            (result as M3uStreamingResult.Failure).message,
+        )
+    }
+
+    private fun playlist(entries: Int): String = buildString {
+        appendLine("#EXTM3U")
+        repeat(entries) { index ->
+            appendLine("#EXTINF:-1 group-title=\"Live\",Channel $index")
+            appendLine("http://stream.example/live/$index.ts")
+        }
+    }
+
+    @Test
     fun transientHttpFailureIsRetriedOnlyOnce() = runBlocking {
         repeat(2) { server.enqueue(MockResponse().setResponseCode(503)) }
 
