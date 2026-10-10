@@ -155,3 +155,11 @@ Première synchronisation (perf) : `m3u_download` 144,6 s (27 s le 09/10 : varia
 - **Session Supabase** : profils et contrôle parental passent par `SupabaseRestClient` (renouvellement si le jeton est expiré, puis une fois après un 401 ; verrou de renouvellement commun à toute l'app ; une ligne `ZyvioNetwork` par réponse, sans jeton ni corps).
 
 Limite assumée : pour une playlist M3U, les familles Chaînes/Films/Séries sont mélangées dans le fichier ; aucune n'est complète avant la dernière ligne. L'Accueil ne peut donc pas s'ouvrir « dès que les Chaînes TV sont prêtes » sans afficher un catalogue partiel, ce que les règles du projet interdisent.
+
+## PR #218 — Correctif : le téléchargement n'attend plus l'analyse
+
+Recette #217 (Pixel 7 émulateur, perf, données effacées) : `m3u failure=connection-interrupted` après 141 s (tentative 1) puis 74 s (tentative 2) ; aucune synchronisation n'aboutit, alors que la même playlist se téléchargeait entièrement en 145 s avant #217. Cause probable : en lisant directement la connexion, l'analyse (à priorité basse) ralentissait la lecture et le fournisseur coupait la connexion. Non prouvé côté serveur.
+
+Correctif : un rédacteur copie le corps dans un fichier temporaire privé (dossier cache de l'app) à la vitesse du réseau, à priorité normale ; l'analyse suit ce fichier pendant qu'il grandit, également à priorité normale. Fin de flux seulement quand le rédacteur a terminé ; toute erreur du rédacteur (coupure, octets manquants, annulation) est relancée par le lecteur, donc jamais prise pour une playlist complète. Le fichier est supprimé à la fin de chaque tentative. Phases : `m3u_download` (copie seule) et `m3u_stream` (jusqu'à la fin de l'analyse).
+
+Recette de la première version de #218 (émulateur, perf, 10/10/2026) : téléchargement complet en 140 s sans coupure (`m3u_download duration_ms=140135`), mais analyse terminée à 379 s (`m3u_stream`, 136 671 entrées, 65 GC / 58 s) : la priorité `THREAD_PRIORITY_BACKGROUND` place le fil dans le groupe CPU limité d'Android. L'analyse repasse en priorité normale ; seule l'écriture Room (après l'Accueil) reste en priorité basse (`catalog_store_write` 38 s, génération complète 6 074 / 12 607 / 4 160 / 117 990).

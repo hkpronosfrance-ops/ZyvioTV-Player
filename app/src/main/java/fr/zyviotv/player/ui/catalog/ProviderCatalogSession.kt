@@ -183,7 +183,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
         ProfilePreferences(applicationContext)
     }
     val m3uClient = remember(applicationContext) {
-        AndroidM3uClient()
+        AndroidM3uClient(tempDirectory = applicationContext.cacheDir)
     }
     val offlineCache = remember(applicationContext) {
         OfflineContentCache(applicationContext)
