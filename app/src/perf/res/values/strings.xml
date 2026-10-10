@@ -1,0 +1,4 @@
+<resources>
+    <!-- PR #216: tells the measurement build apart from the debug app in the launcher. -->
+    <string name="app_name">ZyvioTV Perf</string>
+</resources>

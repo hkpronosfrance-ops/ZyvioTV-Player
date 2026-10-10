@@ -120,3 +120,16 @@ Tests: JVM tests (`CatalogRefreshPolicyTest`, `CatalogCacheMetadataTest`,
 episodes, `XtreamCatalogValidationTest`, `CatalogSingleFlightTest`), shared
 `DisplayTitleTest`, and `tests/test_android_catalog_211.py`. Not measured
 on Pixel 7 yet.
+
+## Mesurer sans la variante debug (PR #216)
+
+Les recettes Pixel 7 lancées par **Run** d'Android Studio utilisent la variante **debug** : pas de compilation anticipée, vérification des classes à l'exécution (lignes `Verification of … took …`), agent Android Studio attaché (`startup_agents`, `Redefining intrinsic`, `LiveLiteralSupport`). Les durées y sont fortement gonflées et varient d'un lancement à l'autre.
+
+La variante **`perf`** reprend la configuration `release` (R8, non débogable) signée avec la clé de debug locale :
+
+- paquet `fr.zyviotv.player.perf`, nom « ZyvioTV Perf » dans le lanceur, installée à côté de l'app debug (données séparées : connexion et première synchronisation à refaire) ;
+- Android Studio : **Build Variants** → `app` → `perf`, puis **Run** ;
+- jamais publiée ; la variante `release` reste sans signature ;
+- les journaux `ZyvioCatalog`, `ZyvioPlayback`, `ZyvioUi` et `ZyvioNetwork` sont identiques (ils ne dépendent pas du type de build).
+
+Une mesure n'est comparable qu'entre deux lancements de la **même** variante, sur le même appareil.
