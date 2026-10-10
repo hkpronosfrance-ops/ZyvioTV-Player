@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "07ec123c85f5f14cfa1464a3050e8cdd",
+    "identityHash": "d12ce304a4bcdc6192b37d8b2aa9b1ef",
     "entities": [
       {
         "tableName": "generation",
@@ -110,14 +110,15 @@
         },
         "indices": [
           {
-            "name": "index_generation_profile_key_state",
+            "name": "index_generation_profile_key_playlist_id_state",
             "unique": false,
             "columnNames": [
               "profile_key",
+              "playlist_id",
               "state"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_generation_profile_key_state` ON `${TABLE_NAME}` (`profile_key`, `state`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_generation_profile_key_playlist_id_state` ON `${TABLE_NAME}` (`profile_key`, `playlist_id`, `state`)"
           }
         ]
       },
@@ -650,7 +651,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '07ec123c85f5f14cfa1464a3050e8cdd')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd12ce304a4bcdc6192b37d8b2aa9b1ef')"
     ]
   }
 }

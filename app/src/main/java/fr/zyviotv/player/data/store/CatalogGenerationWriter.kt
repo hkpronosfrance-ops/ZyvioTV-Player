@@ -33,7 +33,8 @@ sealed interface GenerationWriteResult {
 /**
  * Writes one complete catalogue into a new `building` generation, in batched
  * transactions, verifies every count, then switches it to `active` in a
- * single transaction. The previous active generation of the profile is only
+ * single transaction. The previous active generation of the same profile and
+ * playlist (other playlists keep theirs) is only
  * retired by that switch and deleted afterwards. Any failure (exception,
  * cancellation, process death) leaves the previous active generation intact;
  * the incomplete one is removed now or by [discardInactive] at the next run.
@@ -209,7 +210,7 @@ class CatalogGenerationWriter(
 
             var retired = 0
             database.runInTransaction {
-                retired = dao.retireActive(source.profileKey)
+                retired = dao.retireActive(source.profileKey, catalog.playlistId)
                 check(dao.markActive(generationId) == 1) { "Generation is no longer building" }
             }
             // Retired generations are no longer visible to any reader.

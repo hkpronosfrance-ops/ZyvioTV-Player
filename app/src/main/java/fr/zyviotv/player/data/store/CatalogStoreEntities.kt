@@ -21,7 +21,7 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "generation",
-    indices = [Index(value = ["profile_key", "state"])],
+    indices = [Index(value = ["profile_key", "playlist_id", "state"])],
 )
 data class GenerationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

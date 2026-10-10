@@ -37,14 +37,24 @@ interface CatalogStoreDao {
     @Query("SELECT * FROM generation WHERE id = :generationId")
     fun generation(generationId: Long): GenerationEntity?
 
-    @Query("SELECT * FROM generation WHERE profile_key = :profileKey AND state = 'active' LIMIT 1")
-    fun activeGeneration(profileKey: String): GenerationEntity?
+    /** One active generation per profile and playlist (multi-playlist ready). */
+    @Query(
+        "SELECT * FROM generation WHERE profile_key = :profileKey AND playlist_id = :playlistId " +
+            "AND state = 'active' LIMIT 1",
+    )
+    fun activeGeneration(profileKey: String, playlistId: String): GenerationEntity?
+
+    @Query("SELECT * FROM generation WHERE profile_key = :profileKey AND state = 'active' ORDER BY id")
+    fun activeGenerations(profileKey: String): List<GenerationEntity>
 
     @Query("SELECT id FROM generation WHERE state != 'active'")
     fun inactiveGenerationIds(): List<Long>
 
-    @Query("UPDATE generation SET state = 'retired' WHERE profile_key = :profileKey AND state = 'active'")
-    fun retireActive(profileKey: String): Int
+    @Query(
+        "UPDATE generation SET state = 'retired' WHERE profile_key = :profileKey " +
+            "AND playlist_id = :playlistId AND state = 'active'",
+    )
+    fun retireActive(profileKey: String, playlistId: String): Int
 
     @Query("UPDATE generation SET state = 'active' WHERE id = :generationId AND state = 'building'")
     fun markActive(generationId: Long): Int

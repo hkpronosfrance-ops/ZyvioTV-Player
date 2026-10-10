@@ -48,7 +48,7 @@ class CatalogGenerationWriterTest {
         assertEquals(3, result.movieCount)
         assertEquals(2, result.seriesCount)
         assertEquals(8, result.episodeCount)
-        val active = requireNotNull(dao.activeGeneration(PROFILE_KEY))
+        val active = requireNotNull(dao.activeGeneration(PROFILE_KEY, "playlist-1"))
         assertEquals(result.generationId, active.id)
         assertEquals("raw", active.scope)
         assertEquals("refresh", active.origin)
@@ -90,7 +90,7 @@ class CatalogGenerationWriterTest {
         val second = writer.write(catalog(live = 2), source(fetchedAtEpochMs = 2_000L)) as GenerationWriteResult.Activated
 
         assertEquals(1, second.retiredGenerations)
-        assertEquals(second.generationId, dao.activeGeneration(PROFILE_KEY)?.id)
+        assertEquals(second.generationId, dao.activeGeneration(PROFILE_KEY, "playlist-1")?.id)
         assertNull(dao.generation(first.generationId))
         assertEquals(0, dao.countLiveChannels(first.generationId))
         assertEquals(0, dao.countEpisodes(first.generationId))
@@ -102,7 +102,24 @@ class CatalogGenerationWriterTest {
         val other = writer.write(catalog(), source(profileKey = "other-profile")) as GenerationWriteResult.Activated
         writer.write(catalog(), source())
 
-        assertEquals(other.generationId, dao.activeGeneration("other-profile")?.id)
+        assertEquals(other.generationId, dao.activeGeneration("other-profile", "playlist-1")?.id)
+    }
+
+    @Test
+    fun eachPlaylistOfAProfileKeepsItsOwnActiveGeneration() {
+        val first = writer.write(catalog(live = 3, playlistId = "playlist-1"), source()) as GenerationWriteResult.Activated
+        val second = writer.write(catalog(live = 5, playlistId = "playlist-2"), source()) as GenerationWriteResult.Activated
+        val refreshed = writer.write(catalog(live = 4, playlistId = "playlist-1"), source()) as GenerationWriteResult.Activated
+
+        assertEquals(1, refreshed.retiredGenerations)
+        assertNull(dao.generation(first.generationId))
+        assertEquals(refreshed.generationId, dao.activeGeneration(PROFILE_KEY, "playlist-1")?.id)
+        assertEquals(second.generationId, dao.activeGeneration(PROFILE_KEY, "playlist-2")?.id)
+        assertEquals(5, dao.countLiveChannels(second.generationId))
+        assertEquals(
+            listOf(second.generationId, refreshed.generationId),
+            dao.activeGenerations(PROFILE_KEY).map { it.id },
+        )
     }
 
     @Test
@@ -119,7 +136,7 @@ class CatalogGenerationWriterTest {
             // Expected: the probe abandons the generation.
         }
 
-        val active = requireNotNull(dao.activeGeneration(PROFILE_KEY))
+        val active = requireNotNull(dao.activeGeneration(PROFILE_KEY, "playlist-1"))
         assertEquals(previous.generationId, active.id)
         assertEquals(3, dao.countLiveChannels(active.id))
         assertEquals(emptyList<Long>(), dao.inactiveGenerationIds())
@@ -139,7 +156,7 @@ class CatalogGenerationWriterTest {
         val result = writer.write(broken, source(fetchedAtEpochMs = 9_000L))
 
         assertEquals(GenerationWriteResult.Rejected("missing_sources"), result)
-        assertEquals(previous.generationId, dao.activeGeneration(PROFILE_KEY)?.id)
+        assertEquals(previous.generationId, dao.activeGeneration(PROFILE_KEY, "playlist-1")?.id)
         assertEquals(emptyList<Long>(), dao.inactiveGenerationIds())
     }
 
@@ -156,7 +173,7 @@ class CatalogGenerationWriterTest {
         assertEquals(1, writer.discardInactive())
         assertNull(dao.generation(orphan))
         assertEquals(0, dao.countLiveChannels(orphan))
-        assertEquals(previous.generationId, dao.activeGeneration(PROFILE_KEY)?.id)
+        assertEquals(previous.generationId, dao.activeGeneration(PROFILE_KEY, "playlist-1")?.id)
     }
 
     @Test

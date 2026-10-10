@@ -33,8 +33,9 @@ import kotlinx.coroutines.sync.withLock
  *   written as a new generation.
  *
  * Jobs run one at a time, never start during playback (same rule as automatic
- * refreshes, bloc #211), and a later refresh of a profile supersedes any older
- * request of that profile that has not started yet.
+ * refreshes, bloc #211), and a later refresh of a profile and playlist
+ * supersedes any older request for them that has not started yet. Each
+ * playlist keeps its own active generation (multi-playlist ready).
  */
 class CatalogStore internal constructor(
     private val writer: CatalogGenerationWriter,
@@ -45,7 +46,7 @@ class CatalogStore internal constructor(
 ) {
     private val mutex = Mutex()
     private val sequence = AtomicLong()
-    /** Latest refresh request per profile key. */
+    /** Latest refresh request per profile and playlist. */
     private val latestRefresh = ConcurrentHashMap<String, Long>()
     @Volatile private var cleanedUp = false
 
@@ -90,12 +91,13 @@ class CatalogStore internal constructor(
 
     private fun submit(catalog: CachedCatalog, source: GenerationSource) {
         val request = sequence.incrementAndGet()
-        if (source.origin == GenerationOrigin.Refresh) latestRefresh[source.profileKey] = request
+        val slot = source.profileKey + "|" + catalog.playlistId
+        if (source.origin == GenerationOrigin.Refresh) latestRefresh[slot] = request
         scope.launch {
             // Never compete with Media3 for CPU and I/O (bloc #211 rule).
             playback.awaitIdle()
             mutex.withLock {
-                if ((latestRefresh[source.profileKey] ?: 0L) > request) {
+                if ((latestRefresh[slot] ?: 0L) > request) {
                     CatalogPerformanceDiagnostics.event("catalog_store_skipped", "reason=superseded")
                     return@withLock
                 }
@@ -121,7 +123,7 @@ class CatalogStore internal constructor(
                 }
             }
             if (source.origin == GenerationOrigin.V1Import) {
-                val skip = v1ImportSkipReason(dao.activeGeneration(source.profileKey), source)
+                val skip = v1ImportSkipReason(dao.activeGeneration(source.profileKey, catalog.playlistId), source)
                 if (skip != null) {
                     CatalogPerformanceDiagnostics.event("catalog_store_skipped", "reason=$skip")
                     return

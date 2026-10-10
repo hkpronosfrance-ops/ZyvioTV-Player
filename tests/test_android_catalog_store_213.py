@@ -50,7 +50,7 @@ class AndroidCatalogStore213Test(unittest.TestCase):
     def test_generation_is_activated_in_one_transaction_after_verification(self):
         writer = read(STORE / "CatalogGenerationWriter.kt")
         verify = writer.index("val mismatch = verify(")
-        switch = writer.index("retired = dao.retireActive(source.profileKey)")
+        switch = writer.index("retired = dao.retireActive(source.profileKey, catalog.playlistId)")
         self.assertLess(verify, switch)
         self.assertIn("check(dao.markActive(generationId) == 1)", writer)
         self.assertIn("if (!catalog.isPlayable)", writer)

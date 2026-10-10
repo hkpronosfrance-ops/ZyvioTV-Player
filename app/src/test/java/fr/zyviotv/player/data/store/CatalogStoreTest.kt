@@ -61,13 +61,13 @@ class CatalogStoreTest {
 
         store.mirrorRestoredCache("profile-1", restored)
         awaitJobs()
-        val first = requireNotNull(dao.activeGeneration(CatalogStore.profileKey("profile-1")))
+        val first = requireNotNull(dao.activeGeneration(CatalogStore.profileKey("profile-1"), "playlist-1"))
         assertEquals("v1_import", first.origin)
         assertEquals("profile_filtered", first.scope)
 
         store.mirrorRestoredCache("profile-1", restored)
         awaitJobs()
-        assertEquals(first.id, dao.activeGeneration(CatalogStore.profileKey("profile-1"))?.id)
+        assertEquals(first.id, dao.activeGeneration(CatalogStore.profileKey("profile-1"), "playlist-1")?.id)
     }
 
     @Test
@@ -75,11 +75,11 @@ class CatalogStoreTest {
         val player = playback.begin()
         store.mirrorRestoredCache("profile-1", restored(stamp(1)))
         delay(300)
-        assertNull(dao.activeGeneration(CatalogStore.profileKey("profile-1")))
+        assertNull(dao.activeGeneration(CatalogStore.profileKey("profile-1"), "playlist-1"))
 
         player.close()
         awaitJobs()
-        assertEquals("v1_import", dao.activeGeneration(CatalogStore.profileKey("profile-1"))?.origin)
+        assertEquals("v1_import", dao.activeGeneration(CatalogStore.profileKey("profile-1"), "playlist-1")?.origin)
     }
 
     @Test
@@ -91,7 +91,7 @@ class CatalogStoreTest {
         player.close()
         awaitJobs()
 
-        val active = requireNotNull(dao.activeGeneration(CatalogStore.profileKey("profile-1")))
+        val active = requireNotNull(dao.activeGeneration(CatalogStore.profileKey("profile-1"), "playlist-1"))
         assertEquals("refresh", active.origin)
         assertEquals(6_000L, active.fetchedAtEpochMs)
         assertEquals(7, dao.countLiveChannels(active.id))
