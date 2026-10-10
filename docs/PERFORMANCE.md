@@ -133,3 +133,25 @@ La variante **`perf`** reprend la configuration `release` (R8, non débogable) s
 - les journaux `ZyvioCatalog`, `ZyvioPlayback`, `ZyvioUi` et `ZyvioNetwork` sont identiques (ils ne dépendent pas du type de build).
 
 Une mesure n'est comparable qu'entre deux lancements de la **même** variante, sur le même appareil.
+
+### Recette de la variante perf (Pixel 7 émulateur, 10/10/2026, playlist M3U réelle)
+
+Mesuré sur émulateur, pas sur appareil physique :
+
+| Mesure | debug (#215) | perf (#216) |
+|---|---|---|
+| `catalog_ready` (lecture Room, 22 841 éléments) | 12,2 s | 2,86 s (0 GC) |
+| `ui_map_live` | 374 ms | 27 ms |
+| Chaîne Live : lancement → première image (`first_frame_ms`) | 14,6 s | 5,8 s |
+| Chaîne Live : création du lecteur (lancement → `prepare`) | gel de 8,8 s | 12 ms |
+
+Première synchronisation (perf) : `m3u_download` 144,6 s (27 s le 09/10 : variation réseau/fournisseur), puis analyse et écriture Room avant l'Accueil ; écran de synchronisation `slow=15132` sur `total=15674` images. La liste des profils a ensuite reçu un **HTTP 401** sans renouvellement de session (jeton expiré pendant la synchro) — corrigé par #217.
+
+## PR #217 — Première synchronisation plus rapide
+
+- **Analyse pendant le téléchargement** : la playlist M3U n'est plus copiée entièrement dans un fichier temporaire avant d'être analysée ; chaque ligne est analysée à la réception. Rien n'est validé avant la fin du corps : octets manquants ou ligne `#EXTINF` sans URL → tentative en échec (une nouvelle tentative repart de zéro avec un nouveau constructeur de catalogue). Phase `m3u_stream` (téléchargement + analyse) et événement `m3u_stream_size kib=… attempt=…` ; les anciennes phases `m3u_download` / `m3u_parse` n'existent plus.
+- **Accueil sans attendre l'écriture Room** : le catalogue validé est affiché depuis la mémoire ; `CatalogStore.persistRefresh` l'écrit ensuite dans la portée du store (la sortie de l'écran ne l'annule pas). Si l'écriture échoue, le repli V1 d'avant est conservé. `catalog_store_write` reste journalisé, désormais après l'Accueil.
+- **Priorité basse** pour le téléchargement/analyse et l'écriture Room, afin que l'écran reste fluide.
+- **Session Supabase** : profils et contrôle parental passent par `SupabaseRestClient` (renouvellement si le jeton est expiré, puis une fois après un 401 ; verrou de renouvellement commun à toute l'app ; une ligne `ZyvioNetwork` par réponse, sans jeton ni corps).
+
+Limite assumée : pour une playlist M3U, les familles Chaînes/Films/Séries sont mélangées dans le fichier ; aucune n'est complète avant la dernière ligne. L'Accueil ne peut donc pas s'ouvrir « dès que les Chaînes TV sont prêtes » sans afficher un catalogue partiel, ce que les règles du projet interdisent.

@@ -2,6 +2,7 @@ package fr.zyviotv.player.data.settings
 
 import fr.zyviotv.player.BuildConfig
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.network.SupabaseRestClient
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
@@ -86,6 +87,8 @@ sealed interface ParentalRecoveryResult {
 class ParentalControlsRepository(
     private val sessionStore: SecureSessionStore,
 ) {
+    private val restClient = SupabaseRestClient(sessionStore)
+
     suspend fun requestPinRecoveryEmail(): ParentalRecoveryResult =
         withContext(Dispatchers.IO) {
             val session = sessionStore.load()
@@ -566,42 +569,18 @@ class ParentalControlsRepository(
         return local.take(1) + "***" + local.takeLast(1) + domain
     }
 
-    private fun rpc(
+    // PR #217: token refreshed when expired and after a 401. Content locks
+    // are read right after a long synchronisation, when the token may be old.
+    private suspend fun rpc(
         name: String,
         body: JSONObject,
     ): HttpResponse {
-        val session = sessionStore.load()
-            ?: return HttpResponse(401, "")
-        val connection = (
-            URL(BuildConfig.SUPABASE_URL + "/rest/v1/rpc/" + name)
-                .openConnection() as HttpURLConnection
-            )
-
-        try {
-            connection.requestMethod = "POST"
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 15_000
-            connection.doInput = true
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
-            connection.setRequestProperty(
-                "Authorization",
-                "Bearer " + session.accessToken,
-            )
-            connection.outputStream.bufferedWriter(StandardCharsets.UTF_8).use {
-                it.write(body.toString())
-            }
-
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            return HttpResponse(
-                code = code,
-                body = stream?.bufferedReader()?.use { it.readText() }.orEmpty(),
-            )
-        } finally {
-            connection.disconnect()
-        }
+        val response = restClient.request(
+            path = "/rest/v1/rpc/" + name,
+            method = "POST",
+            body = body.toString(),
+        )
+        return HttpResponse(code = response.code, body = response.body)
     }
 
     private data class HttpResponse(

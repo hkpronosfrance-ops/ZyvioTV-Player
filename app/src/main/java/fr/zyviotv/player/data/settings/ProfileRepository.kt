@@ -1,12 +1,10 @@
 package fr.zyviotv.player.data.settings
 
-import fr.zyviotv.player.BuildConfig
 import fr.zyviotv.player.data.auth.SecureSessionStore
+import fr.zyviotv.player.data.network.SupabaseRestClient
 import fr.zyviotv.player.shared.sync.PlayerProfile
 import fr.zyviotv.player.shared.sync.PlayerProfileType
 import fr.zyviotv.player.shared.sync.ProfileWriteResult
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +15,8 @@ import org.json.JSONObject
 class ProfileRepository(
     private val sessionStore: SecureSessionStore,
 ) {
+    private val client = SupabaseRestClient(sessionStore)
+
     suspend fun ensurePrimaryProfile(): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val response = request(
@@ -69,9 +69,9 @@ class ProfileRepository(
         type: PlayerProfileType,
         maxAge: Int?,
     ): ProfileWriteResult = withContext(Dispatchers.IO) {
-        val session = sessionStore.load()
+        sessionStore.load()
             ?: return@withContext ProfileWriteResult.Failure("Session absente.")
-        val userId = fetchCurrentUserId(session.accessToken)
+        val userId = fetchCurrentUserId()
             ?: return@withContext ProfileWriteResult.Failure("Compte utilisateur introuvable.")
 
         val cleanName = name.trim()
@@ -163,58 +163,19 @@ class ProfileRepository(
             }
         }
 
-    private fun fetchCurrentUserId(accessToken: String): String? {
-        val response = request(
-            path = "/auth/v1/user",
-            method = "GET",
-            accessTokenOverride = accessToken,
-        )
+    private suspend fun fetchCurrentUserId(): String? {
+        val response = request(path = "/auth/v1/user", method = "GET")
         if (response.code !in 200..299) return null
         return runCatching { JSONObject(response.body).getString("id") }.getOrNull()
     }
 
-    private fun request(
+    // PR #217: token refreshed when expired and after a 401 (shared client).
+    private suspend fun request(
         path: String,
         method: String,
         body: String? = null,
-        accessTokenOverride: String? = null,
-    ): HttpResponse {
-        val session = sessionStore.load() ?: return HttpResponse(401, "")
-        val token = accessTokenOverride ?: session.accessToken
-        val connection = URL(BuildConfig.SUPABASE_URL + path).openConnection() as HttpURLConnection
-
-        try {
-            connection.requestMethod = method
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 15_000
-            connection.doInput = true
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
-            connection.setRequestProperty("Authorization", "Bearer " + token)
-
-            if (body != null) {
-                connection.doOutput = true
-                connection.outputStream.bufferedWriter(StandardCharsets.UTF_8).use {
-                    it.write(body)
-                }
-            }
-
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            return HttpResponse(
-                code = code,
-                body = stream?.bufferedReader()?.use { it.readText() }.orEmpty(),
-            )
-        } finally {
-            connection.disconnect()
-        }
-    }
+    ): SupabaseRestClient.Response = client.request(path = path, method = method, body = body)
 
     private fun encoded(value: String): String =
         URLEncoder.encode(value, StandardCharsets.UTF_8.name())
-
-    private data class HttpResponse(
-        val code: Int,
-        val body: String,
-    )
 }

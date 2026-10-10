@@ -61,6 +61,8 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_android_catalog_ready_215.py' -v
       - name: Android perf variant contracts (#216)
         run: python3 -m unittest discover -s tests -p 'test_android_perf_variant_216.py' -v
+      - name: Android first synchronisation contracts (#217)
+        run: python3 -m unittest discover -s tests -p 'test_android_sync_217.py' -v
 
       - name: Shared and Android unit tests
         run: gradle testDebugUnitTest --stacktrace

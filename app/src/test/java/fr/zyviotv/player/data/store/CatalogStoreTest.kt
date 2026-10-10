@@ -132,6 +132,31 @@ class CatalogStoreTest {
         assertEquals(false, store.hasActiveGeneration("profile-2"))
     }
 
+    @Test
+    fun aPersistedRefreshIsWrittenInTheStoreScopeAndReportsItsResult() = runBlocking {
+        val results = mutableListOf<Boolean>()
+
+        store.persistRefresh("profile-1", catalog(live = 4), 8_000L, emptyMap()) { results += it }
+        awaitJobs()
+
+        assertEquals(listOf(true), results)
+        val active = requireNotNull(dao.activeGeneration(CatalogStore.profileKey("profile-1"), "playlist-1"))
+        assertEquals("refresh", active.origin)
+        assertEquals(8_000L, active.fetchedAtEpochMs)
+        assertEquals(4, dao.countLiveChannels(active.id))
+    }
+
+    @Test
+    fun aFailedFollowUpNeverBreaksTheStoredGeneration() = runBlocking {
+        store.persistRefresh("profile-1", catalog(live = 2), 9_000L, emptyMap()) { error("follow-up failed") }
+        awaitJobs()
+
+        assertEquals(
+            9_000L,
+            dao.activeGeneration(CatalogStore.profileKey("profile-1"), "playlist-1")?.fetchedAtEpochMs,
+        )
+    }
+
     private suspend fun awaitJobs() {
         job.children.toList().forEach { it.join() }
     }

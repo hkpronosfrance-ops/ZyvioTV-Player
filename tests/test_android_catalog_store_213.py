@@ -71,7 +71,7 @@ class AndroidCatalogStore213Test(unittest.TestCase):
         self.assertIn("if (!restore.fromStore) catalogStore.mirrorRestoredCache(profileId, restored)", session)
         write = session.split("val raw = CachedCatalog(", 1)[1][:300]
         self.assertIn("snapshot = loaded.snapshot", write)
-        self.assertIn("seriesDetails = allDetails", write)
+        self.assertIn("seriesDetails = M3uSeriesDetailRegistry.snapshot()", write)
         # The V1 fallback keeps the profile-filtered catalogue, unchanged.
         self.assertIn("snapshot = filtered,", session)
 

@@ -35,7 +35,8 @@ class AndroidPlaybackSources208Test(unittest.TestCase):
     def test_restored_catalog_carries_its_source_state(self):
         session = read(APP / "ui/catalog/ProviderCatalogSession.kt")
         self.assertEqual(session.count("sourcesPending = !cached.isPlayable"), 2)
-        self.assertIn("sourcesPending = !fresh.sourceReport.isPlayable", session)
+        self.assertIn("!raw.sourceReport.isPlayable", session)
+        self.assertIn("sourcesPending = sourcesPending,", session)
         app = read(APP / "ui/ZyvioTVPlayerApp.kt")
         self.assertIn("catalogSourcesPending = (providerState as? ProviderCatalogState.Ready)?.sourcesPending == true", app)
 
