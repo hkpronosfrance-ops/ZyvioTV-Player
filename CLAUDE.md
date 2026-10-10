@@ -1,7 +1,7 @@
 # ZYVIOTV Player — Instructions permanentes pour Claude Code
 
 > Référence du projet depuis sa création. À lire AVANT toute analyse, modification, PR ou fusion.
-> État de référence documentaire : 10 octobre 2026, `main` après PR #214 : `fddf895` (bloc Room PR B) ; PR #215 (vitesse de `catalog_ready`, écran de démarrage noir) en cours, voir §8.
+> État de référence documentaire : 10 octobre 2026, `main` après PR #215 : `d3c1f06` ; PR #216 (variante de mesure `perf`) en cours, voir §8.
 > Ce document décrit la vision, les décisions immuables, les réalisations observées et les anomalies connues. **Il ne constitue pas une attestation que chaque fonctionnalité est opérationnelle.**
 
 ## 0. Règles de travail non négociables
@@ -221,6 +221,8 @@ Le produit se veut une expérience moderne de consultation de catalogue, compara
 
 - **PR B fusionnée (#214, `main` = `fddf895`, CI post-fusion verte). Recette Pixel 7 émulateur (10/10/2026)** : `catalog_ready_source source=store` ; `legacy_cache_deleted files=2 complete=true` une seule fois ; lecture Live (2 chaînes), film H.264 (avance rapide comprise) et épisode (9 épisodes lus depuis la base) via les références déchiffrées à la demande. **`catalog_ready` = 32,0 s puis 32,6 s** (44 à 53 s avant, objectif < 2 s non atteint). Film HEVC 10 bits : échec du décodeur de l'émulateur (`emulator=true`), à vérifier sur appareil réel. Zapping non testable sur émulateur (touches télécommande).
 - **PR #215** : cause trouvée dans le code de la PR B : chaque référence était encodée en hexadécimal avec un `String.format` par octet (~1 million d'appels pour 18 681 éléments). Remplacé par un échappement de `%` et `:` seulement, avec un préfixe calculé une fois par type. Micro-mesure **JVM** (PC, pas appareil) : 550 ms → 3 ms pour 18 681 références. Écran de démarrage système Android 12+ : `windowSplashScreenBackground` = `#050506` (noir D6) au lieu du blanc par défaut. Gain réel sur `catalog_ready` à mesurer sur Pixel 7.
+- **PR #215 fusionnée (`main` = `d3c1f06`, CI post-fusion verte). Recette Pixel 7 émulateur (debug)** : écran de démarrage système noir avec le monogramme Z ; `catalog_ready` **12,2 s** (32 s avant), collectes mémoire 6 (74 à 85 avant) ; lecture Live OK avec le nouvel encodage. Ressenti utilisateur : changement d'onglet et lancement de chaîne encore lents (lancement → image 14,6 s, dont un gel de 8,8 s à la création du lecteur, précédé de nombreuses lignes `Verification of … took …` propres à la variante debug).
+- **PR #216 : variante `perf`** (copie de `release`, R8, non débogable, signée avec la clé de debug, paquet `.perf`, nom « ZyvioTV Perf », construite par la CI). Objectif : mesurer démarrage, onglets et lancement de lecture sans la variante debug avant toute nouvelle optimisation. Mode d'emploi : `docs/PERFORMANCE.md`.
 - Anomalies trouvées pendant la recette PR B (hors PR B, prévues en **PR #216**) : fiches film et série sans bouton « Retour » alors que la maquette D1 le prévoit (« Retour toujours disponible en haut à gauche ») ; onglet Films bloqué après fiche → lecteur en erreur → retour (navigation des onglets différente depuis les fiches : `launchSingleTop` seul, sans `popUpTo`/`saveState`/`restoreState`) ; titres d'épisodes en double (« Épisode 1 — Épisode 1 »).
 
 **Xtream fournisseur réel — problème ouvert**

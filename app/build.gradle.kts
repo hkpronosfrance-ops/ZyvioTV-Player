@@ -42,6 +42,16 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
+        // PR #216: release code (R8, not debuggable, no Android Studio agent)
+        // signed with the local debug key, installed next to the debug app.
+        // Only for measuring startup and UI speed; never published.
+        create("perf") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".perf"
+            versionNameSuffix = "-perf"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
