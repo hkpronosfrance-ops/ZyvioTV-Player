@@ -30,7 +30,9 @@ class AndroidSync217Test(unittest.TestCase):
         self.assertIn("file.delete()", streaming)
         self.assertIn('phase("m3u_stream"', streaming)
         self.assertIn('phase("m3u_download"', streaming)
-        self.assertIn("THREAD_PRIORITY_BACKGROUND", client)
+        # PR #218: the analysis stays at normal priority (background priority
+        # made it end 239 s after the download on the emulator).
+        self.assertNotIn("Process.setThreadPriority", client)
 
     def test_a_retried_download_starts_a_new_catalogue_builder(self):
         session = read(APP / "ui/catalog/ProviderCatalogSession.kt")

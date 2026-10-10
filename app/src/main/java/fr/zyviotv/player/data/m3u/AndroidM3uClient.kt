@@ -1,6 +1,5 @@
 package fr.zyviotv.player.data.m3u
 
-import android.os.Process
 import fr.zyviotv.player.data.network.NetworkDiagnostics
 import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
 import fr.zyviotv.player.shared.m3u.M3uClient
@@ -137,7 +136,7 @@ class AndroidM3uClient(
      * variant: connection-interrupted after 141 s, then 74 s, on a playlist
      * that downloaded completely in 145 s before). One coroutine copies the
      * body to a private temporary file at network speed, at normal priority;
-     * the parser follows that file as it grows, at background priority.
+     * the parser follows that file as it grows (normal priority as well).
      */
     private suspend fun streamAttempt(
         url: String,
@@ -162,22 +161,23 @@ class AndroidM3uClient(
                 if (progress.failure == null) CatalogPerformanceDiagnostics.phase("m3u_download", startedAt)
             }
 
+            // Normal priority on purpose: at THREAD_PRIORITY_BACKGROUND the
+            // analysis of 136 671 entries ended 239 s after the download
+            // (Pixel 7 emulator, perf variant): Android caps that group's CPU.
             val report = TailingInputStream(file, progress, job).use { tail ->
-                withBackgroundPriority {
-                    tail.bufferedReader(Charsets.UTF_8).use { reader ->
-                        val lines = sequence {
-                            var lineNumber = 0
-                            while (true) {
-                                if (lineNumber % CANCELLATION_CHECK_INTERVAL == 0 && job?.isActive == false) {
-                                    throw CancellationException("M3U import cancelled")
-                                }
-                                val line = reader.readLine() ?: break
-                                yield(line)
-                                lineNumber += 1
+                tail.bufferedReader(Charsets.UTF_8).use { reader ->
+                    val lines = sequence {
+                        var lineNumber = 0
+                        while (true) {
+                            if (lineNumber % CANCELLATION_CHECK_INTERVAL == 0 && job?.isActive == false) {
+                                throw CancellationException("M3U import cancelled")
                             }
+                            val line = reader.readLine() ?: break
+                            yield(line)
+                            lineNumber += 1
                         }
-                        M3uParser.parseLinesDetailed(lines, Int.MAX_VALUE, onEntry)
                     }
+                    M3uParser.parseLinesDetailed(lines, Int.MAX_VALUE, onEntry)
                 }
             }
             writer.await()
@@ -234,22 +234,6 @@ class AndroidM3uClient(
             failure = IOException("M3U download stopped", error)
         } finally {
             progress.finish(failure)
-        }
-    }
-
-    /**
-     * Download and analysis run below the UI thread's priority: on a busy
-     * device the start-up screen keeps drawing (15 132 of 15 674 frames were
-     * slow during the first perf-variant sync on the emulator).
-     */
-    private inline fun <T> withBackgroundPriority(block: () -> T): T {
-        val tid = Process.myTid()
-        val previous = runCatching { Process.getThreadPriority(tid) }.getOrNull()
-        runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
-        try {
-            return block()
-        } finally {
-            if (previous != null) runCatching { Process.setThreadPriority(previous) }
         }
     }
 
