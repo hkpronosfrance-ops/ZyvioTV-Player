@@ -55,6 +55,8 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_android_catalog_211.py' -v
       - name: Android catalogue store contracts (#213)
         run: python3 -m unittest discover -s tests -p 'test_android_catalog_store_213.py' -v
+      - name: Android catalogue Room reads contracts (#214)
+        run: python3 -m unittest discover -s tests -p 'test_android_catalog_room_reads_214.py' -v
 
       - name: Shared and Android unit tests
         run: gradle testDebugUnitTest --stacktrace

@@ -32,8 +32,10 @@ class CatalogStoreTest {
         database = CatalogStoreFixtures.inMemoryDatabase()
         playback = PlaybackActivityTracker()
         job = Job()
+        val keyWrapper = CatalogStoreFixtures.softwareKeyWrapper()
         store = CatalogStore(
-            writer = CatalogGenerationWriter(database, CatalogStoreFixtures.softwareKeyWrapper()),
+            writer = CatalogGenerationWriter(database, keyWrapper),
+            reader = CatalogStoreReader(dao, keyWrapper),
             dao = dao,
             databaseFile = null,
             playback = playback,
@@ -83,13 +85,14 @@ class CatalogStoreTest {
     }
 
     @Test
-    fun aLaterRefreshSupersedesPendingRequests() = runBlocking {
+    fun aRefreshWrittenNowSupersedesAPendingV1Import() = runBlocking {
         val player = playback.begin()
         store.mirrorRestoredCache("profile-1", restored(stamp(1)))
-        store.mirrorRefresh("profile-1", catalog(live = 1), 5_000L, emptyMap(), stamp(2))
-        store.mirrorRefresh("profile-1", catalog(live = 7), 6_000L, emptyMap(), stamp(3))
+        val written = store.writeRefreshNow("profile-1", catalog(live = 7), 6_000L, emptyMap())
         player.close()
         awaitJobs()
+
+        assertEquals(true, written)
 
         val active = requireNotNull(dao.activeGeneration(CatalogStore.profileKey("profile-1"), "playlist-1"))
         assertEquals("refresh", active.origin)
@@ -108,6 +111,25 @@ class CatalogStoreTest {
         assertEquals("store_newer", v1ImportSkipReason(generation("refresh", 3_000L, null), v1.copy(fetchedAtEpochMs = null)))
         // A V1 file written by a later refresh whose store write failed.
         assertNull(v1ImportSkipReason(generation("refresh", 1_000L, null), v1))
+    }
+
+    @Test
+    fun restoredCatalogueCarriesReferencesThatResolveToTheStoredUrls() = runBlocking {
+        store.writeRefreshNow("profile-1", catalog(live = 3, movies = 2, series = 1, episodesPerSeries = 2), 7_000L, emptyMap())
+
+        val restored = requireNotNull(store.restore("profile-1"))
+        val channel = restored.catalog.snapshot.liveChannels[1]
+        assertEquals(true, CatalogSourceRef.isRef(channel.streamUrl))
+        assertEquals(CatalogStoreFixtures.liveUrl(1), store.resolveSource(channel.streamUrl))
+        assertEquals(CatalogStoreFixtures.movieUrl(1), store.resolveSource(restored.catalog.snapshot.movies[1].streamUrl))
+        val detail = requireNotNull(store.seriesDetail(restored.generation.id, "playlist-1", "series-0"))
+        assertEquals(CatalogStoreFixtures.episodeUrl(0, 1), store.resolveSource(detail.episodes[1].streamUrl))
+        // A plain URL (fresh refresh in memory) is returned unchanged.
+        assertEquals(CatalogStoreFixtures.movieUrl(9), store.resolveSource(CatalogStoreFixtures.movieUrl(9)))
+        assertNull(store.resolveSource("zyvio-store:broken"))
+        assertEquals(7_000L, restored.generation.fetchedAtEpochMs)
+        assertEquals(true, store.hasActiveGeneration("profile-1"))
+        assertEquals(false, store.hasActiveGeneration("profile-2"))
     }
 
     private suspend fun awaitJobs() {

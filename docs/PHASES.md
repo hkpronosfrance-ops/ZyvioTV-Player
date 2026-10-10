@@ -31,4 +31,4 @@
 - Phase 26 — Final QA and publication hardening (in progress)
 - PR #211 — Catalogue telemetry, useless work, stability, integrity and UX (Android)
 - PR #212 — Catalogue titles with trailing year + `player_devices` GRANT migration
-- Room block #213 — Generational catalogue store (Room): PR A storage foundation (#213, in progress), PR B paged reads and < 2 s start (planned), PR C streaming writes (planned)
+- Room block #213 — Generational catalogue store (Room): PR A storage foundation (#213, merged), PR B screens read the store, URLs resolved at playback, V1 cache dropped (in progress), PR C streaming writes (planned)

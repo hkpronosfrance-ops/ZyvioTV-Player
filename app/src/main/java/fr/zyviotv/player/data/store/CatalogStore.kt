@@ -8,6 +8,7 @@ import fr.zyviotv.player.data.cache.RestoredCatalog
 import fr.zyviotv.player.data.catalog.CatalogPerformanceDiagnostics
 import fr.zyviotv.player.data.catalog.PlaybackActivity
 import fr.zyviotv.player.data.catalog.PlaybackActivityTracker
+import fr.zyviotv.player.data.catalog.SeriesDetailSource
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -21,16 +22,19 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
- * Bloc #213, PR A: fills the Room catalogue store in the background while the
- * app keeps reading the V1 file cache exactly as before. Nothing reads the
- * store yet (PR B), and the V1 cache is never deleted here.
+ * Bloc #213: the Room catalogue store.
  *
- * - After a V1 cache was restored, its catalogue is imported once (skipped
- *   when the active generation already mirrors that file or is newer).
- * - After a validated provider refresh, the raw (unfiltered) catalogue is
- *   written as a new generation.
+ * - PR B: the session restores the catalogue from the store at startup
+ *   ([restore]): titles and ids only, stream URLs decrypted one at a time on
+ *   playback ([resolveSource]), episodes read per series ([seriesDetail]).
+ * - When only a V1 file cache exists (first launch after the update), it is
+ *   imported once in the background ([mirrorRestoredCache]); skipped when the
+ *   active generation already mirrors that file or is newer.
+ * - A validated provider refresh is written right away, raw (unfiltered),
+ *   before the session drops the V1 cache ([writeRefreshNow]).
  *
  * Jobs run one at a time, never start during playback (same rule as automatic
  * refreshes, bloc #211), and a later refresh of a profile and playlist
@@ -39,6 +43,7 @@ import kotlinx.coroutines.sync.withLock
  */
 class CatalogStore internal constructor(
     private val writer: CatalogGenerationWriter,
+    private val reader: CatalogStoreReader,
     private val dao: CatalogStoreDao,
     private val databaseFile: File?,
     private val playback: PlaybackActivityTracker,
@@ -68,26 +73,83 @@ class CatalogStore internal constructor(
         )
     }
 
-    /** Raw catalogue of a validated provider refresh, before any parental filtering. */
-    fun mirrorRefresh(
+    /**
+     * Writes the raw catalogue of a validated provider refresh now (the
+     * refresh already waited for the end of playback). True once the new
+     * generation is active; false keeps the previous store content.
+     */
+    suspend fun writeRefreshNow(
         profileId: String,
         rawCatalog: CachedCatalog,
         fetchedAtEpochMs: Long,
         idAliases: Map<String, Long>,
-        v1Stamp: CatalogFileStamp?,
-    ) {
-        submit(
-            catalog = rawCatalog,
-            source = GenerationSource(
-                profileKey = profileKey(profileId),
-                scope = GenerationScope.Raw,
-                origin = GenerationOrigin.Refresh,
-                fetchedAtEpochMs = fetchedAtEpochMs,
-                idAliases = idAliases,
-                v1Stamp = v1Stamp,
-            ),
+    ): Boolean {
+        val source = GenerationSource(
+            profileKey = profileKey(profileId),
+            scope = GenerationScope.Raw,
+            origin = GenerationOrigin.Refresh,
+            fetchedAtEpochMs = fetchedAtEpochMs,
+            idAliases = idAliases,
+            v1Stamp = null,
         )
+        // Pending older requests (a V1 import) of this playlist are superseded.
+        latestRefresh[source.profileKey + "|" + rawCatalog.playlistId] = sequence.incrementAndGet()
+        return mutex.withLock { execute(rawCatalog, source) } is GenerationWriteResult.Activated
     }
+
+    /**
+     * Startup read of the profile's catalogue (blocking: call on IO). Null
+     * when the store holds no active generation for it, or cannot be read.
+     */
+    fun restore(profileId: String): StoredCatalog? {
+        val startedAt = CatalogPerformanceDiagnostics.startedAt()
+        val stored = try {
+            reader.latest(profileKey(profileId))
+        } catch (error: Exception) {
+            CatalogPerformanceDiagnostics.event(
+                name = "catalog_store_unreadable",
+                fields = "failure=" + error.javaClass.simpleName,
+                warning = true,
+            )
+            null
+        } ?: return null
+        val snapshot = stored.catalog.snapshot
+        CatalogPerformanceDiagnostics.phase(
+            name = "catalog_store_load",
+            startedAtMs = startedAt,
+            itemCount = snapshot.liveChannels.size + snapshot.movies.size + snapshot.series.size,
+        )
+        return stored
+    }
+
+    fun hasActiveGeneration(profileId: String): Boolean =
+        runCatching { reader.hasActiveGeneration(profileKey(profileId)) }.getOrDefault(false)
+
+    /**
+     * Decrypts the stream URL behind a [CatalogSourceRef]; any other value is
+     * returned unchanged. Null when the referenced item no longer exists.
+     */
+    suspend fun resolveSource(streamUrl: String): String? {
+        val ref = CatalogSourceRef.parse(streamUrl) ?: return streamUrl.takeUnless(CatalogSourceRef::isRef)
+        return withContext(Dispatchers.IO) {
+            try {
+                reader.resolve(ref)
+            } catch (error: Exception) {
+                CatalogPerformanceDiagnostics.event(
+                    name = "catalog_source_unresolved",
+                    fields = "kind=${ref.kind.wire} failure=" + error.javaClass.simpleName,
+                    warning = true,
+                )
+                null
+            }
+        }
+    }
+
+    /** Stored episodes of a series of the given generation, or null. */
+    suspend fun seriesDetail(generationId: Long, playlistId: String, seriesId: String): SeriesDetailSource? =
+        withContext(Dispatchers.IO) {
+            runCatching { reader.seriesDetail(generationId, playlistId, seriesId) }.getOrNull()
+        }
 
     private fun submit(catalog: CachedCatalog, source: GenerationSource) {
         val request = sequence.incrementAndGet()
@@ -106,11 +168,7 @@ class CatalogStore internal constructor(
         }
     }
 
-    internal suspend fun runNow(catalog: CachedCatalog, source: GenerationSource) {
-        mutex.withLock { execute(catalog, source) }
-    }
-
-    private suspend fun execute(catalog: CachedCatalog, source: GenerationSource) {
+    private suspend fun execute(catalog: CachedCatalog, source: GenerationSource): GenerationWriteResult? {
         val context = currentCoroutineContext()
         try {
             if (!cleanedUp) {
@@ -126,7 +184,7 @@ class CatalogStore internal constructor(
                 val skip = v1ImportSkipReason(dao.activeGeneration(source.profileKey, catalog.playlistId), source)
                 if (skip != null) {
                     CatalogPerformanceDiagnostics.event("catalog_store_skipped", "reason=$skip")
-                    return
+                    return null
                 }
             }
             val startedAt = CatalogPerformanceDiagnostics.startedAt()
@@ -152,6 +210,7 @@ class CatalogStore internal constructor(
                     warning = true,
                 )
             }
+            return result
         } catch (error: Throwable) {
             // The previous active generation and the V1 cache are untouched.
             CatalogPerformanceDiagnostics.event(
@@ -160,6 +219,7 @@ class CatalogStore internal constructor(
                 warning = true,
             )
             if (error is CancellationException) throw error
+            return null
         }
     }
 
@@ -180,8 +240,10 @@ class CatalogStore internal constructor(
                 instance ?: run {
                     val appContext = context.applicationContext
                     val database = CatalogStoreDatabase.get(appContext)
+                    val keyWrapper = KeystoreKeyWrapper()
                     CatalogStore(
-                        writer = CatalogGenerationWriter(database, KeystoreKeyWrapper()),
+                        writer = CatalogGenerationWriter(database, keyWrapper),
+                        reader = CatalogStoreReader(database.dao(), keyWrapper),
                         dao = database.dao(),
                         databaseFile = appContext.getDatabasePath(CatalogStoreDatabase.FILE_NAME),
                         playback = PlaybackActivity.tracker,

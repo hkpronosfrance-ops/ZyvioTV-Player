@@ -25,6 +25,7 @@ import fr.zyviotv.player.shared.AppIdentity
 import fr.zyviotv.player.data.auth.SecureSessionStore
 import fr.zyviotv.player.data.auth.SupabaseAuthRepository
 import fr.zyviotv.player.data.cache.OfflineContentCache
+import fr.zyviotv.player.data.store.CatalogStore
 import fr.zyviotv.player.data.settings.ProfilePreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -51,10 +52,14 @@ fun StartupSplashScreen(
             canUseOffline = {
                 // Never on the main thread: this may hash or decode the cache.
                 withContext(Dispatchers.IO) {
-                    offlineCache.hasUsableOfflineData(
-                        profilePreferences.selectedProfileId()
-                            ?: profilePreferences.defaultProfileId(),
-                    )
+                    val profileId = profilePreferences.selectedProfileId()
+                        ?: profilePreferences.defaultProfileId()
+                    // Bloc #213: an active Room generation is a validated
+                    // catalogue (the V1 file is deleted once it exists).
+                    val storeReady = profileId != null &&
+                        offlineCache.hasLibrary(profileId) &&
+                        CatalogStore.get(appContext).hasActiveGeneration(profileId)
+                    storeReady || offlineCache.hasUsableOfflineData(profileId)
                 }
             },
         )

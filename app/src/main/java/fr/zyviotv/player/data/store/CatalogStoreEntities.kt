@@ -199,3 +199,40 @@ data class IdAliasEntity(
     val alias: String,
     val fingerprint: Long,
 )
+
+// --- Read projections (PR B): titles, artwork and ids only, never url_blob. ---
+
+data class CategoryRow(val id: String, val name: String)
+
+data class LiveRow(
+    val id: String,
+    val name: String,
+    @ColumnInfo(name = "category_id") val categoryId: String?,
+    @ColumnInfo(name = "logo_url") val logoUrl: String?,
+    @ColumnInfo(name = "epg_id") val epgId: String?,
+)
+
+data class MovieRow(
+    val id: String,
+    val title: String,
+    @ColumnInfo(name = "category_id") val categoryId: String?,
+    @ColumnInfo(name = "poster_url") val posterUrl: String?,
+    @ColumnInfo(name = "container_extension") val containerExtension: String,
+    @ColumnInfo(name = "added_at") val addedAtEpochSeconds: Long?,
+)
+
+data class SeriesRow(
+    val id: String,
+    val title: String,
+    @ColumnInfo(name = "category_id") val categoryId: String?,
+    @ColumnInfo(name = "poster_url") val posterUrl: String?,
+    @ColumnInfo(name = "added_at") val addedAtEpochSeconds: Long?,
+)
+
+data class EpisodeRow(
+    val id: String,
+    val season: Int,
+    val number: Int,
+    val title: String,
+    val synopsis: String?,
+)
