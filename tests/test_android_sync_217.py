@@ -12,18 +12,24 @@ def read(path: pathlib.Path) -> str:
 
 
 class AndroidSync217Test(unittest.TestCase):
-    def test_m3u_is_parsed_while_downloading_without_a_temporary_copy(self):
+    def test_m3u_is_parsed_while_downloading_without_slowing_the_download(self):
         client = read(APP / "data/m3u/AndroidM3uClient.kt")
         streaming = client.split("suspend fun importStreaming(", 1)[1].split("    private fun download(", 1)[0]
-        self.assertNotIn("createTempFile", client)
-        self.assertNotIn("FileOutputStream", client)
         self.assertIn("onAttemptStart()", streaming)
         self.assertIn("M3uParser.parseLinesDetailed(lines, Int.MAX_VALUE, onEntry)", streaming)
-        # A truncated body never becomes a success.
+        # PR #218: the socket is read by its own writer into a temporary file;
+        # the parser follows that file, so it never slows the download.
+        self.assertIn("val writer = async(Dispatchers.IO)", streaming)
+        self.assertIn("TailingInputStream(file, progress, job)", streaming)
+        self.assertNotIn("connection.inputStream).bufferedReader", streaming)
+        # A truncated or cut body never becomes a success.
         self.assertIn("counted.count < expectedBytes) throw M3uTruncatedException()", streaming)
+        self.assertIn("progress.failure?.let { throw it }", streaming)
         self.assertIn("if (report.danglingMetadata) throw M3uTruncatedException()", streaming)
-        self.assertLess(streaming.index("throw M3uTruncatedException()"), streaming.index("M3uStreamingResult.Success("))
+        self.assertLess(streaming.index("progress.failure?.let { throw it }"), streaming.index("M3uStreamingResult.Success("))
+        self.assertIn("file.delete()", streaming)
         self.assertIn('phase("m3u_stream"', streaming)
+        self.assertIn('phase("m3u_download"', streaming)
         self.assertIn("THREAD_PRIORITY_BACKGROUND", client)
 
     def test_a_retried_download_starts_a_new_catalogue_builder(self):

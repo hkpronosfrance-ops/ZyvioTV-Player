@@ -11,6 +11,9 @@ import fr.zyviotv.player.shared.m3u.M3uSource
 import fr.zyviotv.player.shared.m3u.M3uValidationResult
 import fr.zyviotv.player.shared.m3u.M3uValidator
 import java.io.EOFException
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -23,12 +26,16 @@ import java.util.zip.GZIPInputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
 
 class AndroidM3uClient(
     private val connectTimeoutMs: Int = CONNECT_TIMEOUT_MS,
     private val readTimeoutMs: Int = READ_TIMEOUT_MS,
+    /** Private directory for the in-progress copy (app cache dir); system temp when null. */
+    private val tempDirectory: File? = null,
 ) : M3uClient {
     override suspend fun import(
         source: M3uSource,
@@ -123,59 +130,110 @@ class AndroidM3uClient(
         M3uStreamingResult.Failure("Impossible de télécharger complètement la playlist M3U.")
     }
 
-    private fun streamAttempt(
+    /**
+     * PR #218: the download no longer waits for the analysis. With #217 the
+     * parser read straight from the socket, so a slower analysis slowed the
+     * reading and the provider closed the connection (Pixel 7 emulator, perf
+     * variant: connection-interrupted after 141 s, then 74 s, on a playlist
+     * that downloaded completely in 145 s before). One coroutine copies the
+     * body to a private temporary file at network speed, at normal priority;
+     * the parser follows that file as it grows, at background priority.
+     */
+    private suspend fun streamAttempt(
         url: String,
         job: Job?,
         attempt: Int,
         onEntry: (M3uEntry) -> Unit,
-    ): M3uStreamingResult {
+    ): M3uStreamingResult = coroutineScope {
         val startedAt = CatalogPerformanceDiagnostics.startedAt()
         val connection = open(url)
+        val file = File.createTempFile("zyviotv-m3u-", ".tmp", tempDirectory)
+        val progress = DownloadProgress()
         try {
             val code = connection.responseCode
             NetworkDiagnostics.response("m3u", url, code, attempt)
             if (code !in 200..299) throw M3uHttpStatusException(code)
 
             val expectedBytes = connection.contentLengthLong
+            val gzip = connection.contentEncoding.equals("gzip", ignoreCase = true)
             val counted = CountingInputStream(connection.inputStream)
-            val decoded: InputStream = if (
-                connection.contentEncoding.equals("gzip", ignoreCase = true)
-            ) {
-                GZIPInputStream(counted, COPY_BUFFER_BYTES)
-            } else {
-                counted
+            val writer = async(Dispatchers.IO) {
+                copyBody(counted, gzip, expectedBytes, file, progress, job)
+                if (progress.failure == null) CatalogPerformanceDiagnostics.phase("m3u_download", startedAt)
             }
 
-            val report = withBackgroundPriority {
-                decoded.bufferedReader(Charsets.UTF_8).use { reader ->
-                    val lines = sequence {
-                        var lineNumber = 0
-                        while (true) {
-                            if (lineNumber % CANCELLATION_CHECK_INTERVAL == 0 && job?.isActive == false) {
-                                throw CancellationException("M3U import cancelled")
+            val report = TailingInputStream(file, progress, job).use { tail ->
+                withBackgroundPriority {
+                    tail.bufferedReader(Charsets.UTF_8).use { reader ->
+                        val lines = sequence {
+                            var lineNumber = 0
+                            while (true) {
+                                if (lineNumber % CANCELLATION_CHECK_INTERVAL == 0 && job?.isActive == false) {
+                                    throw CancellationException("M3U import cancelled")
+                                }
+                                val line = reader.readLine() ?: break
+                                yield(line)
+                                lineNumber += 1
                             }
-                            val line = reader.readLine() ?: break
-                            yield(line)
-                            lineNumber += 1
                         }
+                        M3uParser.parseLinesDetailed(lines, Int.MAX_VALUE, onEntry)
                     }
-                    M3uParser.parseLinesDetailed(lines, Int.MAX_VALUE, onEntry)
                 }
             }
+            writer.await()
+            progress.failure?.let { throw it }
 
-            if (expectedBytes >= 0L && counted.count < expectedBytes) throw M3uTruncatedException()
             if (report.danglingMetadata) throw M3uTruncatedException()
             if (!report.headerSeen || report.emitted == 0) {
-                return M3uStreamingResult.Failure("La playlist M3U est vide ou invalide.")
+                return@coroutineScope M3uStreamingResult.Failure("La playlist M3U est vide ou invalide.")
             }
             CatalogPerformanceDiagnostics.phase("m3u_stream", startedAt, report.emitted)
             CatalogPerformanceDiagnostics.event(
                 name = "m3u_stream_size",
                 fields = "kib=${counted.count / BYTES_PER_KIB} attempt=$attempt",
             )
-            return M3uStreamingResult.Success(report.emitted)
+            M3uStreamingResult.Success(report.emitted)
         } finally {
+            // Unblocks a writer still reading the socket (parse failure or
+            // cancellation) before the scope waits for it.
             connection.disconnect()
+            file.delete()
+        }
+    }
+
+    /** Network to temporary file, never slowed by the parser. Errors go to [progress]. */
+    private fun copyBody(
+        counted: CountingInputStream,
+        gzip: Boolean,
+        expectedBytes: Long,
+        file: File,
+        progress: DownloadProgress,
+        job: Job?,
+    ) {
+        var failure: IOException? = null
+        try {
+            val decoded: InputStream = if (gzip) GZIPInputStream(counted, COPY_BUFFER_BYTES) else counted
+            decoded.use { input ->
+                FileOutputStream(file).use { output ->
+                    val buffer = ByteArray(COPY_BUFFER_BYTES)
+                    while (true) {
+                        if (job?.isActive == false) throw CancellationException("M3U import cancelled")
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        // Unbuffered: every chunk is visible to the parser at once.
+                        output.write(buffer, 0, read)
+                        progress.chunkWritten()
+                    }
+                }
+            }
+            if (expectedBytes >= 0L && counted.count < expectedBytes) throw M3uTruncatedException()
+        } catch (error: IOException) {
+            failure = error
+        } catch (error: Exception) {
+            // Cancellation or anything unexpected: never an end of stream.
+            failure = IOException("M3U download stopped", error)
+        } finally {
+            progress.finish(failure)
         }
     }
 
@@ -289,6 +347,65 @@ class AndroidM3uClient(
             super.read(buffer, offset, length).also { if (it > 0) count += it }
     }
 
+    /** Shared state between the writer and the parser. */
+    private class DownloadProgress {
+        private val lock = Object()
+
+        @Volatile var finished: Boolean = false
+            private set
+
+        @Volatile var failure: IOException? = null
+            private set
+
+        fun chunkWritten() = synchronized(lock) { lock.notifyAll() }
+
+        fun finish(error: IOException?) = synchronized(lock) {
+            failure = error
+            finished = true
+            lock.notifyAll()
+        }
+
+        fun awaitMore() = synchronized(lock) {
+            if (!finished) lock.wait(TAIL_WAIT_MS)
+        }
+    }
+
+    /**
+     * Reads the temporary file while it grows. End of stream only once the
+     * writer finished; a writer failure is rethrown here, so a cut download
+     * never looks like a complete playlist.
+     */
+    private class TailingInputStream(
+        file: File,
+        private val progress: DownloadProgress,
+        private val job: Job?,
+    ) : InputStream() {
+        private val input = FileInputStream(file)
+
+        override fun read(): Int {
+            val single = ByteArray(1)
+            return if (read(single, 0, 1) < 0) -1 else single[0].toInt() and 0xff
+        }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            if (length == 0) return 0
+            while (true) {
+                // State first: bytes written before the writer finished are then visible.
+                val finished = progress.finished
+                val read = input.read(buffer, offset, length)
+                if (read > 0) return read
+                if (finished) {
+                    progress.failure?.let { throw it }
+                    return -1
+                }
+                if (job?.isActive == false) throw CancellationException("M3U import cancelled")
+                progress.awaitMore()
+            }
+        }
+
+        override fun close() = input.close()
+    }
+
     private companion object {
         const val CONNECT_TIMEOUT_MS = 15_000
         const val READ_TIMEOUT_MS = 30_000
@@ -297,6 +414,7 @@ class AndroidM3uClient(
         const val CANCELLATION_CHECK_INTERVAL = 256
         const val COPY_BUFFER_BYTES = 64 * 1024
         const val BYTES_PER_KIB = 1024L
+        const val TAIL_WAIT_MS = 50L
         const val PRIMARY_USER_AGENT = "ZYVIOTV-Player/0.1 (Android)"
         val RETRYABLE_HTTP_CODES = setOf(408, 425, 429, 500, 502, 503, 504)
     }

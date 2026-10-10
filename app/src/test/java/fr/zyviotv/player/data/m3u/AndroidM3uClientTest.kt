@@ -119,6 +119,31 @@ class AndroidM3uClientTest {
     }
 
     @Test
+    fun aSlowlyArrivingPlaylistIsParsedCompletelyWhileItDownloads() = runBlocking {
+        // The body arrives in small pieces: the parser must wait for the
+        // writer instead of taking the current end of the file for the end.
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(playlist(entries = 400))
+                .throttleBody(2_048, 20, java.util.concurrent.TimeUnit.MILLISECONDS),
+        )
+        val received = mutableListOf<String>()
+
+        val result = AndroidM3uClient(tempDirectory = tempDir()).importStreaming(
+            source = M3uSource(server.url("/slow").toString()),
+            onEntry = { received += it.name },
+        )
+
+        assertEquals(400, (result as M3uStreamingResult.Success).totalParsed)
+        assertEquals("Channel 399", received.last())
+        assertEquals(0, tempDir().listFiles().orEmpty().size)
+    }
+
+    private fun tempDir(): java.io.File =
+        java.io.File(System.getProperty("java.io.tmpdir"), "zyviotv-m3u-test").apply { mkdirs() }
+
+    @Test
     fun streamingImportRejectsAnEmptyPlaylist() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(200).setBody("#EXTM3U\n"))
 
