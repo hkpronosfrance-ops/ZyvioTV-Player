@@ -78,6 +78,8 @@ import fr.zyviotv.player.data.system.SystemStateRepository
 import fr.zyviotv.player.data.catalog.AndroidSeriesDetailLoader
 import fr.zyviotv.player.data.catalog.CatalogRefreshTrigger
 import fr.zyviotv.player.data.catalog.M3uSeriesDetailRegistry
+import fr.zyviotv.player.data.store.CatalogSourceRef
+import fr.zyviotv.player.data.store.CatalogStore
 import fr.zyviotv.player.data.catalog.SeriesDetailLoadResult
 import fr.zyviotv.player.data.catalog.SeriesEpisodeSource
 import fr.zyviotv.player.shared.catalog.DisplayTitle
@@ -262,6 +264,10 @@ fun ZyvioTVPlayerApp(
     var seriesEpisodeSources by remember { mutableStateOf<Map<String, SeriesEpisodeSource>>(emptyMap()) }
     var seriesDetailReloadToken by remember { mutableIntStateOf(0) }
     var playbackRequest by remember { mutableStateOf<PlaybackRequest?>(null) }
+    // Zapping follows the channel id: a catalogue restored from the store
+    // holds source references, not the URL the player received (bloc #213).
+    var currentLiveChannelId by remember { mutableStateOf<String?>(null) }
+    val catalogStore = remember(appContext) { CatalogStore.get(appContext) }
     var playbackSyncContext by remember { mutableStateOf<PlaybackSyncContext?>(null) }
     var lastSyncedPositionMs by remember { mutableStateOf(0L) }
 
@@ -269,10 +275,10 @@ fun ZyvioTVPlayerApp(
      * The only way to open the player: every Live/VOD/episode action goes
      * through PlaybackLaunchPolicy, and a refusal is always explained.
      */
-    fun startPlayback(
+    fun launchResolvedPlayback(
         request: PlaybackRequest,
         syncContext: PlaybackSyncContext?,
-        syncedPositionMs: Long = 0L,
+        syncedPositionMs: Long,
     ): Boolean = when (
         val decision = PlaybackLaunchPolicy.decide(
             request = request,
@@ -298,7 +304,30 @@ fun ZyvioTVPlayerApp(
         }
     }
 
+    /**
+     * A source reference (catalogue restored from the store) is decrypted
+     * first, one URL at a time; the player and the parental guard only ever
+     * receive the real URL. Returns true when the launch is underway.
+     */
+    fun startPlayback(
+        request: PlaybackRequest,
+        syncContext: PlaybackSyncContext?,
+        syncedPositionMs: Long = 0L,
+    ): Boolean {
+        if (!CatalogSourceRef.isRef(request.streamUrl)) {
+            return launchResolvedPlayback(request, syncContext, syncedPositionMs)
+        }
+        scope.launch {
+            val resolved = catalogStore.resolveSource(request.streamUrl).orEmpty()
+            // An unresolvable reference becomes an empty source: the policy
+            // then refuses with its "source unavailable" message.
+            launchResolvedPlayback(request.copy(streamUrl = resolved), syncContext, syncedPositionMs)
+        }
+        return true
+    }
+
     fun playLiveChannel(ready: ProviderCatalogState.Ready, channel: CatalogLiveChannel) {
+        currentLiveChannelId = channel.id
         val launched = startPlayback(
             request = PlaybackRequest(
                 title = channel.name,
@@ -399,7 +428,9 @@ fun ZyvioTVPlayerApp(
         val channels = ready.snapshot.liveChannels
         if (channels.isEmpty()) return
 
-        val currentIndex = channels.indexOfFirst { it.streamUrl == request.streamUrl }
+        val currentIndex = channels.indexOfFirst { it.id == currentLiveChannelId }
+            .takeIf { it >= 0 }
+            ?: channels.indexOfFirst { it.streamUrl == request.streamUrl }
         if (currentIndex < 0) return
 
         val targetIndex = (currentIndex + offset + channels.size) % channels.size
@@ -1455,7 +1486,7 @@ fun ZyvioTVPlayerApp(
                     seriesDetailState = SeriesDetailState.Loading
                     seriesEpisodeSources = emptyMap()
 
-                    val localDetail = M3uSeriesDetailRegistry.load(series.id)
+                    val localDetail = M3uSeriesDetailRegistry.loadLocal(series.id)
                     if (localDetail == null && deviceOffline) {
                         seriesDetailState = SeriesDetailState.Ready(
                             SeriesDetailUi(

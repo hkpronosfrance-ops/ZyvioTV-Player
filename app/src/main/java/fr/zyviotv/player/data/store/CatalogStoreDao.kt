@@ -98,6 +98,56 @@ interface CatalogStoreDao {
     @Query("SELECT * FROM id_alias WHERE generation_id = :generationId")
     fun idAliases(generationId: Long): List<IdAliasEntity>
 
+    // --- Reads for the screens (PR B): no encrypted column is loaded here. ---
+
+    @Query(
+        "SELECT * FROM generation WHERE playlist_id = :playlistId AND state = 'active' " +
+            "ORDER BY id DESC LIMIT 1",
+    )
+    fun activeGenerationOfPlaylist(playlistId: String): GenerationEntity?
+
+    @Query("SELECT id, name FROM category WHERE generation_id = :generationId AND kind = :kind ORDER BY ordinal")
+    fun categoryRows(generationId: Long, kind: String): List<CategoryRow>
+
+    @Query(
+        "SELECT id, name, category_id, logo_url, epg_id FROM live_channel " +
+            "WHERE generation_id = :generationId ORDER BY ordinal",
+    )
+    fun liveRows(generationId: Long): List<LiveRow>
+
+    @Query(
+        "SELECT id, title, category_id, poster_url, container_extension, added_at FROM movie " +
+            "WHERE generation_id = :generationId ORDER BY ordinal",
+    )
+    fun movieRows(generationId: Long): List<MovieRow>
+
+    @Query(
+        "SELECT id, title, category_id, poster_url, added_at FROM series " +
+            "WHERE generation_id = :generationId ORDER BY ordinal",
+    )
+    fun seriesRows(generationId: Long): List<SeriesRow>
+
+    @Query("SELECT * FROM series_detail WHERE generation_id = :generationId AND series_id = :seriesId LIMIT 1")
+    fun seriesDetail(generationId: Long, seriesId: String): SeriesDetailEntity?
+
+    @Query(
+        "SELECT id, season, number, title, synopsis FROM episode " +
+            "WHERE generation_id = :generationId AND series_id = :seriesId ORDER BY ordinal",
+    )
+    fun episodeRows(generationId: Long, seriesId: String): List<EpisodeRow>
+
+    @Query("SELECT url_blob FROM live_channel WHERE generation_id = :generationId AND id = :id ORDER BY ordinal LIMIT 1")
+    fun liveUrlBlob(generationId: Long, id: String): ByteArray?
+
+    @Query("SELECT url_blob FROM movie WHERE generation_id = :generationId AND id = :id ORDER BY ordinal LIMIT 1")
+    fun movieUrlBlob(generationId: Long, id: String): ByteArray?
+
+    @Query(
+        "SELECT url_blob FROM episode WHERE generation_id = :generationId AND series_id = :seriesId " +
+            "AND id = :id ORDER BY ordinal LIMIT 1",
+    )
+    fun episodeUrlBlob(generationId: Long, seriesId: String, id: String): ByteArray?
+
     @Query("DELETE FROM category WHERE generation_id = :generationId")
     fun deleteCategories(generationId: Long)
 

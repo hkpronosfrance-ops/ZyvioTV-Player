@@ -96,19 +96,73 @@ private object ProviderCatalogSyncCoordinator {
     }
 }
 
+/** A restored catalogue and where it came from. */
+private class SessionRestore(
+    val restored: RestoredCatalog,
+    /** True when read from the Room store (bloc #213), false for the V1 file cache. */
+    val fromStore: Boolean,
+)
+
 /**
  * The start-up reload (profile gate) cancels the first session effect while
- * its blocking cache read keeps running; sharing the read avoids decoding the
- * 20k+ item cache twice in parallel.
+ * its blocking cache read keeps running; sharing the read avoids reading the
+ * 20k+ item catalogue twice in parallel.
  */
 private object ProviderCatalogCacheCoordinator {
-    private val singleFlight = CatalogSingleFlight<RestoredCatalog?>()
+    private val singleFlight = CatalogSingleFlight<SessionRestore?>()
 
     suspend fun load(
         profileId: String,
-        loader: () -> RestoredCatalog?,
-    ): RestoredCatalog? = singleFlight.run(profileId) { loader() }
+        loader: () -> SessionRestore?,
+    ): SessionRestore? = singleFlight.run(profileId) { loader() }
 }
+
+/**
+ * Bloc #213 (PR B): the Room store first. Its catalogue carries source
+ * references (no URL in memory) and no episodes; they are read per series.
+ * Once a complete generation is active, the V1 file cache is deleted. The V1
+ * file is only read while no generation exists yet (first launch after the
+ * update), and is then copied into the store in the background.
+ */
+private fun restoreCatalogForSession(
+    profileId: String,
+    catalogStore: CatalogStore,
+    offlineCache: OfflineContentCache,
+): SessionRestore? {
+    val startedAt = CatalogPerformanceDiagnostics.startedAt()
+    val stored = catalogStore.restore(profileId)
+    if (stored != null) {
+        val generation = stored.generation
+        M3uSeriesDetailRegistry.useStored { seriesId ->
+            catalogStore.seriesDetail(generation.id, generation.playlistId, seriesId)
+        }
+        offlineCache.deleteCatalogFiles(profileId)
+        CatalogPerformanceDiagnostics.phase(
+            name = "catalog_ready",
+            startedAtMs = startedAt,
+            itemCount = stored.catalog.snapshot.itemCount(),
+        )
+        CatalogPerformanceDiagnostics.event("catalog_ready_source", "source=store scope=${generation.scope}")
+        return SessionRestore(
+            restored = RestoredCatalog(
+                catalog = stored.catalog,
+                fetchedAtEpochMs = generation.fetchedAtEpochMs,
+                idAliases = stored.idAliases,
+            ),
+            fromStore = true,
+        )
+    }
+    val restored = offlineCache.restoreCatalog(profileId) ?: return null
+    CatalogPerformanceDiagnostics.phase(
+        name = "catalog_ready",
+        startedAtMs = startedAt,
+        itemCount = restored.catalog.snapshot.itemCount(),
+    )
+    CatalogPerformanceDiagnostics.event("catalog_ready_source", "source=v1")
+    return SessionRestore(restored = restored, fromStore = false)
+}
+
+private fun CatalogSnapshot.itemCount(): Int = liveChannels.size + movies.size + series.size
 
 @Composable
 fun rememberProviderCatalogSession(): ProviderCatalogSession {
@@ -134,7 +188,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
     val offlineCache = remember(applicationContext) {
         OfflineContentCache(applicationContext)
     }
-    // Bloc #213 (PR A): filled in the background, not read yet.
+    // Bloc #213: the catalogue store, read at startup since PR B.
     val catalogStore = remember(applicationContext) {
         CatalogStore.get(applicationContext)
     }
@@ -159,9 +213,10 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
         var previousReady = (state.value as? ProviderCatalogState.Ready)
             ?.takeIf { session.readyProfileId == profileId }
         if (previousReady == null) {
-            val restored = ProviderCatalogCacheCoordinator.load(profileId) {
-                offlineCache.restoreCatalog(profileId)
+            val restore = ProviderCatalogCacheCoordinator.load(profileId) {
+                restoreCatalogForSession(profileId, catalogStore, offlineCache)
             }
+            val restored = restore?.restored
             if (restored != null) {
                 val cached = restored.catalog
                 previousReady = ProviderCatalogState.Ready(
@@ -178,7 +233,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                 session.fetchedAtEpochMs = restored.fetchedAtEpochMs
                 session.idAliases = restored.idAliases
                 // One-time copy of the V1 cache into the store (skipped once mirrored).
-                catalogStore.mirrorRestoredCache(profileId, restored)
+                if (!restore.fromStore) catalogStore.mirrorRestoredCache(profileId, restored)
             } else {
                 state.value = ProviderCatalogState.Loading
                 session.readyProfileId = null
@@ -254,37 +309,42 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                 }
                 val fresh = withContext(Dispatchers.IO) {
                     val allDetails = M3uSeriesDetailRegistry.snapshot()
-                    val visibleSeriesIds = filtered.series.mapTo(HashSet()) { it.id }
-                    CachedCatalog(
+                    // Bloc #213: the store keeps the raw catalogue; parental
+                    // rules are applied when it is read (PR B).
+                    val raw = CachedCatalog(
                         playlistId = loaded.playlistId,
                         playlistName = loaded.playlistName,
-                        snapshot = filtered,
-                        seriesDetails = allDetails.filterKeys(visibleSeriesIds::contains),
-                    ).also { catalog ->
-                        // saveCatalog only replaces the cache with a catalog
-                        // whose every source survived (bloc #208), then attests
-                        // it with its fetch date (bloc #211).
-                        val v1Stamp = offlineCache.saveCatalog(
+                        snapshot = loaded.snapshot,
+                        seriesDetails = allDetails,
+                    )
+                    val stored = catalogStore.writeRefreshNow(
+                        profileId = profileId,
+                        rawCatalog = raw,
+                        fetchedAtEpochMs = outcome.fetchedAtEpochMs,
+                        idAliases = outcome.idAliases,
+                    )
+                    if (stored) {
+                        // The new generation is complete, verified and active:
+                        // the V1 file cache is obsolete.
+                        offlineCache.deleteCatalogFiles(profileId)
+                    } else {
+                        // Fallback: keep a V1 cache. saveCatalog only replaces it
+                        // with a catalog whose every source survived (bloc #208),
+                        // then attests it with its fetch date (bloc #211).
+                        val visibleSeriesIds = filtered.series.mapTo(HashSet()) { it.id }
+                        offlineCache.saveCatalog(
                             profileId = profileId,
-                            catalog = catalog,
-                            fetchedAtEpochMs = outcome.fetchedAtEpochMs,
-                            idAliases = outcome.idAliases,
-                        )
-                        // Bloc #213: the store keeps the raw catalogue; parental
-                        // rules will be applied when reading (PR B).
-                        catalogStore.mirrorRefresh(
-                            profileId = profileId,
-                            rawCatalog = CachedCatalog(
+                            catalog = CachedCatalog(
                                 playlistId = loaded.playlistId,
                                 playlistName = loaded.playlistName,
-                                snapshot = loaded.snapshot,
-                                seriesDetails = allDetails,
+                                snapshot = filtered,
+                                seriesDetails = allDetails.filterKeys(visibleSeriesIds::contains),
                             ),
                             fetchedAtEpochMs = outcome.fetchedAtEpochMs,
                             idAliases = outcome.idAliases,
-                            v1Stamp = v1Stamp,
                         )
                     }
+                    raw
                 }
                 session.readyProfileId = profileId
                 session.fetchedAtEpochMs = outcome.fetchedAtEpochMs
@@ -307,8 +367,8 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     )
                 } else {
                     val restored = ProviderCatalogCacheCoordinator.load(profileId) {
-                        offlineCache.restoreCatalog(profileId)
-                    }
+                        restoreCatalogForSession(profileId, catalogStore, offlineCache)
+                    }?.restored
                     if (restored != null) {
                         val cached = restored.catalog
                         session.readyProfileId = profileId

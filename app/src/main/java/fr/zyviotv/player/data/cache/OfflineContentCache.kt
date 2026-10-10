@@ -206,6 +206,39 @@ class OfflineContentCache(context: Context) {
         return RestoredCatalog(catalog, fetchedAtEpochMs = null, idAliases = aliases, fileStamp = stamp)
     }
 
+    /**
+     * Bloc #213 (PR B): removes the V1 file cache of a profile (catalogue,
+     * backup, temporary file, metadata and pre-#206 JSON copy). Only call once
+     * a complete Room generation of that profile is active. True when nothing
+     * is left.
+     */
+    fun deleteCatalogFiles(profileId: String): Boolean {
+        val catalog = catalogFile(profileId)
+        val files = listOf(
+            catalog,
+            File(catalog.parentFile, catalog.name + ".bak"),
+            File(catalog.parentFile, catalog.name + ".tmp"),
+            metadataFile(profileId),
+            File(catalogDirectory, metadataFile(profileId).name + ".tmp"),
+        )
+        val present = files.filter(File::exists)
+        val hadLegacy = preferences.contains(catalogKey(profileId))
+        if (present.isEmpty() && !hadLegacy) return true
+        present.forEach(File::delete)
+        if (hadLegacy) preferences.edit().remove(catalogKey(profileId)).apply()
+        val removed = files.none(File::exists)
+        CatalogPerformanceDiagnostics.event(
+            name = "legacy_cache_deleted",
+            fields = "files=${present.size} legacy_json=$hadLegacy complete=$removed",
+            warning = !removed,
+        )
+        return removed
+    }
+
+    /** True when the profile has a cached library (favourites, progress, history). */
+    fun hasLibrary(profileId: String?): Boolean =
+        !profileId.isNullOrBlank() && loadLibrary(profileId) != null
+
     /** Authentic id aliases of the last saved catalog, even if that file changed since. */
     fun loadIdAliases(profileId: String): Map<String, Long> =
         readMetadata(profileId)?.idAliases.orEmpty()

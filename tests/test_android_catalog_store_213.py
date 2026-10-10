@@ -56,7 +56,9 @@ class AndroidCatalogStore213Test(unittest.TestCase):
         self.assertIn("if (!catalog.isPlayable)", writer)
         self.assertIn("runCatching { deleteGeneration(generationId) }", writer)
 
-    def test_v1_cache_is_never_deleted_by_pr_a(self):
+    def test_store_never_touches_the_v1_files_itself(self):
+        # Only the session may drop the V1 cache, through OfflineContentCache,
+        # once a generation is active (PR B, see test_android_catalog_room_reads_214).
         for path in STORE.glob("*.kt"):
             text = read(path)
             self.assertNotIn("catalogFile(", text, path.name)
@@ -64,13 +66,13 @@ class AndroidCatalogStore213Test(unittest.TestCase):
         cache = read(APP / "data/cache/OfflineContentCache.kt")
         self.assertNotIn("CatalogStore", cache)
 
-    def test_session_mirrors_raw_refreshes_and_the_restored_cache(self):
+    def test_session_writes_raw_refreshes_and_imports_the_v1_cache_once(self):
         session = read(APP / "ui/catalog/ProviderCatalogSession.kt")
-        self.assertIn("catalogStore.mirrorRestoredCache(profileId, restored)", session)
-        mirror = session.split("catalogStore.mirrorRefresh(", 1)[1][:600]
-        self.assertIn("snapshot = loaded.snapshot", mirror)
-        self.assertIn("seriesDetails = allDetails", mirror)
-        # The V1 cache keeps the profile-filtered catalogue, unchanged.
+        self.assertIn("if (!restore.fromStore) catalogStore.mirrorRestoredCache(profileId, restored)", session)
+        write = session.split("val raw = CachedCatalog(", 1)[1][:300]
+        self.assertIn("snapshot = loaded.snapshot", write)
+        self.assertIn("seriesDetails = allDetails", write)
+        # The V1 fallback keeps the profile-filtered catalogue, unchanged.
         self.assertIn("snapshot = filtered,", session)
 
     def test_store_logs_carry_counts_only(self):
