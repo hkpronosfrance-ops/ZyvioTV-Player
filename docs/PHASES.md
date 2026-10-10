@@ -33,5 +33,6 @@
 - PR #212 — Catalogue titles with trailing year + `player_devices` GRANT migration
 - Room block #213 — Generational catalogue store (Room): PR A storage foundation (#213, merged), PR B screens read the store, URLs resolved at playback, V1 cache dropped (#214, merged), #215 fast source references + black system splash (merged), #216 perf measurement variant (merged)
 - PR #217 — Faster first synchronisation: M3U parsed while downloading, home shown before the Room write, background priority, Supabase session refresh for profiles and parental rules (merged)
-- PR #218 — Fix: M3U download decoupled from the analysis (temporary file followed by the parser) + library GRANT migration (in progress)
-- PR #219 — Detail screen navigation (Retour button, tab navigation, Films tab freeze, duplicated episode titles) and onboarding preference chips (planned)
+- PR #218 — Fix: M3U download decoupled from the analysis (temporary file followed by the parser) + library GRANT migration (merged)
+- PR #219 — Channels and films first on a first M3U sync (order-proven), provider URL kind before group words (in progress)
+- PR #220 — Detail screen navigation (Retour button, tab navigation, Films tab freeze, duplicated episode titles) and onboarding preference chips (planned)

@@ -395,11 +395,21 @@ fun HomeScreen(
     val offlineMode = isOffline
     val syncNotice = when {
         offlineMode -> null
+        // PR #219: first synchronisation, channels and films already complete.
+        readyProvider?.seriesPending == true && readyProvider.syncWarning != null ->
+            "Chaînes et films sont disponibles ; la synchronisation des séries n’a pas abouti. Réessayez depuis l’onglet Séries."
+        readyProvider?.seriesPending == true ->
+            "Chaînes et films sont prêts. Les séries arrivent dans quelques minutes."
         readyLibrary?.snapshot?.isFromCache == true ->
             "Votre catalogue et la lecture restent disponibles. Favoris et progression sont affichés depuis l’appareil."
         readyProvider?.syncWarning != null ->
             "Le catalogue enregistré reste lisible ; la dernière actualisation de la playlist n’a pas abouti."
         else -> null
+    }
+    val syncNoticeTitle = if (readyProvider?.seriesPending == true && readyProvider.syncWarning == null) {
+        "Synchronisation en cours"
+    } else {
+        "Synchronisation incomplète"
     }
 
     Column(
@@ -417,7 +427,7 @@ fun HomeScreen(
         }
         if (syncNotice != null) {
             LocalStatusBanner(
-                title = "Synchronisation incomplète",
+                title = syncNoticeTitle,
                 message = syncNotice,
             )
             Spacer(Modifier.height(16.dp))

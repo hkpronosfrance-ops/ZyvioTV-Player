@@ -60,6 +60,11 @@ sealed interface ProviderCatalogState {
         val sourcesPending: Boolean = false,
         val syncWarning: String? = null,
         val isRefreshing: Boolean = false,
+        /**
+         * PR #219: first synchronisation in progress; channels and films are
+         * complete, series are still arriving (empty until the final catalogue).
+         */
+        val seriesPending: Boolean = false,
     ) : ProviderCatalogState
 
     data class Empty(val message: String) : ProviderCatalogState
@@ -288,12 +293,44 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
 
         val previousCatalog = previousReady
         val idAliases = session.idAliases
+        // PR #219: on a first synchronisation (nothing to show yet), channels
+        // and films are shown as soon as the playlist order proves them
+        // complete; series follow. Only with the profile's parental rules
+        // loaded: an early catalogue is never shown unfiltered.
+        session.earlyReady = null
+        val earlyLocks = if (previousReady == null) {
+            parentalRepository.loadContentLocks(profileId).getOrNull()
+        } else {
+            null
+        }
+        val refreshStartedAt = CatalogPerformanceDiagnostics.startedAt()
+        val onEarlyCatalog: ((String, String, CatalogSnapshot) -> Unit)? = earlyLocks?.let { earlyRules ->
+            { playlistId, playlistName, partial ->
+                val early = ProviderCatalogState.Ready(
+                    playlistId = playlistId,
+                    playlistName = playlistName,
+                    snapshot = applyParentalCatalogPolicy(snapshot = partial, locks = earlyRules),
+                    rawSnapshot = partial,
+                    contentLocks = earlyRules,
+                    seriesPending = true,
+                    isRefreshing = true,
+                )
+                session.earlyReady = early
+                state.value = early
+                CatalogPerformanceDiagnostics.phase(
+                    name = "catalog_early_ready",
+                    startedAtMs = refreshStartedAt,
+                    itemCount = partial.liveChannels.size + partial.movies.size,
+                )
+            }
+        }
         val outcome = ProviderCatalogSyncCoordinator.run(profileId) {
             refreshCatalog(
                 repository = repository,
                 m3uClient = m3uClient,
                 previous = previousCatalog,
                 idAliases = idAliases,
+                onEarlyCatalog = onEarlyCatalog,
             )
         }
         val loaded = outcome.state
@@ -350,6 +387,7 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                 session.readyProfileId = profileId
                 session.fetchedAtEpochMs = outcome.fetchedAtEpochMs
                 session.idAliases = outcome.idAliases
+                session.earlyReady = null
                 loaded.copy(
                     snapshot = filtered,
                     rawSnapshot = loaded.snapshot,
@@ -363,6 +401,13 @@ fun rememberProviderCatalogSession(): ProviderCatalogSession {
                     // The catalogue already validated stays (error, cancellation
                     // or rejected partial response alike).
                     previousReady.copy(
+                        syncWarning = loaded.message,
+                        isRefreshing = false,
+                    )
+                } else if (session.earlyReady != null) {
+                    // PR #219: channels and films were complete and stay; the
+                    // series screen reports the failure (seriesPending kept).
+                    requireNotNull(session.earlyReady).copy(
                         syncWarning = loaded.message,
                         isRefreshing = false,
                     )
@@ -420,6 +465,9 @@ private class CatalogSessionMemory {
     @Volatile var fetchedAtEpochMs: Long? = null
 
     @Volatile var idAliases: Map<String, Long> = emptyMap()
+
+    /** Channels and films shown before the end of a first synchronisation (PR #219). */
+    @Volatile var earlyReady: ProviderCatalogState.Ready? = null
 }
 
 private suspend fun refreshCatalog(
@@ -427,6 +475,7 @@ private suspend fun refreshCatalog(
     m3uClient: AndroidM3uClient,
     previous: ProviderCatalogState.Ready?,
     idAliases: Map<String, Long>,
+    onEarlyCatalog: ((String, String, CatalogSnapshot) -> Unit)? = null,
 ): CatalogRefreshOutcome {
     val playlists = repository.listPlaylists().getOrElse {
         return CatalogRefreshOutcome(
@@ -457,7 +506,7 @@ private suspend fun refreshCatalog(
     )
     // Only a catalogue of the same playlist can make an empty list suspicious.
     val previousSnapshot = previous?.takeIf { it.playlistId == playlist.id }?.rawSnapshot
-    return loadCatalog(playlist, secret, m3uClient, previousSnapshot, idAliases)
+    return loadCatalog(playlist, secret, m3uClient, previousSnapshot, idAliases, onEarlyCatalog)
 }
 
 private suspend fun loadCatalog(
@@ -466,6 +515,7 @@ private suspend fun loadCatalog(
     m3uClient: AndroidM3uClient,
     previousSnapshot: CatalogSnapshot?,
     idAliases: Map<String, Long>,
+    onEarlyCatalog: ((String, String, CatalogSnapshot) -> Unit)?,
 ): CatalogRefreshOutcome {
     var resolvedAliases = emptyMap<String, Long>()
     val snapshot = when (secret) {
@@ -494,10 +544,23 @@ private suspend fun loadCatalog(
         is PlaylistSecret.M3u -> {
             // A fresh builder per attempt: a retried download starts from zero.
             var builder = M3uCatalogMapper.builder(idIncumbents = idAliases)
+            var earlyPublished = false
             val result = m3uClient.importStreaming(
                 source = M3uSource(secret.url),
                 onAttemptStart = { builder = M3uCatalogMapper.builder(idIncumbents = idAliases) },
-                onEntry = { entry -> builder.add(entry) },
+                onEntry = { entry ->
+                    builder.add(entry)
+                    // PR #219: once per synchronisation, even across attempts.
+                    if (!earlyPublished && onEarlyCatalog != null && builder.liveAndMoviesComplete) {
+                        earlyPublished = true
+                        onEarlyCatalog(playlist.id, playlist.name, builder.buildLiveAndMovies())
+                    }
+                },
+            )
+            CatalogPerformanceDiagnostics.event(
+                name = "m3u_family_order",
+                fields = "early=$earlyPublished violations=${builder.orderViolations}",
+                warning = earlyPublished && builder.orderViolations > 0,
             )
             when (result) {
                 is M3uStreamingResult.Success -> {
