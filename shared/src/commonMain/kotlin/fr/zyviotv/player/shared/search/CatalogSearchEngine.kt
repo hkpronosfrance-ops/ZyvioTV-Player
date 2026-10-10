@@ -91,6 +91,9 @@ object CatalogSearchEngine {
             .take(limit)
     }
 
+    /** Leading channel number matched by [search] ("12 - Name" → "12"), if any. */
+    fun channelNumber(name: String): String? = name.leadingChannelNumber()
+
     fun normalize(value: String): String =
         value
             .trim()
