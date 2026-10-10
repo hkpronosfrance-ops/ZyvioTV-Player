@@ -39,7 +39,9 @@ class CatalogStoreReader(
     private fun load(generation: GenerationEntity): StoredCatalog {
         val gen = generation.id
         val playlistId = generation.playlistId
-        fun ref(kind: CatalogKind, id: String) = CatalogSourceRef(kind, gen, playlistId, id).encode()
+        // Built once per kind (PR #215): each reference is then one concatenation.
+        val livePrefix = CatalogSourceRef.prefix(CatalogKind.Live, gen, playlistId)
+        val moviePrefix = CatalogSourceRef.prefix(CatalogKind.Movie, gen, playlistId)
         fun categories(kind: CatalogKind) =
             dao.categoryRows(gen, kind.wire).map { CatalogCategory(id = it.id, name = it.name) }
 
@@ -51,7 +53,7 @@ class CatalogStoreReader(
                     name = it.name,
                     categoryId = it.categoryId,
                     logoUrl = it.logoUrl,
-                    streamUrl = ref(CatalogKind.Live, it.id),
+                    streamUrl = CatalogSourceRef.ofItem(livePrefix, it.id),
                     epgId = it.epgId,
                 )
             },
@@ -62,7 +64,7 @@ class CatalogStoreReader(
                     title = it.title,
                     categoryId = it.categoryId,
                     posterUrl = it.posterUrl,
-                    streamUrl = ref(CatalogKind.Movie, it.id),
+                    streamUrl = CatalogSourceRef.ofItem(moviePrefix, it.id),
                     containerExtension = it.containerExtension,
                     addedAtEpochSeconds = it.addedAtEpochSeconds,
                 )

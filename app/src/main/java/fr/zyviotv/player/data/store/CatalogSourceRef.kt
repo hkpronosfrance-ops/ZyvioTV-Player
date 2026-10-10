@@ -3,10 +3,15 @@ package fr.zyviotv.player.data.store
 /**
  * Bloc #213 (PR B): a catalogue restored from the Room store does not hold
  * its stream URLs in memory. Each item carries this opaque reference instead
- * (`zyvio-store:<kind>:<generationId>:<playlist>:<id>[:<seriesId>]`, the
- * strings hex-encoded), and the URL is decrypted only when playback is
- * requested (`CatalogStore.resolveSource`). A reference contains no host,
- * credential or URL, and never reaches the player: it is resolved first.
+ * (`zyvio-store:<kind>:<generationId>:<playlist>:<id>[:<seriesId>]`), and the
+ * URL is decrypted only when playback is requested
+ * (`CatalogStore.resolveSource`). A reference contains no host, credential or
+ * URL, and never reaches the player: it is resolved first.
+ *
+ * PR #215: the strings are escaped (`%` → `%25`, `:` → `%3A`) instead of
+ * hex-encoded with `String.format` per byte, which cost ~1 million format
+ * calls for a 22 841-item catalogue at startup. Ids rarely contain either
+ * character, so encoding is usually a plain concatenation.
  */
 data class CatalogSourceRef(
     val kind: CatalogKind,
@@ -16,19 +21,9 @@ data class CatalogSourceRef(
     /** Only for episodes, whose ids are unique inside their series. */
     val seriesId: String? = null,
 ) {
-    fun encode(): String = buildString {
-        append(PREFIX)
-        append(kind.wire)
-        append(SEPARATOR)
-        append(generationId)
-        append(SEPARATOR)
-        append(playlistId.hex())
-        append(SEPARATOR)
-        append(id.hex())
-        if (seriesId != null) {
-            append(SEPARATOR)
-            append(seriesId.hex())
-        }
+    fun encode(): String {
+        val head = prefix(kind, generationId, playlistId)
+        return if (seriesId == null) head + escape(id) else head + escape(id) + SEPARATOR + escape(seriesId)
     }
 
     companion object {
@@ -36,6 +31,16 @@ data class CatalogSourceRef(
         private const val SEPARATOR = ':'
 
         fun isRef(value: String): Boolean = value.startsWith(PREFIX)
+
+        /**
+         * Everything before the item id; the same for every item of one kind
+         * in one generation, so a reader computes it once (see [ofItem]).
+         */
+        fun prefix(kind: CatalogKind, generationId: Long, playlistId: String): String =
+            PREFIX + kind.wire + SEPARATOR + generationId + SEPARATOR + escape(playlistId) + SEPARATOR
+
+        /** Reference of a live channel or film from a precomputed [prefix]. */
+        fun ofItem(prefix: String, id: String): String = prefix + escape(id)
 
         /** Null when [value] is not a well-formed reference. */
         fun parse(value: String): CatalogSourceRef? {
@@ -47,21 +52,23 @@ data class CatalogSourceRef(
                 CatalogSourceRef(
                     kind = kind,
                     generationId = parts[1].toLong(),
-                    playlistId = parts[2].unhex(),
-                    id = parts[3].unhex(),
-                    seriesId = parts.getOrNull(4)?.unhex(),
+                    playlistId = unescape(parts[2]),
+                    id = unescape(parts[3]),
+                    seriesId = parts.getOrNull(4)?.let(::unescape),
                 ).takeIf { (it.seriesId != null) == (kind == CatalogKind.Episode) }
             }.getOrNull()
         }
 
-        // Hex rather than java.util.Base64, which needs API 26 (minSdk is 24).
-        private fun String.hex(): String =
-            toByteArray(Charsets.UTF_8).joinToString("") { byte -> "%02x".format(byte) }
+        // `%` first, so an escaped `:` is never escaped twice.
+        internal fun escape(value: String): String =
+            if (value.indexOf('%') < 0 && value.indexOf(SEPARATOR) < 0) {
+                value
+            } else {
+                value.replace("%", "%25").replace(":", "%3A")
+            }
 
-        private fun String.unhex(): String {
-            require(length % 2 == 0)
-            return ByteArray(length / 2) { index -> substring(index * 2, index * 2 + 2).toInt(16).toByte() }
-                .toString(Charsets.UTF_8)
-        }
+        // `%3A` first: an original "%3A" was encoded as "%253A", which holds no "%3A".
+        internal fun unescape(value: String): String =
+            if (value.indexOf('%') < 0) value else value.replace("%3A", ":").replace("%25", "%")
     }
 }

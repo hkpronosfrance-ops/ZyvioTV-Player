@@ -1,0 +1,14 @@
+<resources>
+    <!--
+      Android 12+ draws its own system splash before the first frame. Without
+      this colour it falls back to a white background, whereas the validated
+      design (D6) is ZYVIOTV black #050506 (PR #215).
+    -->
+    <style name="Theme.ZyvioTVPlayer" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#080808</item>
+        <item name="android:navigationBarColor">#080808</item>
+        <item name="android:windowBackground">#080808</item>
+        <item name="android:windowSplashScreenBackground">#050506</item>
+    </style>
+</resources>
