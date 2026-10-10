@@ -195,6 +195,62 @@ class M3uCatalogMapperTest {
     }
 
     @Test
+    fun theProviderUrlKindWinsOverGroupWords() {
+        // Cases of the recetted playlist (synthetic URLs): group words said
+        // the opposite of the provider's URL.
+        val snapshot = M3uCatalogMapper.map(
+            listOf(
+                M3uEntry("Documentaire A", "http://provider.example/movie/acc/key/1.mkv", groupTitle = "DOCUMENTAIRES | EMISSION TV"),
+                M3uEntry("Workout B", "http://provider.example/movie/acc/key/2.mp4", groupTitle = "WORKOUT | SPORTS"),
+                M3uEntry("Alwan Cine", "http://provider.example/acc/key/3", groupTitle = "ALWAN SPORT | CULTE | CINE ( ARABIC )"),
+                M3uEntry("FR Cinema", "http://provider.example/acc/key/4.ts", groupTitle = "FR TV CINEMA FHD"),
+                // A live channel whose name looks like an episode stays live.
+                M3uEntry("BH ARENA SPORT 1x2", "http://provider.example/acc/key/5", groupTitle = "BOSNIAQUE"),
+                M3uEntry("Espion S01E01 Pilote", "http://provider.example/series/acc/key/6.mkv", groupTitle = "ESPIONNAGE ( APPLE TV+ )"),
+            ),
+        )
+
+        assertEquals(listOf("Alwan Cine", "FR Cinema", "BH ARENA SPORT 1x2"), snapshot.liveChannels.map { it.name })
+        assertEquals(listOf("Documentaire A", "Workout B"), snapshot.movies.map { it.title })
+        assertEquals(listOf("Espion"), snapshot.series.map { it.title })
+    }
+
+    @Test
+    fun liveAndMoviesAreCompleteOnlyAfterALongRunOfEpisodes() {
+        val builder = M3uCatalogMapper.builder()
+        builder.add(M3uEntry("Chaîne", "http://provider.example/acc/key/1", groupTitle = "FR"))
+        builder.add(M3uEntry("Film", "http://provider.example/movie/acc/key/2.mkv", groupTitle = "FILMS"))
+        assertEquals(false, builder.liveAndMoviesComplete)
+
+        repeat(M3uCatalogMapper.EARLY_EPISODE_RUN - 1) { index ->
+            builder.add(M3uEntry("Serie S01E${index % 900 + 1}", "http://provider.example/series/acc/key/$index.mkv"))
+        }
+        assertEquals(false, builder.liveAndMoviesComplete)
+        builder.add(M3uEntry("Serie S02E01", "http://provider.example/series/acc/key/last.mkv"))
+        assertEquals(true, builder.liveAndMoviesComplete)
+
+        val early = builder.buildLiveAndMovies()
+        assertEquals(1, early.liveChannels.size)
+        assertEquals(1, early.movies.size)
+        assertEquals(0, early.series.size)
+        // The early films keep the ids of the final catalogue.
+        assertEquals(early.movies.map { it.id }, builder.build().movies.map { it.id })
+    }
+
+    @Test
+    fun aChannelAfterTheSeriesKeepsTheCompleteFileRule() {
+        val builder = M3uCatalogMapper.builder()
+        builder.add(M3uEntry("Film", "http://provider.example/movie/acc/key/1.mkv", groupTitle = "FILMS"))
+        repeat(M3uCatalogMapper.EARLY_EPISODE_RUN) { index ->
+            builder.add(M3uEntry("Serie S01E${index % 900 + 1}", "http://provider.example/series/acc/key/$index.mkv"))
+            if (index == 10) builder.add(M3uEntry("Chaîne tardive", "http://provider.example/acc/key/99999", groupTitle = "FR"))
+        }
+
+        assertEquals(1, builder.orderViolations)
+        assertEquals(false, builder.liveAndMoviesComplete)
+    }
+
+    @Test
     fun unnamedSeriesEntriesDoNotFabricateEpisodes() {
         val snapshot = M3uCatalogMapper.map(
             listOf(

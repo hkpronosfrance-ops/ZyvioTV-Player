@@ -82,7 +82,15 @@ fun ProviderCatalogState.toSeriesState(
         ProviderCatalogState.Loading -> SeriesScreenState.Loading
         is ProviderCatalogState.Error -> SeriesScreenState.Error(message)
         is ProviderCatalogState.Empty -> SeriesScreenState.Ready(emptyList(), emptyList())
-        is ProviderCatalogState.Ready -> {
+        // PR #219: series still arriving (first synchronisation), or failed after
+        // channels and films were shown: never "no series available".
+        is ProviderCatalogState.Ready -> if (seriesPending) {
+            if (syncWarning != null) {
+                SeriesScreenState.Error("La synchronisation des séries n’a pas abouti. Réessayez.")
+            } else {
+                SeriesScreenState.Loading
+            }
+        } else {
             val categories = snapshot.seriesCategories.associate { it.id to it.name }
             val lockedCategories = contentLocks?.lockedCategoryKeys.orEmpty()
             val lockedContents = contentLocks?.lockedContentKeys.orEmpty()
